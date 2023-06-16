@@ -7,10 +7,11 @@ library(assertr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
-external_data_dir <- here("Data", "External")
+source(here("parameters.R"))
+
 factor_data_dir <- here(external_data_dir, "Factors")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")
-output_data_dir <- here("Output", "Data")
+output_data_dir <- output_data_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 
