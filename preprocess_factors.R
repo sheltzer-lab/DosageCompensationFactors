@@ -2,7 +2,6 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(arrow)
-library(openxlsx)
 library(readxl)
 library(assertr)
 
@@ -11,6 +10,9 @@ here::i_am("DosageCompensationFactors.Rproj")
 external_data_dir <- here("Data", "External")
 factor_data_dir <- here(external_data_dir, "Factors")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")
+output_data_dir <- here("Output", "Data")
+
+dir.create(output_data_dir, recursive = TRUE)
 
 # === Load Datasets ===
 ## Load PhosphoSitePlus datasets
@@ -39,71 +41,21 @@ dc_factors <- c(
   "mRNA Abundance", "Protein Abundance", "Transcription Rate", "Translation Rate", "Protein Length", "mRNA Length"
 )
 
-## Get UniProt Accession from ENSEMBL ID
-ensembl_to_uniprot <- function(df, ensembl_column = "Gene.ENSEMBL.Id") {
-  uniprot <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
-                                   keys = df[[ensembl_column]],
-                                   column = 'UNIPROT',
-                                   keytype = 'ENSEMBL',
+## Keys/Values: UNIPROT, ENSEMBL, SYMBOL, ...
+## See documentation of org.Hs.eg.db package on Bioconductor
+mapIds <- function(df, key_type, value_type, key_col, value_col) {
+    key_values <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
+                                   keys = df[[key_col]],
+                                   column = value_type,
+                                   keytype = key_type,
                                    multiVals = 'first')
-
   df <- df %>%
-    mutate(MERGED_ACC_ID = names(uniprot),
-           Protein.Uniprot.Accession = uniprot) %>%
-    assertr::verify(MERGED_ACC_ID == .data[[ensembl_column]]) %>%      # Sanity check
-    select(-MERGED_ACC_ID)
-
+    mutate(Key = names(key_values),
+           !!value_col := key_values) %>%
+    assertr::verify(Key == .data[[key_col]]) %>%      # Sanity check
+    select(-Key)
   return(df)
 }
-
-ensembl_to_genesymbol <- function(df, ensembl_column = "Gene.ENSEMBL.Id") {
-  symbols <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
-                                   keys = df[[ensembl_column]],
-                                   column = 'SYMBOL',
-                                   keytype = 'ENSEMBL',
-                                   multiVals = 'first')
-
-  df <- df %>%
-    mutate(MERGED_ACC_ID = names(symbols),
-           Gene.Symbol = symbols) %>%
-    assertr::verify(MERGED_ACC_ID == .data[[ensembl_column]]) %>%      # Sanity check
-    select(-MERGED_ACC_ID)
-
-  return(df)
-}
-
-genesymbol_to_ensembl <- function(df, symbol_column = "Gene.Symbol") {
-  gene_IDs <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
-                                   keys = df[[symbol_column]],
-                                   column = 'ENSEMBL',
-                                   keytype = 'SYMBOL',
-                                   multiVals = 'first')
-
-  df <- df %>%
-    mutate(MERGED_ACC_ID = names(gene_IDs),
-           Gene.ENSEMBL.Id = gene_IDs) %>%
-    assertr::verify(MERGED_ACC_ID == .data[[symbol_column]]) %>%      # Sanity check
-    select(-MERGED_ACC_ID)
-
-  return(df)
-}
-
-uniprot_to_ensembl <- function(df, acc_column = "Protein.Uniprot.Accession") {
-  gene_IDs <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
-                                    keys = df[[acc_column]],
-                                    column = 'ENSEMBL',
-                                    keytype = 'UNIPROT',
-                                    multiVals = 'first')
-
-  df <- df %>%
-    mutate(MERGED_ACC_ID = names(gene_IDs),
-           Gene.ENSEMBL.Id = gene_IDs) %>%
-    assertr::verify(MERGED_ACC_ID == .data[[acc_column]]) %>%      # Sanity check
-    select(-MERGED_ACC_ID)
-
-  return(df)
-}
-
 
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
 count_sites <- function(df, colname = "n") {
@@ -124,18 +76,22 @@ df_rates <- human_rates %>%
          `Translation Rate` = "bp",
          `Protein Length` = "lp",
          `mRNA Length` = "lm") %>%
-  ensembl_to_uniprot()
+  mapIds("ENSEMBL", "UNIPROT",
+         "Gene.ENSEMBL.Id", "Protein.Uniprot.Accession") %>%
+  mapIds("ENSEMBL", "SYMBOL",
+         "Gene.ENSEMBL.Id", "Gene.Symbol")
 
 ## Prepare Proten-Protein-Interaction data
 hippie_filtered <- hippie %>%
   select("Gene Name Interactor A", "Gene Name Interactor B", "Confidence Value") %>%
   rename(Gene.Symbol = "Gene Name Interactor A") %>%
   filter(`Confidence Value` > 0.6) %>%
-  group_by(Gene.Symbol) %>%
-  count(name = "Protein-Protein Interactions") %>%
-  # ToDo: Code breaks here
-  genesymbol_to_ensembl() %>%
-  ensembl_to_uniprot()
+  count(Gene.Symbol, name = "Protein-Protein Interactions") %>%
+  drop_na() %>%
+  mapIds("SYMBOL", "ENSEMBL",
+         "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
+  mapIds("SYMBOL", "UNIPROT",
+         "Gene.Symbol", "Protein.Uniprot.Accession")
 
 ## Prepare Protein half-life data
 half_life_sample_cols <- c("Bcells replicate 1 half_life", "Bcells replicate 2 half_life",
@@ -149,8 +105,11 @@ half_life_avg <- half_life %>%
   pivot_longer(all_of(half_life_sample_cols), names_to = "sample", values_to = "half_life_values") %>%
   group_by(Gene.Symbol) %>%
   summarize(`Protein Half-Life` = mean(half_life_values, na.rm = TRUE)) %>%
-  genesymbol_to_ensembl() %>%
-  ensembl_to_uniprot()
+  ungroup() %>%
+  mapIds("SYMBOL", "ENSEMBL",
+         "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
+  mapIds("SYMBOL", "UNIPROT",
+         "Gene.Symbol", "Protein.Uniprot.Accession")
 
 ## Prepare 3'-/5'-UTR data
 df_utr <- ref_seq %>%
@@ -165,7 +124,11 @@ df_utr <- ref_seq %>%
   group_by(Gene.Symbol) %>%
   summarize(`3'-UTR Length` = list(`3'-UTR Length`),
             `5'-UTR Length` = list(`5'-UTR Length`)) %>%
-  ungroup()
+  ungroup() %>%
+  mapIds("SYMBOL", "ENSEMBL",
+         "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
+  mapIds("SYMBOL", "UNIPROT",
+         "Gene.Symbol", "Protein.Uniprot.Accession")
 
 # === Combine Factor Datasets ===
 
@@ -198,15 +161,25 @@ df_dc_factors <- count_sites(phospho_sites, colname = "Phosphorylation Sites") %
             na_matches = "never", relationship = "many-to-one") %>%
   mutate(`Regulatory Sites` = replace_na(`Regulatory Sites`, 0)) %>%
   # Transform Uniprot Accessions to ENSEMBL IDs
-  uniprot_to_ensembl() %>%
+  mapIds("UNIPROT", "ENSEMBL",
+         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id") %>%
   # Add central dogma rates data
-  full_join(y = df_rates, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id"),
+  full_join(y = df_rates, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one") %>%
   # Add protein-protein-interactions data
-  # ToDo: Merge by ENSEMBL Id
-  full_join(y = hippie_filtered, by = "Gene.Symbol",
+  full_join(y = hippie_filtered, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one") %>%
   mutate(`Protein-Protein Interactions` = replace_na(`Protein-Protein Interactions`, 0)) %>%
   # Add Protein Half-Life data
-  full_join(y = half_life_avg, by = "Gene.Symbol",
+  full_join(y = half_life_avg, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
+
+## Determine amount of missing data
+# ToDo: Exclude ID columns
+na_counts <- colSums(is.na(df_dc_factors))
+total_na_count <- sum(na_counts)
+na_share <- total_na_count / (nrow(df_dc_factors) * ncol(df_dc_factors))
+
+# === Write combined factors to disk ===
+write_parquet(df_dc_factors, here(output_data_dir, 'dosage_compensation_factors.parquet'),
+              version = "2.6")
