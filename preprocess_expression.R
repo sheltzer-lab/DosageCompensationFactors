@@ -31,8 +31,10 @@ procan_expr_avg_tidy <- procan_expr_avg %>%
   separate_wider_delim(Protein,
            delim = ";",
            names = c("Protein.Uniprot.Accession", "Protein.Uniprot.Id")) %>%
-  rename(Project.Id = "Project_Identifier") %>%
-  unite("UniqueId", c("Project.Id", "Protein.Uniprot.Accession"),
+  separate_wider_delim(Project_Identifier,
+                       delim = ";",
+                       names = c("CellLine.SangerModelId", "CellLine.Name")) %>%
+  unite("UniqueId", c("CellLine.SangerModelId", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE)
 
 # === Preprocess Dataset ===
@@ -41,7 +43,7 @@ normalize_celllines <- function(df, cellline_col, value_col, group_col, normaliz
   df_pre <- data.frame(df)
 
   df_test <- df %>%
-#    assert_rows(col_concat, is_uniq, {{ cellline_col }}, {{ group_col }}) %>%
+    assert_rows(col_concat, is_uniq, {{ cellline_col }}, {{ group_col }}) %>%
     select({{ cellline_col }}, {{ value_col }}, {{ group_col }}) %>%
     pivot_wider(names_from = {{ cellline_col }}, values_from = {{ value_col }}) %>%
     tibble::column_to_rownames(var = quo_name(enquo(group_col))) %>%
@@ -69,7 +71,7 @@ remove_noisefloor <- function(df, value_col, percentile_cutoff = 0.0001) {
 procan_expr_avg_processed <- procan_expr_avg_tidy %>%
   filter(str_detect(Protein.Uniprot.Id, "HUMAN")) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
-  normalize_celllines(Project.Id, Protein.Expression.Log2, Protein.Uniprot.Accession,
+  normalize_celllines(CellLine.SangerModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
                       normalized_colname = "Protein.Expression.Normalized")
 
 # === Quality Control ===
