@@ -160,6 +160,8 @@ df_dc_factors <- count_sites(phospho_sites, colname = "Phosphorylation Sites") %
   full_join(y = half_life_avg, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
 
+# ToDo: Include UTR data
+
 ## Determine amount of missing data
 # ToDo: Exclude ID columns
 na_counts <- colSums(is.na(df_dc_factors))
