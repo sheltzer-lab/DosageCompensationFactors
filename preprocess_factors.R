@@ -8,6 +8,7 @@ library(assertr)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("parameters.R"))
+source(here("annotation.R"))
 
 factor_data_dir <- here(external_data_dir, "Factors")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")
@@ -41,22 +42,6 @@ dc_factors <- c(
   "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites", "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
   "mRNA Abundance", "Protein Abundance", "Transcription Rate", "Translation Rate", "Protein Length", "mRNA Length"
 )
-
-## Keys/Values: UNIPROT, ENSEMBL, SYMBOL, ...
-## See documentation of org.Hs.eg.db package on Bioconductor
-mapIds <- function(df, key_type, value_type, key_col, value_col) {
-    key_values <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
-                                   keys = df[[key_col]],
-                                   column = value_type,
-                                   keytype = key_type,
-                                   multiVals = 'first')
-  df <- df %>%
-    mutate(Key = names(key_values),
-           !!value_col := key_values) %>%
-    assertr::verify(Key == .data[[key_col]]) %>%      # Sanity check
-    select(-Key)
-  return(df)
-}
 
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
 count_sites <- function(df, colname = "n") {

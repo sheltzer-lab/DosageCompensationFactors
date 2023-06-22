@@ -11,6 +11,8 @@ library(limma)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("parameters.R"))
+source(here("annotation.R"))
+
 
 expression_data_dir <- here(external_data_dir, "Expression")
 output_data_dir <- output_data_base_dir
@@ -42,7 +44,7 @@ procan_expr_avg_tidy <- procan_expr_avg %>%
 normalize_celllines <- function(df, cellline_col, value_col, group_col, normalized_colname = "Normalized") {
   df_pre <- data.frame(df)
 
-  df_test <- df %>%
+  df %>%
     assert_rows(col_concat, is_uniq, {{ cellline_col }}, {{ group_col }}) %>%
     select({{ cellline_col }}, {{ value_col }}, {{ group_col }}) %>%
     pivot_wider(names_from = {{ cellline_col }}, values_from = {{ value_col }}) %>%
@@ -72,7 +74,10 @@ procan_expr_avg_processed <- procan_expr_avg_tidy %>%
   filter(str_detect(Protein.Uniprot.Id, "HUMAN")) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   normalize_celllines(CellLine.SangerModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
-                      normalized_colname = "Protein.Expression.Normalized")
+                      normalized_colname = "Protein.Expression.Normalized") %>%
+  mapIds("UNIPROT", "SYMBOL",
+         "Protein.Uniprot.Accession", "Gene.Symbol")
+
 
 # === Quality Control ===
 
