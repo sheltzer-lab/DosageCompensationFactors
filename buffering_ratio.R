@@ -1,9 +1,14 @@
 library(dplyr)
+library(plotly)
 
 buffering_ratio <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
-  ifelse(cn_var > cn_base,
-         log2(cn_var / cn_base) - log2(expr_var / expr_base),
-         log2(expr_var / expr_base) - log2(cn_var / cn_base))
+  br <- log2(cn_var / cn_base) - log2(expr_var / expr_base)
+  ifelse(cn_var > cn_base, br, -br)
+}
+
+buffering_ratio_old <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
+  br <- 1 - (expr_var / expr_base) * (cn_base / cn_var)
+  ifelse(cn_var > cn_base, br, -br)
 }
 
 buffering_class <- function(buffering_ratio) {
@@ -27,6 +32,18 @@ buffering_class_log2fc <- function (log2fc, cn_base = 2, cn_var = 3) {
 }
 
 # === Example Code ===
+
+plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
+  cn_base <- 2
+  cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
+  expr_base <- 2
+  expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
+
+  br <- outer(expr_diff + expr_base, cn_diff + cn_base,
+              FUN = \(x,y) br_func(expr_var = x, cn_var = y,
+                                   expr_base = expr_base, cn_base = cn_base))
+  plot_ly(x = ~expr_diff, y = ~cn_diff, z = ~br, type = 'surface')
+}
 
 buffering_example <- function() {
   df1 <- data.frame(ExprBase = c(10, 10, 10, 10), ExprVar = c(10, 15, 20, 30),
