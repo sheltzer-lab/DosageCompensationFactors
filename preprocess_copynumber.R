@@ -2,6 +2,7 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(arrow)
+library(stringr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -14,10 +15,45 @@ plots_dir <- plots_base_dir
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
+ensembl_mart <- biomaRt::useMart("ENSEMBL_MART_ENSEMBL", "hsapiens_gene_ensembl")
+
+get_chromosome_arms <- function(df, mart = ensembl_mart, symbol_col = "Gene.Symbol") {
+  chr_location <- biomaRt::getBM(attributes = c("hgnc_symbol", 'chromosome_name', 'band'),
+                                 filters = 'hgnc_symbol',
+                                 values = unique(df[[symbol_col]]),
+                                 mart = ensembl_mart) %>%
+    rename(Gene.Symbol = "hgnc_symbol",
+           Gene.Chromosome = "chromosome_name",
+           Gene.ChromosomeBand = "band") %>%
+    mutate(Gene.ChromosomeArm = ifelse(str_detect(Gene.ChromosomeBand, "q"), "q",
+                                       ifelse(str_detect(Gene.ChromosomeBand, "p"), "p",
+                                              NA))) %>%
+    unite("Gene.ChromosomeArm", Gene.Chromosome, Gene.ChromosomeArm,
+          sep = "", remove = FALSE) %>%
+    mutate_all(na_if,"") %>%
+    drop_na() %>%
+    distinct()
+
+  df <- df %>%
+    mutate(Gene.Symbol = .data[[symbol_col]]) %>% # Ensure correct column name
+    left_join(y = chr_location, by = "Gene.Symbol",
+              na_matches = "never", relationship = "many-to-one")
+
+  return(df)
+}
+
 df_model <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
   select(ModelID, SangerModelID) %>%
   rename(CellLine.DepMapModelId = "ModelID",
          CellLine.SangerModelId = "SangerModelID")
+
+df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv")) %>%
+  rename(CellLine.DepMapModelId = 1) %>%
+  pivot_longer(everything() & !CellLine.DepMapModelId,
+               names_to = "Gene.ChromosomeArm", values_to = "ChromosomeArm.CNA") %>%
+  mutate(ChromosomeArm.CNA = as.integer(ChromosomeArm.CNA)) %>%
+  mutate(ChromosomeArm.CopyNumber.Baseline = 2L,
+         ChromosomeArm.CopyNumber = 2L + ChromosomeArm.CNA)
 
 # NOTE! SIDM00018 has a different cell line name in DepMap and expression datasets (KO52 vs K052)!!!
 df_cn <-
@@ -26,12 +62,16 @@ df_cn <-
     row.names = 1,
     check.names = FALSE
   ) %>%
-  as.matrix() %>%
-  as.table() %>%
-  as.data.frame() %>%
-  setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber"))  %>%
-  inner_join(y = df_model, by = "CellLine.DepMapModelId",
-             na_matches = "never", relationship = "many-to-one")
+    as.matrix() %>%
+    as.table() %>%
+    as.data.frame() %>%
+    setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber")) %>%
+    inner_join(y = df_model, by = "CellLine.DepMapModelId",
+               na_matches = "never", relationship = "many-to-one") %>%
+    get_chromosome_arms() %>%
+    # ToDo: Consider Left Join
+    inner_join(y = df_arm_level_cna, by = c("CellLine.DepMapModelId", "Gene.ChromosomeArm"),
+               na_matches = "never", relationship = "many-to-one")
 
 write_parquet(df_cn, here(output_data_dir, 'copy_number.parquet'),
               version = "2.6")

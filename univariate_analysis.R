@@ -36,27 +36,36 @@ calculate_baseline_copynumber <- function(df, gene_col, copynumber_col) {
     ungroup()
 }
 
-calculate_baseline_expression <- function(df, gene_col, expr_col) {
+calculate_baseline_expression <- function(df, gene_col, chr_arm_cna_col, expr_col) {
+  baseline_expr <- df %>%
+    select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }) %>%
+    filter({ { chr_arm_cna_col } } == 0) %>%
+    group_by({ { gene_col } }) %>%
+    summarize(Protein.Expression.Baseline = median({ { expr_col } }, na.rm = TRUE)) %>%
+    ungroup() %>%
+    select({ { gene_col } }, Protein.Expression.Baseline)
+
   df %>%
-    group_by({{ gene_col }}) %>%
-    mutate(Protein.Expression.Baseline = median({{ expr_col }}, na.rm = TRUE)) %>%
-    ungroup()
+    inner_join(y = baseline_expr, by = quo_name(enquo(gene_col)),
+               unmatched = "error", na_matches = "never", relationship = "many-to-one")
 }
 
 expr_avg_dc <- expr_avg %>%
   inner_join(y = copy_number, by = c("CellLine.SangerModelId", "Gene.Symbol"),
              na_matches = "never", relationship = "one-to-one") %>%
   calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
-  calculate_baseline_expression(Gene.Symbol, Protein.Expression.Normalized) %>%
-  mutate(Buffering.Ratio = buffering_ratio(Protein.Expression.Baseline, Protein.Expression.Normalized,
-                                           Gene.CopyNumber.Baseline, Gene.CopyNumber)) %>%
-  mutate(Buffering.Class = buffering_class(Buffering.Ratio)) %>%
-  mutate(Buffered = ifelse(Buffering.Class == "Buffered", 1, 0)) %>%
-  mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
+  calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
+  mutate(Log2FC = log2(Protein.Expression.Normalized) - log2(Protein.Expression.Baseline)) %>%
+  mutate(Buffering.GeneLevel.Ratio = buffering_ratio_old(Protein.Expression.Baseline, Protein.Expression.Normalized,
+                                                     Gene.CopyNumber.Baseline, Gene.CopyNumber)) %>%
+  mutate(Buffering.GeneLevel.Class = buffering_class_old(Buffering.GeneLevel.Ratio)) %>%
+  mutate(Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
+                                                              cn_base = ChromosomeArm.CopyNumber.Baseline,
+                                                              cn_var = ChromosomeArm.CopyNumber)) %>%
   left_join(y = dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
 
-# === Calculate ROC AUC of factors
+# === Calculate ROC AUC of factors ===
 dc_factor_names <- c(
   "Protein-Protein Interactions", "Protein Half-Life",
   "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites", "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
@@ -64,6 +73,8 @@ dc_factor_names <- c(
 )
 
 factors_roc_auc <- expr_avg_dc %>%
+  mutate(Buffered = ifelse(Buffering.GeneLevel.Class == "Buffered", 1, 0)) %>%
+  mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
   drop_na(Buffered) %>%
   select(UniqueId, Buffered, all_of(dc_factor_names)) %>%
   pivot_longer(all_of(dc_factor_names),
@@ -95,6 +106,5 @@ avg_abs_auc <- factors_roc_auc %>%
   summarize(Score = mean(abs(DosageCompensation.Factor.ROC_AUC - 0.5)))
 
 # === Write Processed dataset to disk ===
-
-write_parquet(expr_avg_dc, here(output_data_dir, 'expression_average_dc.parquet'),
+write_parquet(expr_avg_dc, here(output_data_dir, 'expression_average_buffering.parquet'),
               version = "2.6")

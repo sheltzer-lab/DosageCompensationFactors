@@ -17,6 +17,12 @@ buffering_class <- function(buffering_ratio) {
                 "Scaling"))                                  # Expression level as expected or higher
 }
 
+buffering_class_old <- function(buffering_ratio) {
+    ifelse(buffering_ratio > 0.377978, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
+         ifelse(buffering_ratio > 0.2071953, "Buffered",    # Less expression in trisomy than expected
+                "Scaling"))                                  # Expression level as expected or higher
+}
+
 # Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) on chromosome arm gain (inverted for arm loss):
 # Scaling:        0.25 < Log2FC
 # Buffered:      -0.1  < Log2FC <  0.25
