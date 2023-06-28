@@ -72,7 +72,9 @@ dc_factor_cols <- c(
   "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
   "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
   "mRNA Abundance", "Protein Abundance", "Transcription Rate",
-  "Translation Rate", "Protein Length", "mRNA Length"
+  "Translation Rate", "Protein Length", "mRNA Length",
+  "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
+  "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity"
 )
 
 analyze_roc_auc <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {

@@ -36,6 +36,9 @@ ref_seq <- read_excel(here(factor_data_dir, "NCBI.Human.RefSeq.chr1.xlsx"))
 half_life <- read_excel(here(factor_data_dir, "41467_2018_3106_MOESM5_ESM.xlsx"))
 # CORUM, version 210512, DOI: 10.1093/nar/gkm936
 corum <- read_tsv_arrow(here(factor_data_dir, "CORUMallComplexes.tsv"))
+# URL: https://mobidb.bio.unipd.it/browse?proteome=UP000005640&limit=10&skip=0&projection=acc,name,organism,reviewed,prediction-disorder-mobidblite.contentfraction,gene,length
+# Version: 5.0, Release: 2022_07, Accessed: 2023-06-23
+mobidb <- read_tsv_arrow(here(factor_data_dir, "mobidb_result.tsv"))
 
 # === Summarize Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
@@ -128,6 +131,28 @@ df_complexes <- corum %>%
   mapIds("UNIPROT", "SYMBOL",
          "Protein.Uniprot.Accession", "Gene.Symbol")
 
+## Prepare MobiDB data
+mobidb_features <- c("prediction-disorder-mobidb_lite", "prediction-low_complexity-merge",
+                     "homology-domain-merge", "prediction-lip-anchor",
+                     "prediction-polyampholyte-mobidb_lite_sub", "prediction-polar-mobidb_lite_sub")
+
+df_mobidb <- mobidb %>%
+  select(acc, feature, content_count) %>%
+  filter(feature %in% mobidb_features) %>%
+  pivot_wider(id_cols = "acc", names_from = "feature", values_from = "content_count") %>%
+  rename(Protein.Uniprot.Accession = "acc",
+         `Intrinsic Protein Disorder` = "prediction-disorder-mobidb_lite",
+         `Low Complexity Score` = "prediction-low_complexity-merge",
+         `Homology Score` = "homology-domain-merge",
+         `Loops In Protein Score` = "prediction-lip-anchor",
+         `Protein Polyampholyte Score` = "prediction-polyampholyte-mobidb_lite_sub",
+         `Protein Polarity` = "prediction-polar-mobidb_lite_sub") %>%
+  mapIds("UNIPROT", "ENSEMBL",
+         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id") %>%
+  mapIds("UNIPROT", "SYMBOL",
+         "Protein.Uniprot.Accession", "Gene.Symbol")
+
+
 # === Combine Factor Datasets ===
 
 # Add phosphorylation site counts
@@ -176,6 +201,10 @@ df_dc_factors <- count_sites(phospho_sites, colname = "Phosphorylation Sites") %
             na_matches = "never", relationship = "many-to-one") %>%
   # Add Protein Complex (CORUM) data
   full_join(y = df_complexes, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+            na_matches = "never", relationship = "many-to-one") %>%
+  mutate(`Protein Complexes (CORUM)` = replace_na(`Protein Complexes (CORUM)`, 0)) %>%
+  # Add MobiDB data
+  full_join(y = df_mobidb, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
 
 ## Determine amount of missing data
