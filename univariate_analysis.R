@@ -74,7 +74,8 @@ dc_factor_cols <- c(
   "mRNA Abundance", "Protein Abundance", "Transcription Rate",
   "Translation Rate", "Protein Length", "mRNA Length",
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
-  "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity"
+  "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
+  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate"
 )
 
 analyze_roc_auc <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
@@ -128,7 +129,7 @@ auc_score_gene <- roc_auc_summary_score(factors_roc_auc_gene)
 
 ### Filtered by copy number difference
 cn_diff_quantiles <- quantile(expr_avg_dc$Gene.CopyNumber - expr_avg_dc$Gene.CopyNumber.Baseline,
-                              probs = seq(0, 1, 0.05))
+                              probs = seq(0, 1, 0.01))
 
 factors_roc_auc_gene_filtered <- expr_avg_dc %>%
   filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles["5%"] |

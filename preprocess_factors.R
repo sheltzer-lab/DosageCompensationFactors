@@ -39,6 +39,10 @@ corum <- read_tsv_arrow(here(factor_data_dir, "CORUMallComplexes.tsv"))
 # URL: https://mobidb.bio.unipd.it/browse?proteome=UP000005640&limit=10&skip=0&projection=acc,name,organism,reviewed,prediction-disorder-mobidblite.contentfraction,gene,length
 # Version: 5.0, Release: 2022_07, Accessed: 2023-06-23
 mobidb <- read_tsv_arrow(here(factor_data_dir, "mobidb_result.tsv"))
+# DOI: 10.1016/j.cell.2016.09.015, Supplementary Table 4: All AHA Pulse-Chase and Related Data for the Human RPE-1 Cells
+ned_human <- read_excel(here(factor_data_dir, "NED-Human_RPE-1.xlsx"))
+# DOI: 10.1101/gr.1272403, Supplementary Table 9: Decay Rates (hour^-1) for Accessions in HepG2 Experiments
+mrna_decay <- read_excel(here(factor_data_dir, "Yang.2003.mRNADecay.Rates.xlsx"))
 
 # === Summarize Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
@@ -152,6 +156,33 @@ df_mobidb <- mobidb %>%
   mapIds("UNIPROT", "SYMBOL",
          "Protein.Uniprot.Accession", "Gene.Symbol")
 
+## Prepare NED data
+df_ned <- ned_human %>%
+  select("Protein IDs (Uniprot)", "Gene names", "Δ-score") %>%
+  rename(Protein.Uniprot.Accession = "Protein IDs (Uniprot)",
+         Gene.Symbol = "Gene names",
+         `Non-Exponential Decay Delta` = "Δ-score") %>%
+  separate_longer_delim(Gene.Symbol, delim = ";") %>%
+  drop_na() %>%
+  mapIds("SYMBOL", "ENSEMBL",
+         "Gene.Symbol", "Gene.ENSEMBL.Id")
+
+## Prepare mRNA Decay data
+df_decay <- mrna_decay %>%
+  mutate_at(c("Rate_1", "Rate_2", "StdDev"), as.numeric) %>%
+  mutate(`mRNA Decay Rate` = ifelse(is.na(Rate_1), Rate_2, Rate_1)) %>%
+  drop_na(`mRNA Decay Rate`) %>%
+  select("Accession", "mRNA Decay Rate") %>%
+  rename(Gene.GenBank.Accession = "Accession") %>%
+  mapIds("ACCNUM", "ENSEMBL",
+         "Gene.GenBank.Accession", "Gene.ENSEMBL.Id") %>%
+  mapIds("ACCNUM", "SYMBOL",
+         "Gene.GenBank.Accession", "Gene.Symbol") %>%
+  mapIds("ACCNUM", "UNIPROT",
+         "Gene.GenBank.Accession", "Protein.Uniprot.Accession") %>%
+  drop_na() %>%
+  group_by(Gene.Symbol, Gene.ENSEMBL.Id, Protein.Uniprot.Accession) %>%
+  summarize(`Mean mRNA Decay Rate` = mean(`mRNA Decay Rate`, na.rm = TRUE))
 
 # === Combine Factor Datasets ===
 
@@ -205,6 +236,12 @@ df_dc_factors <- count_sites(phospho_sites, colname = "Phosphorylation Sites") %
   mutate(`Protein Complexes (CORUM)` = replace_na(`Protein Complexes (CORUM)`, 0)) %>%
   # Add MobiDB data
   full_join(y = df_mobidb, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+            na_matches = "never", relationship = "many-to-one") %>%
+  # Add Non-Exponential Decay data
+  full_join(y = df_ned, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+            na_matches = "never", relationship = "many-to-one") %>%
+  # Add mRNA Decay data
+  full_join(y = df_decay, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
 
 ## Determine amount of missing data
