@@ -67,7 +67,8 @@ expr_avg_dc <- expr_avg %>%
 
 # === Calculate ROC AUC of factors ===
 dc_factor_cols <- c(
-  "Protein-Protein Interactions", "Protein Half-Life",
+  "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
+  "Mean 3'-UTR Length", "Mean 5'-UTR Length",
   "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
   "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
   "mRNA Abundance", "Protein Abundance", "Transcription Rate",

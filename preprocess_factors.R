@@ -34,15 +34,10 @@ hippie <- read_excel(here(factor_data_dir, "HIPPIE-v2.3.xlsx"))
 ref_seq <- read_excel(here(factor_data_dir, "NCBI.Human.RefSeq.chr1.xlsx"))
 # DOI: https://doi.org/10.1038/s41467-018-03106-1, Supplementary Table 2
 half_life <- read_excel(here(factor_data_dir, "41467_2018_3106_MOESM5_ESM.xlsx"))
-
+# CORUM, version 210512, DOI: 10.1093/nar/gkm936
+corum <- read_tsv_arrow(here(factor_data_dir, "CORUMallComplexes.tsv"))
 
 # === Summarize Factor Datasets ===
-dc_factors <- c(
-  "Protein Complex (CORUM)", "Protein-Protein Interactions", "3'-UTR Length", "5'-UTR Length", "Protein Half-Life",
-  "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites", "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
-  "mRNA Abundance", "Protein Abundance", "Transcription Rate", "Translation Rate", "Protein Length", "mRNA Length"
-)
-
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
 count_sites <- function(df, colname = "n") {
   df %>%
@@ -108,13 +103,30 @@ df_utr <- ref_seq %>%
   select("name2", "3'-UTR Length", "5'-UTR Length") %>%
   rename(Gene.Symbol = "name2") %>%
   group_by(Gene.Symbol) %>%
-  summarize(`3'-UTR Length` = list(`3'-UTR Length`),
-            `5'-UTR Length` = list(`5'-UTR Length`)) %>%
+  mutate(`Median 3'-UTR Length` = median(`3'-UTR Length`, na.rm = TRUE),
+         `Median 5'-UTR Length` = median(`5'-UTR Length`, na.rm = TRUE),
+         `Mean 3'-UTR Length` = mean(`3'-UTR Length`, na.rm = TRUE),
+         `Mean 5'-UTR Length` = mean(`5'-UTR Length`, na.rm = TRUE),
+         `3'-UTR Length` = list(`3'-UTR Length`),
+         `5'-UTR Length` = list(`5'-UTR Length`)) %>%
   ungroup() %>%
+  distinct() %>%
   mapIds("SYMBOL", "ENSEMBL",
          "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
   mapIds("SYMBOL", "UNIPROT",
          "Gene.Symbol", "Protein.Uniprot.Accession")
+
+## Prepare CORUM data
+df_complexes <- corum %>%
+  filter(Organism == "Human") %>%
+  select(ComplexID, ComplexName, "subunits(UniProt IDs)") %>%
+  separate_longer_delim("subunits(UniProt IDs)", delim = ";") %>%
+  count(`subunits(UniProt IDs)`, name = "Protein Complexes (CORUM)") %>%
+  rename(Protein.Uniprot.Accession = "subunits(UniProt IDs)") %>%
+  mapIds("UNIPROT", "ENSEMBL",
+         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id") %>%
+  mapIds("UNIPROT", "SYMBOL",
+         "Protein.Uniprot.Accession", "Gene.Symbol")
 
 # === Combine Factor Datasets ===
 
@@ -158,9 +170,13 @@ df_dc_factors <- count_sites(phospho_sites, colname = "Phosphorylation Sites") %
   mutate(`Protein-Protein Interactions` = replace_na(`Protein-Protein Interactions`, 0)) %>%
   # Add Protein Half-Life data
   full_join(y = half_life_avg, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+            na_matches = "never", relationship = "many-to-one") %>%
+  # Add UTR data
+  full_join(y = df_utr, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+            na_matches = "never", relationship = "many-to-one") %>%
+  # Add Protein Complex (CORUM) data
+  full_join(y = df_complexes, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
-
-# ToDo: Include UTR data
 
 ## Determine amount of missing data
 # ToDo: Exclude ID columns
