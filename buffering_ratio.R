@@ -45,6 +45,7 @@ plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1
   expr_base <- 2
   expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
 
+  # ToDo: Something is wrong here
   br <- outer(expr_diff + expr_base, cn_diff + cn_base,
               FUN = \(x,y) br_func(expr_var = x, cn_var = y,
                                    expr_base = expr_base, cn_base = cn_base))
