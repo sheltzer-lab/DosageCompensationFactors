@@ -55,8 +55,8 @@ expr_avg_dc <- expr_avg %>%
              na_matches = "never", relationship = "one-to-one") %>%
   calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
   calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
-  mutate(Log2FC = log2(Protein.Expression.Normalized) - log2(Protein.Expression.Baseline)) %>%
-  mutate(Buffering.GeneLevel.Ratio = buffering_ratio(Protein.Expression.Baseline, Protein.Expression.Normalized,
+  mutate(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline) %>%
+  mutate(Buffering.GeneLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
                                                      Gene.CopyNumber.Baseline, Gene.CopyNumber)) %>%
   mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio)) %>%
   mutate(Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
