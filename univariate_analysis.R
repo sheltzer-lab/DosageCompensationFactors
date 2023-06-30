@@ -36,34 +36,64 @@ calculate_baseline_copynumber <- function(df, gene_col, copynumber_col) {
     ungroup()
 }
 
-calculate_baseline_expression <- function(df, gene_col, chr_arm_cna_col, expr_col) {
+calculate_baseline_expression <- function(df, gene_col, chr_arm_cna_col, expr_col, aneuploidy_score_col = NULL) {
   baseline_expr <- df %>%
-    select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }) %>%
+    select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }, { { aneuploidy_score_col } }) %>%
     filter({ { chr_arm_cna_col } } == 0) %>%
     group_by({ { gene_col } }) %>%
-    summarize(Protein.Expression.Baseline = median({ { expr_col } }, na.rm = TRUE)) %>%
-    ungroup() %>%
-    select({ { gene_col } }, Protein.Expression.Baseline)
+    mutate(Weights = ifelse(is.null({ { aneuploidy_score_col } }),
+                            NA,
+                            (1 / (1 + { { aneuploidy_score_col } })) /
+                              sum(1 / (1 + { { aneuploidy_score_col } }), na.rm = TRUE))) %>%
+    summarize(Protein.Expression.Baseline = ifelse(is.null({ { aneuploidy_score_col } }),
+                                                   mean({ { expr_col } }, na.rm = TRUE),
+                                                   sum({ { expr_col } } * Weights, na.rm = TRUE)),
+              Protein.Expression.Baseline.Unweighted = mean({ { expr_col } }, na.rm = TRUE)) %>%
+    ungroup()
 
   df %>%
     inner_join(y = baseline_expr, by = quo_name(enquo(gene_col)),
                unmatched = "error", na_matches = "never", relationship = "many-to-one")
 }
 
+filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
+  filtered <- df %>%
+    group_by({ { gene_col } }, { { chr_arm_cna_col } }) %>%
+    mutate(Samples = sum(!is.na({ { expr_col } }))) %>%
+    group_by({ { gene_col } }) %>%
+    filter(all(Samples > 10)) %>%
+    select(-Samples) %>%
+    ungroup()
+
+  return(filtered)
+}
+
 expr_avg_dc <- expr_avg %>%
   inner_join(y = copy_number, by = c("CellLine.SangerModelId", "Gene.Symbol"),
              na_matches = "never", relationship = "one-to-one") %>%
+  # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
+  filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
   calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
-  calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
-  mutate(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline) %>%
+  calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                                aneuploidy_score_col = CellLine.AneuploidyScore) %>%
+  group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
+  mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline,
+         Log2FC.Average = Protein.Expression.Average - Protein.Expression.Baseline.Unweighted) %>%
+  # ToDo: Evaluate if building mean positive/negative CNV per gene is interesting
   mutate(Buffering.GeneLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
                                                      Gene.CopyNumber.Baseline, Gene.CopyNumber)) %>%
-  mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio)) %>%
-  mutate(Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
+  mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
+         Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
                                                               cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                              cn_var = ChromosomeArm.CopyNumber)) %>%
+                                                              cn_var = ChromosomeArm.CopyNumber),
+         Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
+                                                                      cn_base = ChromosomeArm.CopyNumber.Baseline,
+                                                                      cn_var = ChromosomeArm.CopyNumber)) %>%
   left_join(y = dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
+
 
 # === Calculate ROC AUC of factors ===
 dc_factor_cols <- c(
@@ -158,6 +188,25 @@ factors_roc_auc_chr_loss <- expr_avg_dc %>%
 plot_roc_auc_summary(factors_roc_auc_chr_loss, "buffering-factors_roc-auc_chr-level_loss.png")
 
 auc_score_chr_loss <- roc_auc_summary_score(factors_roc_auc_chr_loss)
+
+## Chromosome-arm-level Dosage Compensation (Close to reference method of Schukken & Sheltzer)
+### Chromosome Arm Gain
+factors_roc_auc_chr_gain_avg <- expr_avg_dc %>%
+  filter(ChromosomeArm.CNA > 0) %>%
+  analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
+
+plot_roc_auc_summary(factors_roc_auc_chr_gain_avg, "buffering-factors_roc-auc_chr-level_gain_averaged.png")
+
+auc_score_chr_gain_avg <- roc_auc_summary_score(factors_roc_auc_chr_gain_avg)
+
+### Chromosome Arm Loss
+factors_roc_auc_chr_loss_avg <- expr_avg_dc %>%
+  filter(ChromosomeArm.CNA < 0) %>%
+  analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
+
+plot_roc_auc_summary(factors_roc_auc_chr_loss_avg, "buffering-factors_roc-auc_chr-level_loss_averaged.png")
+
+auc_score_chr_loss_avg <- roc_auc_summary_score(factors_roc_auc_chr_loss_avg)
 
 
 # === Write Processed dataset to disk ===
