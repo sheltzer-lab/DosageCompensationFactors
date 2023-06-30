@@ -83,7 +83,8 @@ expr_avg_dc <- expr_avg %>%
          Log2FC.Average = Protein.Expression.Average - Protein.Expression.Baseline.Unweighted) %>%
   # ToDo: Evaluate if building mean positive/negative CNV per gene is interesting
   mutate(Buffering.GeneLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
-                                                     Gene.CopyNumber.Baseline, Gene.CopyNumber)) %>%
+  # ToDo: Investigate: "Gene-level copy number data that is log2 transformed with a pseudo-count of 1; log2(CN ratio + 1)"
+                                                     2^Gene.CopyNumber.Baseline, 2^Gene.CopyNumber)) %>%
   mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
          Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
                                                               cn_base = ChromosomeArm.CopyNumber.Baseline,
