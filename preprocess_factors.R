@@ -4,6 +4,7 @@ library(dplyr)
 library(arrow)
 library(readxl)
 library(assertr)
+library(purrr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -186,63 +187,38 @@ df_decay <- mrna_decay %>%
 
 # === Combine Factor Datasets ===
 
-# Add phosphorylation site counts
-df_dc_factors <- count_sites(phospho_sites, colname = "Phosphorylation Sites") %>%
-  mutate(`Phosphorylation Sites` = replace_na(`Phosphorylation Sites`, 0)) %>%
-  # Add ubiquitination site counts
-  full_join(y = count_sites(ubi_sites, colname = "Ubiquitination Sites"),
-            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Ubiquitination Sites` = replace_na(`Ubiquitination Sites`, 0)) %>%
-    # Add sumorylation site counts
-  full_join(y = count_sites(sumo_sites, colname = "Sumoylation Sites"),
-            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Sumoylation Sites` = replace_na(`Sumoylation Sites`, 0)) %>%
-  # Add methylation site counts
-  full_join(y = count_sites(methyl_sites, colname = "Methylation Sites"),
-            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Methylation Sites` = replace_na(`Methylation Sites`, 0)) %>%
-  # Add acetylation site counts
-  full_join(y = count_sites(ace_sites, colname = "Acetylation Sites"),
-            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Acetylation Sites` = replace_na(`Acetylation Sites`, 0)) %>%
-  # Add regulatory site counts
-  full_join(y = count_sites(reg_sites, colname = "Regulatory Sites"),
-            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Regulatory Sites` = replace_na(`Regulatory Sites`, 0)) %>%
-  # Transform Uniprot Accessions to ENSEMBL IDs
+ptm_factor_datasets <- list(
+  count_sites(phospho_sites, colname = "Phosphorylation Sites"),
+  count_sites(ubi_sites, colname = "Ubiquitination Sites"),
+  count_sites(sumo_sites, colname = "Sumoylation Sites"),
+  count_sites(methyl_sites, colname = "Methylation Sites"),
+  count_sites(ace_sites, colname = "Acetylation Sites"),
+  count_sites(reg_sites, colname = "Regulatory Sites")
+)
+
+other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
+                           df_complexes, df_mobidb, df_ned, df_decay)
+
+df_dc_factors_ptm <- ptm_factor_datasets %>%
+  reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+         na_matches = "never", relationship = "many-to-one") %>%
+  mutate_if(is.numeric, ~replace_na(., 0)) %>%
   mapIds("UNIPROT", "ENSEMBL",
-         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id") %>%
-  # Add central dogma rates data
-  full_join(y = df_rates, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  # Add protein-protein-interactions data
-  full_join(y = hippie_filtered, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Protein-Protein Interactions` = replace_na(`Protein-Protein Interactions`, 0)) %>%
-  # Add Protein Half-Life data
-  full_join(y = half_life_avg, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  # Add UTR data
-  full_join(y = df_utr, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  # Add Protein Complex (CORUM) data
-  full_join(y = df_complexes, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  mutate(`Protein Complexes (CORUM)` = replace_na(`Protein Complexes (CORUM)`, 0)) %>%
-  # Add MobiDB data
-  full_join(y = df_mobidb, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  # Add Non-Exponential Decay data
-  full_join(y = df_ned, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one") %>%
-  # Add mRNA Decay data
-  full_join(y = df_decay, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id")
+
+
+df_dc_factors_other <- other_factor_datasets %>%
+  reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+         na_matches = "never", relationship = "many-to-one") %>%
+  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)"), ~replace_na(., 0))
+
+df_dc_factors <- df_dc_factors_ptm %>%
+  full_join(y = df_dc_factors_other, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
             na_matches = "never", relationship = "many-to-one")
+
+# === Quality Control ===
+# Check for unmatched and ambiguous rows
+ambig <- df_dc_factors %>% add_count(Gene.Symbol, Protein.Uniprot.Accession) %>% filter(n > 1)
 
 ## Determine amount of missing data
 # ToDo: Exclude ID columns
