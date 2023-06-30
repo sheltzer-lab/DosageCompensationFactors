@@ -201,24 +201,29 @@ other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-         na_matches = "never", relationship = "many-to-one") %>%
+         relationship = "many-to-one") %>%
+  filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol))) %>%
   mutate_if(is.numeric, ~replace_na(., 0)) %>%
   mapIds("UNIPROT", "ENSEMBL",
          "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id")
 
-
 df_dc_factors_other <- other_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-         na_matches = "never", relationship = "many-to-one") %>%
+         relationship = "many-to-one") %>%
+  filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol))) %>%
+  select(-Gene.ENSEMBL.Id) %>%
+  group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
+  summarize_if(is.numeric, ~first(na.omit(.))) %>%
+  ungroup() %>%
   mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)"), ~replace_na(., 0))
 
 df_dc_factors <- df_dc_factors_ptm %>%
-  full_join(y = df_dc_factors_other, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one")
+  full_join(y = df_dc_factors_other, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+            relationship = "many-to-one")
 
 # === Quality Control ===
 # Check for unmatched and ambiguous rows
-ambig <- df_dc_factors %>% add_count(Gene.Symbol, Protein.Uniprot.Accession) %>% filter(n > 1)
+ambig <- df_dc_factors_other %>% add_count(Gene.Symbol, Protein.Uniprot.Accession) %>% filter(n > 1)
 
 ## Determine amount of missing data
 # ToDo: Exclude ID columns

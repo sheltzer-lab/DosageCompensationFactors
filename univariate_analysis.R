@@ -16,12 +16,18 @@ source(here("parameters.R"))
 source(here("buffering_ratio.R"))
 
 output_data_dir <- output_data_base_dir
-plots_dir <- plots_base_dir
+goncalves_plots_dir <- here(plots_base_dir, "Univariate", "Goncalves")
+depmap_plots_dir <- here(plots_base_dir, "Univariate", "DepMap")
 
 dir.create(output_data_dir, recursive = TRUE)
-dir.create(plots_dir, recursive = TRUE)
+dir.create(goncalves_plots_dir, recursive = TRUE)
+dir.create(depmap_plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
+
+expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
+expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+
 
 # === Calculate ROC AUC of factors ===
 dc_factor_cols <- c(
@@ -54,7 +60,7 @@ analyze_roc_auc <- function(df, buffering_class_col, factor_cols = dc_factor_col
     arrange(DosageCompensation.Factor.ROC_AUC)
 }
 
-plot_roc_auc_summary <- function(factors_roc_auc, filename) {
+plot_roc_auc_summary <- function(factors_roc_auc, plots_dir, filename) {
   roc_auc_summary_plot <- factors_roc_auc %>%
     ggplot() +
     aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC_AUC,
@@ -76,62 +82,127 @@ roc_auc_summary_score <- function(df) {
   mean(abs(df$DosageCompensation.Factor.ROC_AUC - 0.5))
 }
 
+# === Calculate ROC AUCs for data from Goncalves et al. ===
+
 ## Gene-level Dosage Compensation
 ### Unfiltered
-factors_roc_auc_gene <- expr_avg_dc %>%
+factors_roc_auc_gene <- expr_buf_goncalves %>%
   analyze_roc_auc(Buffering.GeneLevel.Class)
 
-plot_roc_auc_summary(factors_roc_auc_gene, "buffering-factors_roc-auc_gene-level.png")
+plot_roc_auc_summary(factors_roc_auc_gene, goncalves_plots_dir, "buffering-factors_roc-auc_gene-level.png")
 
 auc_score_gene <- roc_auc_summary_score(factors_roc_auc_gene)
 
 ### Filtered by copy number difference
-cn_diff_quantiles <- quantile(expr_avg_dc$Gene.CopyNumber - expr_avg_dc$Gene.CopyNumber.Baseline,
+cn_diff_quantiles <- quantile(expr_buf_goncalves$Gene.CopyNumber - expr_buf_goncalves$Gene.CopyNumber.Baseline,
                               probs = seq(0, 1, 0.01))
 
-factors_roc_auc_gene_filtered <- expr_avg_dc %>%
+factors_roc_auc_gene_filtered <- expr_buf_goncalves %>%
   filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles["5%"] |
            Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles["95%"]) %>%
   analyze_roc_auc(Buffering.GeneLevel.Class)
 
-plot_roc_auc_summary(factors_roc_auc_gene_filtered, "buffering-factors_roc-auc_gene-level_filtered.png")
+plot_roc_auc_summary(factors_roc_auc_gene_filtered, goncalves_plots_dir, "buffering-factors_roc-auc_gene-level_filtered.png")
 
 auc_score_gene_filtered <- roc_auc_summary_score(factors_roc_auc_gene_filtered)
 
 ## Chromosome-arm-level Dosage Compensation
 ### Chromosome Arm Gain
-factors_roc_auc_chr_gain <- expr_avg_dc %>%
+factors_roc_auc_chr_gain <- expr_buf_goncalves %>%
   filter(ChromosomeArm.CNA > 0) %>%
   analyze_roc_auc(Buffering.ChrArmLevel.Class)
 
-plot_roc_auc_summary(factors_roc_auc_chr_gain, "buffering-factors_roc-auc_chr-level_gain.png")
+plot_roc_auc_summary(factors_roc_auc_chr_gain, goncalves_plots_dir, "buffering-factors_roc-auc_chr-level_gain.png")
 
 auc_score_chr_gain <- roc_auc_summary_score(factors_roc_auc_chr_gain)
 
 ### Chromosome Arm Loss
-factors_roc_auc_chr_loss <- expr_avg_dc %>%
+factors_roc_auc_chr_loss <- expr_buf_goncalves %>%
   filter(ChromosomeArm.CNA < 0) %>%
   analyze_roc_auc(Buffering.ChrArmLevel.Class)
 
-plot_roc_auc_summary(factors_roc_auc_chr_loss, "buffering-factors_roc-auc_chr-level_loss.png")
+plot_roc_auc_summary(factors_roc_auc_chr_loss, goncalves_plots_dir, "buffering-factors_roc-auc_chr-level_loss.png")
 
 auc_score_chr_loss <- roc_auc_summary_score(factors_roc_auc_chr_loss)
 
 ## Chromosome-arm-level Dosage Compensation (Close to reference method of Schukken & Sheltzer)
 ### Chromosome Arm Gain
-factors_roc_auc_chr_gain_avg <- expr_avg_dc %>%
+factors_roc_auc_chr_gain_avg <- expr_buf_goncalves %>%
   filter(ChromosomeArm.CNA > 0) %>%
   analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
 
-plot_roc_auc_summary(factors_roc_auc_chr_gain_avg, "buffering-factors_roc-auc_chr-level_gain_averaged.png")
+plot_roc_auc_summary(factors_roc_auc_chr_gain_avg, goncalves_plots_dir, "buffering-factors_roc-auc_chr-level_gain_averaged.png")
 
 auc_score_chr_gain_avg <- roc_auc_summary_score(factors_roc_auc_chr_gain_avg)
 
 ### Chromosome Arm Loss
-factors_roc_auc_chr_loss_avg <- expr_avg_dc %>%
+factors_roc_auc_chr_loss_avg <- expr_buf_goncalves %>%
   filter(ChromosomeArm.CNA < 0) %>%
   analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
 
-plot_roc_auc_summary(factors_roc_auc_chr_loss_avg, "buffering-factors_roc-auc_chr-level_loss_averaged.png")
+plot_roc_auc_summary(factors_roc_auc_chr_loss_avg, goncalves_plots_dir, "buffering-factors_roc-auc_chr-level_loss_averaged.png")
+
+auc_score_chr_loss_avg <- roc_auc_summary_score(factors_roc_auc_chr_loss_avg)
+
+
+# === Calculate ROC AUCs for data from DepMap ===
+
+## Gene-level Dosage Compensation
+### Unfiltered
+factors_roc_auc_gene <- expr_buf_depmap %>%
+  analyze_roc_auc(Buffering.GeneLevel.Class)
+
+plot_roc_auc_summary(factors_roc_auc_gene, depmap_plots_dir, "buffering-factors_roc-auc_gene-level.png")
+
+auc_score_gene <- roc_auc_summary_score(factors_roc_auc_gene)
+
+### Filtered by copy number difference
+cn_diff_quantiles <- quantile(expr_buf_depmap$Gene.CopyNumber - expr_buf_depmap$Gene.CopyNumber.Baseline,
+                              probs = seq(0, 1, 0.01))
+
+factors_roc_auc_gene_filtered <- expr_buf_depmap %>%
+  filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles["5%"] |
+           Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles["95%"]) %>%
+  analyze_roc_auc(Buffering.GeneLevel.Class)
+
+plot_roc_auc_summary(factors_roc_auc_gene_filtered, depmap_plots_dir, "buffering-factors_roc-auc_gene-level_filtered.png")
+
+auc_score_gene_filtered <- roc_auc_summary_score(factors_roc_auc_gene_filtered)
+
+## Chromosome-arm-level Dosage Compensation
+### Chromosome Arm Gain
+factors_roc_auc_chr_gain <- expr_buf_depmap %>%
+  filter(ChromosomeArm.CNA > 0) %>%
+  analyze_roc_auc(Buffering.ChrArmLevel.Class)
+
+plot_roc_auc_summary(factors_roc_auc_chr_gain, depmap_plots_dir, "buffering-factors_roc-auc_chr-level_gain.png")
+
+auc_score_chr_gain <- roc_auc_summary_score(factors_roc_auc_chr_gain)
+
+### Chromosome Arm Loss
+factors_roc_auc_chr_loss <- expr_buf_depmap %>%
+  filter(ChromosomeArm.CNA < 0) %>%
+  analyze_roc_auc(Buffering.ChrArmLevel.Class)
+
+plot_roc_auc_summary(factors_roc_auc_chr_loss, depmap_plots_dir, "buffering-factors_roc-auc_chr-level_loss.png")
+
+auc_score_chr_loss <- roc_auc_summary_score(factors_roc_auc_chr_loss)
+
+## Chromosome-arm-level Dosage Compensation (Close to reference method of Schukken & Sheltzer)
+### Chromosome Arm Gain
+factors_roc_auc_chr_gain_avg <- expr_buf_depmap %>%
+  filter(ChromosomeArm.CNA > 0) %>%
+  analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
+
+plot_roc_auc_summary(factors_roc_auc_chr_gain_avg, depmap_plots_dir, "buffering-factors_roc-auc_chr-level_gain_averaged.png")
+
+auc_score_chr_gain_avg <- roc_auc_summary_score(factors_roc_auc_chr_gain_avg)
+
+### Chromosome Arm Loss
+factors_roc_auc_chr_loss_avg <- expr_buf_depmap %>%
+  filter(ChromosomeArm.CNA < 0) %>%
+  analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
+
+plot_roc_auc_summary(factors_roc_auc_chr_loss_avg, depmap_plots_dir, "buffering-factors_roc-auc_chr-level_loss_averaged.png")
 
 auc_score_chr_loss_avg <- roc_auc_summary_score(factors_roc_auc_chr_loss_avg)
