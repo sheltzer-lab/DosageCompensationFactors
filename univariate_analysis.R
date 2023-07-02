@@ -44,6 +44,7 @@ dc_factor_cols <- c(
 
 analyze_roc_auc <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
   df %>%
+    filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
     mutate(Buffered = ifelse({ { buffering_class_col } } == "Buffered", 1, 0)) %>%
     mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
     drop_na(Buffered) %>%
