@@ -1,5 +1,6 @@
 library(dplyr)
 library(plotly)
+library(ggplot2)
 
 buffering_ratio <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
   br <- log2(cn_var / cn_base) - log2(expr_var / expr_base)
@@ -39,17 +40,33 @@ buffering_class_log2fc <- function (log2fc, cn_base = 2, cn_var = 3) {
 
 # === Example Code ===
 
-plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
-  cn_base <- 2
+plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
   cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
-  expr_base <- 2
+  cn_base <- rep(2, length(cn_diff))
   expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
+  expr_base <- rep(2, length(expr_diff))
 
-  # ToDo: Something is wrong here
   br <- outer(expr_diff + expr_base, cn_diff + cn_base,
               FUN = \(x,y) br_func(expr_var = x, cn_var = y,
                                    expr_base = expr_base, cn_base = cn_base))
-  plot_ly(x = ~expr_diff, y = ~cn_diff, z = ~br, type = 'surface')
+  plot_ly(y = ~expr_diff, x = ~cn_diff, z = ~br, type = 'surface')
+}
+
+plot_buffering_ratio <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
+                                 buffered_threshold = 0.3349625, anti_scaling_threshold = 0.6849625) {
+  expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
+  expr_base <- rep(2, length(expr_diff))
+  cn_base <- rep(2, length(expr_diff))
+  cn_diff <- rep(cn_diff, length(expr_diff))
+  br_values <- br_func(expr_var = expr_diff + expr_base, cn_var = cn_diff + cn_base,
+                       expr_base = expr_base, cn_base = cn_base)
+
+  ggplot() +
+    aes(x = expr_diff, y = br_values) +
+    geom_line() +
+    geom_hline(yintercept = buffered_threshold, color = "orange", linetype = "dashed") +
+    geom_hline(yintercept = anti_scaling_threshold, color = "red", linetype = "dashed") +
+    scale_x_continuous(limits = expr_lim, breaks = seq(expr_lim[1], expr_lim[2], 0.2))
 }
 
 buffering_example <- function() {
