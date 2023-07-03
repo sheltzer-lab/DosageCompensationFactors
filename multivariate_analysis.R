@@ -8,7 +8,9 @@ library(assertr)
 library(ggplot2)
 library(limma)
 library(pROC)
+library(caret)
 library(randomForest)
+library(MLeval)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -44,30 +46,54 @@ dc_factor_cols <- c(
 
 # === Separate Training & Test Dataset ===
 
-training_set_ratio <- 0.8
+training_set_ratio <- 0.6
 set.seed(42)
 
 ## Chromosome Gain
 
-shuffle_rows <- function (df) {
+shuffle_rows <- function(df) {
   df[sample(nrow(df), replace = FALSE),]
 }
 
-impute_na <- function (df) {
+impute_na <- function(df) {
   df %>%
     mutate_if(is.numeric, \(x) replace_na(x, median(x, na.rm = TRUE)))
+}
+
+balanced_sample <- function(df, class_col, n_per_class) {
+  df %>%
+    group_by({ { class_col } }) %>%
+    slice_sample(n = n_per_class) %>%
+    ungroup()
+}
+
+rebalance_binary <- function(df, class_col, target_balance = 0.5) {
+  total_size <- nrow(df)
+  new_samples <- df %>%
+    count({ { class_col } }) %>%
+    mutate(Ratio = n/total_size) %>%
+    mutate(Samples = c(ceiling((target_balance * min(n)) / (1 - target_balance)), min(n))) %>%
+    select(-n, -Ratio)
+
+  df %>%
+    left_join(y = new_samples, by = quo_name(enquo(class_col))) %>%
+    group_by({ { class_col } }) %>%
+    group_map(~slice_sample(.x, n = unique(.x$Samples)), .keep = TRUE) %>%
+    bind_rows() %>%
+    select(-Samples)
 }
 
 expr_buf_goncalves_gain <- expr_buf_goncalves %>%
   filter(ChromosomeArm.CNA > 0) %>%
   filter(Buffering.ChrArmLevel.Class == "Buffered" | Buffering.ChrArmLevel.Class == "Scaling") %>%
-  mutate(Buffered = if_else(Buffering.ChrArmLevel.Class == "Buffered", 1, 0)) %>%
-  mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
+  mutate(Buffered = factor(Buffering.ChrArmLevel.Class, levels = c("Scaling", "Buffered"))) %>%
   drop_na(Buffered) %>%
-  select("UniqueId", Buffered, all_of(dc_factor_cols)) %>%
+  select(Buffered, all_of(dc_factor_cols)) %>%
   impute_na() %>%
-  slice_sample(n = 10000) %>%
-  shuffle_rows()
+  rebalance_binary(Buffered, target_balance = 0.6) %>%
+  shuffle_rows() %>%
+  janitor::clean_names()
+
 
 train_size <- ceiling(nrow(expr_buf_goncalves_gain) * training_set_ratio)
 test_size <- nrow(expr_buf_goncalves_gain) - train_size
@@ -76,31 +102,22 @@ train_set <- expr_buf_goncalves_gain[1:train_size,]
 test_set <- expr_buf_goncalves_gain[(train_size+1):(train_size+test_size),]
 
 # === Build Random Forest Model ===
+tc <- trainControl(method = "cv",
+                   number = 2,
+                   savePredictions = TRUE,
+                   classProbs = TRUE,
+                   verboseIter = TRUE)
 
-predictors <- train_set %>% select(-Buffered, -UniqueId)
-responses <- train_set$Buffered
+forest.model <- caret::train(buffered ~., data = train_set, method = "rf", trControl = tc)
 
-rf_model <- randomForest(
-  x = predictors,
-  y = responses,
-  na.action = na.roughfix
-)
+forest.model$finalModel
+forest.model.eval <- evalm(forest.model)
+forest.model.importance <- varImp(forest.model)
+varImpPlot(forest.model$finalModel)
 
-rf_model
-which.min(rf_model$err.rate)
-rf_model$err.rate[which.min(rf_model$err.rate)]
-varImpPlot(rf_model)
-
-test_predictors <- test_set %>% select(-Buffered, -UniqueId)
-test_responses <- test_set$Buffered
-test_predicted <- predict(rf_model, newdata=test_predictors)
-test_predicted_prob <- predict(rf_model, newdata=test_predictors, type = "prob")
-
-success <- test_responses == test_predicted
-success_rate <- length(success[success]) / length(success)
-
-rf_roc <- roc(response = test_responses, predictor = as.numeric(test_predicted_prob[,1]))
-plot(rf_roc)
+test_predicted_prob <- predict(forest.model, test_set, type = "prob")
+rf_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[,"Buffered"]))
+plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft", print.auc = TRUE)
+rf_coords <- coords(rf_roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
+print(rf_coords)
 auc(rf_roc)
-
-# ToDo: Read https://stackoverflow.com/questions/30366143/how-to-compute-roc-and-auc-under-roc-after-training-using-caret-in-r
