@@ -46,7 +46,7 @@ dc_factor_cols <- c(
 
 # === Separate Training & Test Dataset ===
 
-training_set_ratio <- 0.6
+training_set_ratio <- 0.7
 set.seed(42)
 
 ## Chromosome Gain
@@ -90,7 +90,7 @@ expr_buf_goncalves_gain <- expr_buf_goncalves %>%
   drop_na(Buffered) %>%
   select(Buffered, all_of(dc_factor_cols)) %>%
   impute_na() %>%
-  rebalance_binary(Buffered, target_balance = 0.6) %>%
+  rebalance_binary(Buffered, target_balance = 0.7) %>%
   shuffle_rows() %>%
   janitor::clean_names()
 
@@ -121,3 +121,19 @@ plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft", prin
 rf_coords <- coords(rf_roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
 print(rf_coords)
 auc(rf_roc)
+
+
+# === Build Neural Network Model ===
+
+tc <- trainControl(method = "cv",
+                   number = 3,
+                   savePredictions = TRUE,
+                   classProbs = TRUE,
+                   verboseIter = TRUE)
+
+neural.model <- caret::train(buffered ~., data = train_set, method = "pcaNNet", trControl = tc)
+
+neural.model$finalModel
+test_predicted_prob_neural <- predict(neural.model, test_set, type = "prob")
+rf_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob_neural[,"Buffered"]))
+plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft", print.auc = TRUE)
