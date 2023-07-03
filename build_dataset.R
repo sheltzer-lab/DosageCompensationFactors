@@ -72,31 +72,34 @@ filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
 
 build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
   df %>%
-  inner_join(y = copy_number, by = c(quo_name(enquo(cellline_col)), "Gene.Symbol"),
-             na_matches = "never", relationship = "many-to-one") %>%
-  # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
-  filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
-  calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
-  calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                                aneuploidy_score_col = CellLine.AneuploidyScore) %>%
-  group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
-  mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
-  ungroup() %>%
-  mutate(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline,
-         Log2FC.Average = Protein.Expression.Average - Protein.Expression.Baseline.Unweighted) %>%
-  # ToDo: Evaluate if building mean positive/negative CNV per gene is interesting
-  mutate(Buffering.GeneLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
-  # ToDo: Investigate: "Gene-level copy number data that is log2 transformed with a pseudo-count of 1; log2(CN ratio + 1)"
-                                                     2^Gene.CopyNumber.Baseline, 2^Gene.CopyNumber)) %>%
-  mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
-         Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
-                                                              cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                              cn_var = ChromosomeArm.CopyNumber),
-         Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
-                                                                      cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                                      cn_var = ChromosomeArm.CopyNumber)) %>%
-  left_join(y = dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            na_matches = "never", relationship = "many-to-one")
+    inner_join(y = copy_number, by = c(quo_name(enquo(cellline_col)), "Gene.Symbol"),
+               na_matches = "never", relationship = "many-to-one") %>%
+    # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
+    filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
+    calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
+    calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                                  aneuploidy_score_col = CellLine.AneuploidyScore) %>%
+    group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
+    mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline,
+           Log2FC.Average = Protein.Expression.Average - Protein.Expression.Baseline.Unweighted) %>%
+    # ToDo: Evaluate if building mean positive/negative CNV per gene is interesting
+    mutate(Buffering.GeneLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
+                                                       2^Gene.CopyNumber.Baseline, 2^Gene.CopyNumber),
+           Buffering.ChrArmLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
+                                                         ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
+           Buffering.ChrArmLevel.Average.Ratio = buffering_ratio(2^Protein.Expression.Baseline.Unweighted, 2^Protein.Expression.Average,
+                                                                 ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber)) %>%
+    mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
+           Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
+                                                                cn_base = ChromosomeArm.CopyNumber.Baseline,
+                                                                cn_var = ChromosomeArm.CopyNumber),
+           Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
+                                                                        cn_base = ChromosomeArm.CopyNumber.Baseline,
+                                                                        cn_var = ChromosomeArm.CopyNumber)) %>%
+    left_join(y = dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+              na_matches = "never", relationship = "many-to-one")
 }
 
 # === Process & Write datasets to disk ===
