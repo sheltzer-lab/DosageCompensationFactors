@@ -70,11 +70,38 @@ analyze_roc_auc <- function(df, buffering_class_col, factor_cols = dc_factor_col
     arrange(DosageCompensation.Factor.ROC.AUC)
 }
 
-plot_roc_auc_summary <- function(factors_roc_auc, plots_dir, filename) {
-  roc_auc_summary_plot <- factors_roc_auc %>%
+reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
+  df %>%
+    filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
+    mutate(Buffered = ifelse({ { buffering_class_col } } == "Buffered", 1, 0)) %>%
+    mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
+    drop_na(Buffered) %>%
+    select(all_of(id_col), Buffered, all_of(factor_cols)) %>%
+    pivot_longer(all_of(factor_cols),
+                 names_to = "DosageCompensation.Factor",
+                 values_to = "DosageCompensation.Factor.Value")
+}
+
+determine_rocs <- function(df) {
+  df %>%
+    group_by(DosageCompensation.Factor) %>%
+    group_map(~list(factor = .y$DosageCompensation.Factor,
+                    roc = roc(.x$Buffered, .x$DosageCompensation.Factor.Value, na.rm = TRUE)), .keep = TRUE)
+}
+
+plot_roc_auc_summary <- function(factor_rocs, plots_dir, filename) {
+  roc_auc_summary <- data.frame(t(sapply(factor_rocs,
+                                         \(x) list(DosageCompensation.Factor = x$factor,
+                                                   DosageCompensation.Factor.ROC.AUC = auc(x$roc)) %>% unlist()))) %>%
+    mutate(DosageCompensation.Factor.ROC.AUC = as.numeric(DosageCompensation.Factor.ROC.AUC),
+           ROC.AUC.Label = format(round(DosageCompensation.Factor.ROC.AUC, 3), nsmall = 3),
+           DosageCompensation.Factor = factor(DosageCompensation.Factor,
+                                              levels = DosageCompensation.Factor[order(DosageCompensation.Factor.ROC.AUC)])) %>%
+    arrange(DosageCompensation.Factor.ROC.AUC)
+
+  roc_auc_summary_plot <- roc_auc_summary %>%
     ggplot() +
-    aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC.AUC,
-        label = format(round(DosageCompensation.Factor.ROC.AUC, 3), nsmall = 3)) +
+    aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC.AUC, label = ROC.AUC.Label) +
     geom_bar(stat = "identity") +
     geom_hline(yintercept = 0.5) +
     geom_text(color = "white", nudge_y = -0.007) +
@@ -84,41 +111,30 @@ plot_roc_auc_summary <- function(factors_roc_auc, plots_dir, filename) {
     coord_flip(ylim = c(0.45, 0.60)) +
     theme_light()
 
+  dir.create(plots_dir)
   ggsave(here(plots_dir, filename), plot = roc_auc_summary_plot,
          height = 200, width = 180, units = "mm", dpi = 300)
+
+  return(roc_auc_summary)
 }
 
 roc_auc_summary_score <- function(df) {
   mean(abs(df$DosageCompensation.Factor.ROC.AUC - 0.5))
 }
 
-plot_roc_curves <- function(df, buffering_class_col, dir, factor_cols = dc_factor_cols) {
+plot_roc_curves <- function(factor_rocs, dir) {
   dir <- here(dir, "ROC-Curves")
   dir.create(dir, recursive = TRUE)
 
-  plot_roc_curve <- function(df_dc_factors, factor) {
-    df <- df_dc_factors %>%
-      filter(DosageCompensation.Factor == factor)
-    roc <- roc(df$Buffered, df$DosageCompensation.Factor.Value, na.rm = TRUE)
-    roc_plot <- plot(roc, main = factor, print.thres = "best", print.thres.best.method = "closest.topleft", print.auc = TRUE)
-  }
-
-  df_dc_factors <- df %>%
-    filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
-    mutate(Buffered = ifelse({ { buffering_class_col } } == "Buffered", 1, 0)) %>%
-    mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
-    drop_na(Buffered) %>%
-    select(Buffered, all_of(factor_cols)) %>%
-    pivot_longer(all_of(factor_cols),
-                 names_to = "DosageCompensation.Factor",
-                 values_to = "DosageCompensation.Factor.Value")
-
-  for (factor in factor_cols) {
-    png(here(dir, paste0(factor, ".png")),
+  for (factor_roc in factor_rocs) {
+    png(here(dir, paste0(factor_roc$factor, ".png")),
         width = 200, height = 200, units = "mm", res = 200)
-    plot_roc_curve(df_dc_factors, factor)
+    plot(factor_roc$roc, main = factor_roc$factor,
+         print.thres = "best", print.thres.best.method = "closest.topleft", print.auc = TRUE)
     dev.off()
   }
+
+  return(factor_rocs)
 }
 
 # === Calculate ROC AUCs for data from Goncalves et al. ===
@@ -179,16 +195,14 @@ auc_score_chr_loss <- roc_auc_summary_score(factors_roc_auc_chr_loss)
 
 ## Chromosome-arm-level Dosage Compensation (Close to reference method of Schukken & Sheltzer)
 ### Chromosome Arm Gain
-factors_roc_auc_chr_gain_avg <- expr_buf_goncalves %>%
+auc_score_chr_loss_avg <- expr_buf_goncalves %>%
   filter(ChromosomeArm.CNA > 0) %>%
-  analyze_roc_auc(Buffering.ChrArmLevel.Average.Class)
-
-plot_roc_auc_summary(factors_roc_auc_chr_gain_avg, here(goncalves_chr_plots_dir, "AverageGain"), "buffering-factors_roc-auc_chr-level_gain_averaged.png")
-plot_roc_curves(expr_buf_goncalves %>% filter(ChromosomeArm.CNA > 0),
-                Buffering.ChrArmLevel.Average.Class, here(goncalves_chr_plots_dir, "AverageGain"),
-                factor_cols = union(dc_factor_cols, c("Buffering.ChrArmLevel.Average.Ratio", "Log2FC.Average")))
-
-auc_score_chr_gain_avg <- roc_auc_summary_score(factors_roc_auc_chr_gain_avg)
+  reshape_factors(Buffering.ChrArmLevel.Average.Class) %>%
+  determine_rocs() %>%
+  plot_roc_curves(here(goncalves_chr_plots_dir, "AverageGain")) %>%
+  plot_roc_auc_summary(here(goncalves_chr_plots_dir, "AverageGain"),
+                       "buffering-factors_roc-auc_chr-level_gain_averaged.png") %>%
+  roc_auc_summary_score()
 
 ### Chromosome Arm Loss
 factors_roc_auc_chr_loss_avg <- expr_buf_goncalves %>%
