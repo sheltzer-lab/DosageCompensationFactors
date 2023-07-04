@@ -130,7 +130,8 @@ plot_roc_curves <- function(factor_rocs, dir) {
     png(here(dir, paste0(factor_roc$factor, ".png")),
         width = 200, height = 200, units = "mm", res = 200)
     plot(factor_roc$roc, main = factor_roc$factor,
-         print.thres = "best", print.thres.best.method = "closest.topleft", print.auc = TRUE)
+         print.thres = "best", print.thres.best.method = "closest.topleft",
+         print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
     dev.off()
   }
 

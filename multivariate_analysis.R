@@ -106,9 +106,14 @@ tc <- trainControl(method = "cv",
                    number = 2,
                    savePredictions = TRUE,
                    classProbs = TRUE,
-                   verboseIter = TRUE)
+                   verboseIter = TRUE,
+                   summaryFunction = twoClassSummary)
 
-forest.model <- caret::train(buffered ~., data = train_set, method = "rf", trControl = tc)
+forest.model <- caret::train(buffered ~.,
+                             data = train_set,
+                             method = "rf",
+                             trControl = tc,
+                             metric = "ROC")
 
 forest.model$finalModel
 forest.model.eval <- evalm(forest.model)
@@ -117,7 +122,8 @@ varImpPlot(forest.model$finalModel)
 
 test_predicted_prob <- predict(forest.model, test_set, type = "prob")
 rf_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[,"Buffered"]))
-plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft", print.auc = TRUE)
+plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft",
+     print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
 rf_coords <- coords(rf_roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
 print(rf_coords)
 auc(rf_roc)
@@ -129,11 +135,17 @@ tc <- trainControl(method = "cv",
                    number = 3,
                    savePredictions = TRUE,
                    classProbs = TRUE,
-                   verboseIter = TRUE)
+                   verboseIter = TRUE,
+                   summaryFunction = twoClassSummary)
 
-neural.model <- caret::train(buffered ~., data = train_set, method = "pcaNNet", trControl = tc)
+neural.model <- caret::train(buffered ~.,
+                             data = train_set,
+                             method = "pcaNNet",
+                             trControl = tc,
+                             metric = "ROC")
 
 neural.model$finalModel
 test_predicted_prob_neural <- predict(neural.model, test_set, type = "prob")
 rf_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob_neural[,"Buffered"]))
-plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft", print.auc = TRUE)
+plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft",
+     print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
