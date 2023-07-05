@@ -19,12 +19,10 @@ source(here("parameters.R"))
 source(here("buffering_ratio.R"))
 
 output_data_dir <- output_data_base_dir
-goncalves_plots_dir <- here(plots_base_dir, "Univariate", "Goncalves")
-depmap_plots_dir <- here(plots_base_dir, "Univariate", "DepMap")
+plots_dir <- here(plots_base_dir, "Multivariate")
 
 dir.create(output_data_dir, recursive = TRUE)
-dir.create(goncalves_plots_dir, recursive = TRUE)
-dir.create(depmap_plots_dir, recursive = TRUE)
+dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
 
@@ -44,13 +42,6 @@ dc_factor_cols <- c(
   ## Dataset-Specific Factors
   "Protein Neutral CV"
 )
-
-# === Separate Training & Test Dataset ===
-
-training_set_ratio <- 0.7
-set.seed(42)
-
-## Chromosome Gain
 
 shuffle_rows <- function(df) {
   df[sample(nrow(df), replace = FALSE),]
@@ -84,69 +75,144 @@ rebalance_binary <- function(df, class_col, target_balance = 0.5) {
     select(-Samples)
 }
 
-expr_buf_goncalves_gain <- expr_buf_goncalves %>%
-  filter(ChromosomeArm.CNA > 0) %>%
-  filter(Buffering.ChrArmLevel.Class == "Buffered" | Buffering.ChrArmLevel.Class == "Scaling") %>%
-  mutate(Buffered = factor(Buffering.ChrArmLevel.Class, levels = c("Scaling", "Buffered"))) %>%
-  drop_na(Buffered) %>%
-  select(Buffered, all_of(dc_factor_cols)) %>%
-  impute_na() %>%
-  rebalance_binary(Buffered, target_balance = 0.7) %>%
-  shuffle_rows() %>%
-  janitor::clean_names()
+filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {
+  cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01))
+  df %>%
+    filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[1]] |
+             Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[2]])
+}
+
+filter_arm_gain <- function(df) {
+  df %>% filter(ChromosomeArm.CNA > 0)
+}
+
+filter_arm_loss <- function(df) {
+  df %>% filter(ChromosomeArm.CNA < 0)
+}
+
+explain_model <- function(model, dir) {
+  # forest.model$finalModel
+  # forest.model.eval <- evalm(forest.model)
+  # forest.model.importance <- varImp(forest.model)
+  png(here(dir, paste0("importance", ".png")),
+        width = 200, height = 200, units = "mm", res = 200)
+  varImpPlot(model$finalModel)
+  dev.off()
+}
+
+evaluate_model <- function(model, test_set, dir) {
+  test_predicted_prob <- predict(model, test_set, type = "prob")
+  model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]))
+  png(here(dir, paste0("ROC-Curve", ".png")),
+      width = 200, height = 200, units = "mm", res = 200)
+  plot(model_roc, print.thres = "best", print.thres.best.method = "closest.topleft",
+       print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
+  dev.off()
+  # rf_coords <- coords(rf_roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
+
+  return(model_roc)
+}
+
+run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, train_control, dir,
+                         factor_cols = dc_factor_cols, training_set_ratio = 0.7, target_balance = 0.7) {
+  set.seed(42)
+  dir.create(dir, recursive = TRUE)
+
+  # Filter and clean dataset before training
+  df_prep <- dataset %>%
+    filter_func() %>%
+    filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
+    mutate(Buffered = factor({ { buffering_class_col } }, levels = c("Scaling", "Buffered"))) %>%
+    drop_na(Buffered) %>%
+    select(Buffered, all_of(factor_cols)) %>%
+    impute_na() %>%
+    rebalance_binary(Buffered, target_balance = target_balance) %>%
+    shuffle_rows() %>%
+    janitor::clean_names()
 
 
-train_size <- ceiling(nrow(expr_buf_goncalves_gain) * training_set_ratio)
-test_size <- nrow(expr_buf_goncalves_gain) - train_size
+  # Split training & test data
+  train_size <- ceiling(nrow(df_prep) * training_set_ratio)
+  test_size <- nrow(df_prep) - train_size
 
-train_set <- expr_buf_goncalves_gain[1:train_size,]
-test_set <- expr_buf_goncalves_gain[(train_size+1):(train_size+test_size),]
+  df_train <- df_prep[1:train_size,]
+  df_test <- df_prep[(train_size + 1):(train_size + test_size),]
 
-# === Build Random Forest Model ===
-tc <- trainControl(method = "cv",
-                   number = 2,
-                   savePredictions = TRUE,
-                   classProbs = TRUE,
-                   verboseIter = TRUE,
-                   summaryFunction = twoClassSummary)
+  # Train model
+  model <- caret::train(buffered ~ .,
+                        data = df_train,
+                        method = model_name,
+                        trControl = train_control,
+                        metric = "ROC")
 
-forest.model <- caret::train(buffered ~.,
-                             data = train_set,
-                             method = "rf",
-                             trControl = tc,
-                             metric = "ROC")
+  explain_model(model, dir)
+  model_roc <- evaluate_model(model, df_test, dir)
 
-forest.model$finalModel
-forest.model.eval <- evalm(forest.model)
-forest.model.importance <- varImp(forest.model)
-varImpPlot(forest.model$finalModel)
+  return(list(model = model, test_set = df_test, train_set = df_train, roc = model_roc))
+}
 
-test_predicted_prob <- predict(forest.model, test_set, type = "prob")
-rf_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[,"Buffered"]))
-plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft",
-     print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
-rf_coords <- coords(rf_roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
-print(rf_coords)
-auc(rf_roc)
+# === Build Models ===
+tc_rf <- trainControl(method = "cv",
+                      number = 2,
+                      savePredictions = TRUE,
+                      classProbs = TRUE,
+                      verboseIter = TRUE,
+                      summaryFunction = twoClassSummary)
+
+tc_nn <- trainControl(method = "cv",
+                      number = 3,
+                      savePredictions = TRUE,
+                      classProbs = TRUE,
+                      verboseIter = TRUE,
+                      summaryFunction = twoClassSummary)
+
+analysis_list <- list(
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = identity,
+       dir = here(plots_dir, "Goncalves", "Gene-Level", "Unfiltered")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+       dir = here(plots_dir, "Goncalves", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Gain")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Loss")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "GainAverage")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "LossAverage")),
+
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
+       dir = here(plots_dir, "DepMap", "Gene-Level", "Unfiltered")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+       dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "GainAverage")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "LossAverage"))
+)
 
 
-# === Build Neural Network Model ===
+## Random Forest
+for (analysis in analysis_list) {
+  run_analysis(dataset = analysis$dataset,
+               buffering_class_col = get(analysis$buffering),
+               filter_func = analysis$filter,
+               model_name = "rf",
+               train_control = tc_rf,
+               dir = analysis$dir
+  )
+}
 
-tc <- trainControl(method = "cv",
-                   number = 3,
-                   savePredictions = TRUE,
-                   classProbs = TRUE,
-                   verboseIter = TRUE,
-                   summaryFunction = twoClassSummary)
-
-neural.model <- caret::train(buffered ~.,
-                             data = train_set,
-                             method = "pcaNNet",
-                             trControl = tc,
-                             metric = "ROC")
-
-neural.model$finalModel
-test_predicted_prob_neural <- predict(neural.model, test_set, type = "prob")
-rf_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob_neural[,"Buffered"]))
-plot(rf_roc, print.thres="best", print.thres.best.method="closest.topleft",
-     print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
+## Neural Network
+for (analysis in analysis_list) {
+  run_analysis(dataset = analysis$dataset,
+               buffering_class_col = get(analysis$buffering),
+               filter_func = analysis$filter,
+               model_name = "pcaNNet",
+               train_control = tc_nn,
+               dir = analysis$dir
+  )
+}
