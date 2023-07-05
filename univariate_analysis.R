@@ -46,7 +46,9 @@ dc_factor_cols <- c(
   "Translation Rate", "Protein Length", "mRNA Length",
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
   "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
-  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate"
+  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score",
+  ## Dataset-Specific Factors
+  "Protein Neutral CV"
 )
 
 reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
@@ -83,11 +85,11 @@ plot_roc_auc_summary <- function(factor_rocs, plots_dir, filename) {
     aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC.AUC, label = ROC.AUC.Label) +
     geom_bar(stat = "identity") +
     geom_hline(yintercept = 0.5) +
-    geom_text(color = "white", nudge_y = -0.007) +
-    scale_y_continuous(breaks = seq(0.45, 0.60, 0.05)) +
+    geom_text(color = "white", nudge_y = -0.01) +
+    scale_y_continuous(breaks = seq(0.45, 0.65, 0.05)) +
     xlab("") +
     ylab("ROC AUC") +
-    coord_flip(ylim = c(0.45, 0.60)) +
+    coord_flip(ylim = c(0.45, 0.65)) +
     theme_light()
 
   dir.create(plots_dir)

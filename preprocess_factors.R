@@ -44,8 +44,10 @@ mobidb <- read_tsv_arrow(here(factor_data_dir, "mobidb_result.tsv"))
 ned_human <- read_excel(here(factor_data_dir, "NED-Human_RPE-1.xlsx"))
 # DOI: 10.1101/gr.1272403, Supplementary Table 9: Decay Rates (hour^-1) for Accessions in HepG2 Experiments
 mrna_decay <- read_excel(here(factor_data_dir, "Yang.2003.mRNADecay.Rates.xlsx"))
+# DOI: 10.1016/j.celrep.2013.09.043, Supplementary Table 2: Supersaturation Database.
+agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 18254)
 
-# === Summarize Factor Datasets ===
+# === Prepare Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
 count_sites <- function(df, colname = "n") {
   df %>%
@@ -185,6 +187,22 @@ df_decay <- mrna_decay %>%
   group_by(Gene.Symbol, Gene.ENSEMBL.Id, Protein.Uniprot.Accession) %>%
   summarize(`Mean mRNA Decay Rate` = mean(`mRNA Decay Rate`, na.rm = TRUE))
 
+## Prepare Aggregation Score data
+df_agg <- agg_score %>%
+  select("Uniprot ID", "ZaggSC") %>%
+  mutate(`Aggregation Score` = as.numeric(if_else(ZaggSC == "-", NA, ZaggSC))) %>%
+  drop_na() %>%
+  separate_wider_delim(`Uniprot ID`,
+           delim = "_",
+           names = c("Gene.Symbol", "Species")) %>%
+  filter(Species == "human") %>%
+  select(-ZaggSC, -Species) %>%
+  mutate(Gene.Symbol = toupper(Gene.Symbol)) %>%
+  mapIds("SYMBOL", "UNIPROT",
+         "Gene.Symbol", "Protein.Uniprot.Accession") %>%
+  mapIds("SYMBOL", "ENSEMBL",
+         "Gene.Symbol", "Gene.ENSEMBL.Id")
+
 # === Combine Factor Datasets ===
 
 ptm_factor_datasets <- list(
@@ -197,7 +215,7 @@ ptm_factor_datasets <- list(
 )
 
 other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
-                           df_complexes, df_mobidb, df_ned, df_decay)
+                           df_complexes, df_mobidb, df_ned, df_decay, df_agg)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
@@ -226,10 +244,10 @@ df_dc_factors <- df_dc_factors_ptm %>%
 ambig <- df_dc_factors_other %>% add_count(Gene.Symbol, Protein.Uniprot.Accession) %>% filter(n > 1)
 
 ## Determine amount of missing data
-# ToDo: Exclude ID columns
-na_counts <- colSums(is.na(df_dc_factors))
+df_dc_factors_values <- df_dc_factors %>% select(where(is.numeric))
+na_counts <- colSums(is.na(df_dc_factors_values))
 total_na_count <- sum(na_counts)
-na_share <- total_na_count / (nrow(df_dc_factors) * ncol(df_dc_factors))
+na_share <- total_na_count / (nrow(df_dc_factors_values) * ncol(df_dc_factors_values))
 
 # === Write combined factors to disk ===
 write_parquet(df_dc_factors, here(output_data_dir, 'dosage_compensation_factors.parquet'),

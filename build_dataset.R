@@ -58,6 +58,19 @@ calculate_baseline_expression <- function(df, gene_col, chr_arm_cna_col, expr_co
                unmatched = "error", na_matches = "never", relationship = "many-to-one")
 }
 
+calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col) {
+  variance <- df %>%
+    select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }) %>%
+    filter({ { chr_arm_cna_col } } == 0) %>%
+    group_by({ { gene_col } }) %>%
+    summarize(`Protein Neutral CV` = -log2(sd(2^{ { expr_col } }, na.rm = TRUE) / mean(2^{ { expr_col } }, na.rm = TRUE))) %>%
+    ungroup()
+
+  df %>%
+    inner_join(y = variance, by = quo_name(enquo(gene_col)),
+               unmatched = "error", na_matches = "never", relationship = "many-to-one")
+}
+
 filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
   filtered <- df %>%
     group_by({ { gene_col } }, { { chr_arm_cna_col } }) %>%
@@ -79,6 +92,7 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
     calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
     calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                                   aneuploidy_score_col = CellLine.AneuploidyScore) %>%
+    calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
     group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
     mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
     ungroup() %>%

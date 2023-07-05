@@ -40,9 +40,10 @@ dc_factor_cols <- c(
   "Translation Rate", "Protein Length", "mRNA Length",
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
   "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
-  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate"
+  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score",
+  ## Dataset-Specific Factors
+  "Protein Neutral CV"
 )
-
 
 # === Separate Training & Test Dataset ===
 
