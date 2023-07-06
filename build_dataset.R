@@ -7,7 +7,7 @@ library(readxl)
 library(assertr)
 library(ggplot2)
 library(limma)
-library(pROC)
+library(gtsummary)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -63,7 +63,7 @@ calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col
     select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }) %>%
     filter({ { chr_arm_cna_col } } == 0) %>%
     group_by({ { gene_col } }) %>%
-    summarize(`Protein Neutral CV` = -log2(sd(2^{ { expr_col } }, na.rm = TRUE) / mean(2^{ { expr_col } }, na.rm = TRUE))) %>%
+    summarize(`Protein Neutral CV` = log2(sd({ { expr_col } }, na.rm = TRUE) / abs(mean({ { expr_col } }, na.rm = TRUE)))) %>%
     ungroup()
 
   df %>%
@@ -115,6 +115,34 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
     left_join(y = dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
               na_matches = "never", relationship = "many-to-one")
 }
+
+
+# === Summarize Distribution of Obersavtions ===
+
+summary_tbl_depmap <- expr_buf_depmap %>%
+  tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Normalized, Protein.Expression.Average,
+                          Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
+                          Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+                          Buffering.ChrArmLevel.Average.Class),
+              by = ChromosomeArm.CNA) %>%
+  modify_header(label = "**Chromosome Arm CNA**") %>%
+  bold_labels()
+
+summary_tbl_goncalves <- expr_buf_goncalves %>%
+  tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Normalized, Protein.Expression.Average,
+                          Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
+                          Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+                          Buffering.ChrArmLevel.Average.Class),
+              by = ChromosomeArm.CNA) %>%
+  modify_header(label = "**Chromosome Arm CNA**") %>%
+  bold_labels()
+
+summary_tbl_merged <-   tbl_merge(
+    tbls = list(summary_tbl_depmap, summary_tbl_goncalves),
+    tab_spanner = c("**DepMap**", "**ProCan (Goncalves)**")
+  )
+
+summary_tbl_merged
 
 # === Process & Write datasets to disk ===
 
