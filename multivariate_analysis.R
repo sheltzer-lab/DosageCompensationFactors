@@ -9,8 +9,6 @@ library(ggplot2)
 library(limma)
 library(pROC)
 library(caret)
-library(randomForest)
-library(MLeval)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -18,6 +16,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("parameters.R"))
 source(here("buffering_ratio.R"))
 
+models_base_dir <- here("Output", "Models")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Multivariate")
 
@@ -38,9 +37,7 @@ dc_factor_cols <- c(
   "Translation Rate", "Protein Length", "mRNA Length",
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
   "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
-  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score",
-  ## Dataset-Specific Factors
-  "Protein Neutral CV"
+  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score"
 )
 
 shuffle_rows <- function(df) {
@@ -103,9 +100,6 @@ filter_arm_loss_gene_avg <- function(df) {
 }
 
 explain_model <- function(model, dir) {
-  # forest.model$finalModel
-  # forest.model.eval <- evalm(forest.model)
-  # forest.model.importance <- varImp(forest.model)
   png(here(dir, paste0("importance", ".png")),
         width = 200, height = 200, units = "mm", res = 200)
   varImpPlot(model$finalModel)
@@ -114,34 +108,40 @@ explain_model <- function(model, dir) {
 
 evaluate_model <- function(model, test_set, dir) {
   test_predicted_prob <- predict(model, test_set, type = "prob")
-  model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]))
+  model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]), na.rm = TRUE)
   png(here(dir, paste0("ROC-Curve", ".png")),
       width = 200, height = 200, units = "mm", res = 200)
   plot(model_roc, print.thres = "best", print.thres.best.method = "closest.topleft",
        print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
   dev.off()
-  # rf_coords <- coords(rf_roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
 
   return(model_roc)
 }
 
-run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, train_control, dir,
-                         factor_cols = dc_factor_cols, training_set_ratio = 0.7, target_balance = 0.7) {
-  set.seed(42)
-  dir.create(dir, recursive = TRUE)
-
-  # Filter and clean dataset before training
-  df_prep <- dataset %>%
-    filter_func() %>%
+clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_cols) {
+  dataset %>%
     filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
     mutate(Buffered = factor({ { buffering_class_col } }, levels = c("Scaling", "Buffered"))) %>%
     drop_na(Buffered) %>%
     select(Buffered, all_of(factor_cols)) %>%
-    impute_na() %>%
-    rebalance_binary(Buffered, target_balance = target_balance) %>%
-    shuffle_rows() %>%
     janitor::clean_names()
+}
 
+run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, train_control,
+                         plots_dir, models_dir, sub_dir,
+                         factor_cols = dc_factor_cols, training_set_ratio = 0.7, target_balance = 0.7) {
+  set.seed(42)
+  plots_dir <- here(plots_dir, sub_dir)
+  dir.create(plots_dir, recursive = TRUE)
+  dir.create(models_dir, recursive = TRUE)
+
+  # Filter and clean dataset before training
+  df_prep <- dataset %>%
+    filter_func() %>%
+    clean_data({{ buffering_class_col }}, factor_cols = factor_cols) %>%
+    impute_na() %>%
+    rebalance_binary(buffered, target_balance = target_balance) %>%
+    shuffle_rows()
 
   # Split training & test data
   train_size <- ceiling(nrow(df_prep) * training_set_ratio)
@@ -157,8 +157,12 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
                         trControl = train_control,
                         metric = "ROC")
 
-  explain_model(model, dir)
-  model_roc <- evaluate_model(model, df_test, dir)
+  # Save Mode\
+  saveRDS(model, here(models_dir, paste0("model_", model_name, "_", paste0(sub_dir, collapse = ""), ".rds")))
+
+  # Evaluate Model
+  explain_model(model, plots_dir)
+  model_roc <- evaluate_model(model, df_test, plots_dir)
 
   return(list(model = model, roc = model_roc))
 }
@@ -179,44 +183,63 @@ tc_nn <- trainControl(method = "cv",
                       summaryFunction = twoClassSummary)
 
 analysis_list <- list(
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = identity,
-       dir = here(plots_dir, "Goncalves", "Gene-Level", "Unfiltered")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = identity,
+  #      sub_dir =  list("Goncalves", "Gene-Level", "Unfiltered")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-       dir = here(plots_dir, "Goncalves", "Gene-Level", "Filtered")),
+       sub_dir =  list("Goncalves", "Gene-Level", "Filtered")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Gain")),
+       sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Gain")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Loss")),
+       sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Loss")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "GainAverage")),
+       sub_dir =  list("Goncalves", "ChromosomeArm-Level", "GainAverage")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "LossAverage")),
+       sub_dir =  list("Goncalves", "ChromosomeArm-Level", "LossAverage")),
 
-  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
-       dir = here(plots_dir, "DepMap", "Gene-Level", "Unfiltered")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
+  #      sub_dir =  list("DepMap", "Gene-Level", "Unfiltered")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-       dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered")),
+       sub_dir =  list("DepMap", "Gene-Level", "Filtered")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain")),
+       sub_dir =  list("DepMap", "ChromosomeArm-Level", "Gain")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss")),
+       sub_dir =  list("DepMap", "ChromosomeArm-Level", "Loss")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "GainAverage")),
+       sub_dir =  list("DepMap", "ChromosomeArm-Level", "GainAverage")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "LossAverage"))
+       sub_dir =  list("DepMap", "ChromosomeArm-Level", "LossAverage"))
 )
 
 
 ## Random Forest
+analysis_results_rf <- list()
 for (analysis in analysis_list) {
-  run_analysis(dataset = analysis$dataset,
-               buffering_class_col = get(analysis$buffering),
-               filter_func = analysis$filter,
-               model_name = "rf",
-               train_control = tc_rf,
-               dir = analysis$dir
+  results <- run_analysis(dataset = analysis$dataset,
+                          buffering_class_col = get(analysis$buffering),
+                          filter_func = analysis$filter,
+                          model_name = "rf",
+                          train_control = tc_rf,
+                          plots_dir = plots_dir,
+                          sub_dir = analysis$sub_dir,
+                          models_dir = models_base_dir
   )
+  result_id <- paste0(analysis$sub_dir, collapse = "_")
+  analysis_results_rf[[result_id]] <- results
 }
+
+### Use goncalves gain model for evaluating depmap gene-level gain data
+model_goncalves_filtered <- readRDS(here(models_base_dir, "model_rf_GoncalvesGene-LevelFiltered.rds"))
+
+test_data <- expr_buf_depmap %>%
+  filter_cn_diff_quantiles() %>%
+  clean_data(Buffering.GeneLevel.Class) %>%
+  impute_na() %>%
+  shuffle_rows()
+
+eval_dir <- here(plots_dir, "Goncalves", "Gene-Level", "Filtered", "Eval-DepMap")
+dir.create(eval_dir, recursive = TRUE)
+evaluate_model(model_goncalves_filtered, test_data, eval_dir)
+
 
 ## Neural Network
 for (analysis in analysis_list) {
@@ -225,6 +248,8 @@ for (analysis in analysis_list) {
                filter_func = analysis$filter,
                model_name = "pcaNNet",
                train_control = tc_nn,
-               dir = analysis$dir
+               plots_dir = plots_dir,
+               sub_dir = analysis$sub_dir,
+               models_dir = models_base_dir
   )
 }
