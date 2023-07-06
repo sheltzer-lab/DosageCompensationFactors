@@ -90,6 +90,18 @@ filter_arm_loss <- function(df) {
   df %>% filter(ChromosomeArm.CNA < 0)
 }
 
+filter_arm_gain_gene_avg <- function(df) {
+  df %>%
+    filter(ChromosomeArm.CNA > 0) %>%
+    distinct(Gene.Symbol, .keep_all = TRUE)
+}
+
+filter_arm_loss_gene_avg <- function(df) {
+  df %>%
+    filter(ChromosomeArm.CNA < 0) %>%
+    distinct(Gene.Symbol, .keep_all = TRUE)
+}
+
 explain_model <- function(model, dir) {
   # forest.model$finalModel
   # forest.model.eval <- evalm(forest.model)
@@ -148,7 +160,7 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
   explain_model(model, dir)
   model_roc <- evaluate_model(model, df_test, dir)
 
-  return(list(model = model, test_set = df_test, train_set = df_train, roc = model_roc))
+  return(list(model = model, roc = model_roc))
 }
 
 # === Build Models ===
@@ -175,9 +187,9 @@ analysis_list <- list(
        dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Gain")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
        dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Loss")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain,
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
        dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "GainAverage")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss,
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
        dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "LossAverage")),
 
   list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
@@ -188,9 +200,9 @@ analysis_list <- list(
        dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
        dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain,
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
        dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "GainAverage")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss,
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
        dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "LossAverage"))
 )
 
