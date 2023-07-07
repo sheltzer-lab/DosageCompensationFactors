@@ -9,6 +9,7 @@ library(ggplot2)
 library(limma)
 library(pROC)
 library(caret)
+library(randomForest)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -77,6 +78,18 @@ filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {
   df %>%
     filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[1]] |
              Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[2]])
+}
+
+filter_cn_gain <- function(df, remove_below = "90%") {
+  cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01))
+  df %>%
+    filter(Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_below])
+}
+
+filter_cn_loss <- function(df, remove_above = "10%") {
+  cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01))
+  df %>%
+    filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_above])
 }
 
 filter_arm_gain <- function(df) {
@@ -187,6 +200,10 @@ analysis_list <- list(
   #      sub_dir =  list("Goncalves", "Gene-Level", "Unfiltered")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
        sub_dir =  list("Goncalves", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+       sub_dir =  list("Goncalves", "Gene-Level", "FilteredGain")),
+  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+       sub_dir =  list("Goncalves", "Gene-Level", "FilteredLoss")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
        sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Gain")),
   list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
@@ -200,6 +217,10 @@ analysis_list <- list(
   #      sub_dir =  list("DepMap", "Gene-Level", "Unfiltered")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
        sub_dir =  list("DepMap", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+       sub_dir =  list("DepMap", "Gene-Level", "FilteredGain")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+       sub_dir =  list("DepMap", "Gene-Level", "FilteredLoss")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
        sub_dir =  list("DepMap", "ChromosomeArm-Level", "Gain")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
