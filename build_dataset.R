@@ -122,6 +122,7 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
 summary_tbl_depmap <- expr_buf_depmap %>%
   tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Normalized, Protein.Expression.Average,
                           Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
+                          Log2FC, Log2FC.Average,
                           Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
                           Buffering.ChrArmLevel.Average.Class),
               by = ChromosomeArm.CNA) %>%
@@ -131,6 +132,7 @@ summary_tbl_depmap <- expr_buf_depmap %>%
 summary_tbl_goncalves <- expr_buf_goncalves %>%
   tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Normalized, Protein.Expression.Average,
                           Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
+                          Log2FC, Log2FC.Average,
                           Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
                           Buffering.ChrArmLevel.Average.Class),
               by = ChromosomeArm.CNA) %>%
