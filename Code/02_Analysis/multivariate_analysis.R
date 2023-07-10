@@ -46,6 +46,8 @@ balanced_sample <- function(df, class_col, n_per_class) {
     ungroup()
 }
 
+# TODO: Explore further techniques
+# Oversampling, Undersampling, slice_sample(weight_by=..., replace=TRUE)
 rebalance_binary <- function(df, class_col, target_balance = 0.5) {
   total_size <- nrow(df)
   new_samples <- df %>%
