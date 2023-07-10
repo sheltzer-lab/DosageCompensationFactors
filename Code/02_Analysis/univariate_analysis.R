@@ -13,6 +13,8 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "buffering_ratio.R"))
+source(here("Code", "02_Analysis", "analysis.R"))
+
 
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Univariate")
@@ -37,20 +39,6 @@ expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_g
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
 # === Define Processing Functions ===
-dc_factor_cols <- c(
-  "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
-  "Mean 3'-UTR Length", "Mean 5'-UTR Length",
-  "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
-  "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
-  "mRNA Abundance", "Protein Abundance", "Transcription Rate",
-  "Translation Rate", "Protein Length", "mRNA Length",
-  "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
-  "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
-  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score",
-  ## Dataset-Specific Factors
-  "Protein Neutral CV"
-)
-
 reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
   df %>%
     filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
@@ -129,33 +117,6 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, dir) {
   plot_roc_curves(dir) %>%
   plot_roc_auc_summary(dir, "buffering-factors_roc-auc.png") %>%
   roc_auc_summary_score()
-}
-
-filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {
-  cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01))
-  df %>%
-    filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[1]] |
-             Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[2]])
-}
-
-filter_cn_gain <- function(df, remove_below = "90%") {
-  cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01))
-  df %>%
-    filter(Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_below])
-}
-
-filter_cn_loss <- function(df, remove_above = "10%") {
-  cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01))
-  df %>%
-    filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_above])
-}
-
-filter_arm_gain <- function(df) {
-  df %>% filter(ChromosomeArm.CNA > 0)
-}
-
-filter_arm_loss <- function(df) {
-  df %>% filter(ChromosomeArm.CNA < 0)
 }
 
 # === Calculate ROC for all factors in all datasets ===
