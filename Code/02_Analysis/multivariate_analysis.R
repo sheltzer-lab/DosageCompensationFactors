@@ -14,8 +14,8 @@ library(randomForest)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
-source(here("parameters.R"))
-source(here("buffering_ratio.R"))
+source(here("Code", "parameters.R"))
+source(here("Code", "buffering_ratio.R"))
 
 models_base_dir <- here("Output", "Models")
 output_data_dir <- output_data_base_dir

@@ -8,8 +8,8 @@ library(purrr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
-source(here("parameters.R"))
-source(here("annotation.R"))
+source(here("Code", "parameters.R"))
+source(here("Code", "annotation.R"))
 
 factor_data_dir <- here(external_data_dir, "Factors")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")

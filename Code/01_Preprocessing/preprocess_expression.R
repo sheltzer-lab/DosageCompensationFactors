@@ -10,8 +10,8 @@ library(limma)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
-source(here("parameters.R"))
-source(here("annotation.R"))
+source(here("Code", "parameters.R"))
+source(here("Code", "annotation.R"))
 
 
 expression_data_dir <- here(external_data_dir, "Expression")

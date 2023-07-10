@@ -6,7 +6,7 @@ library(stringr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
-source(here("parameters.R"))
+source(here("Code", "parameters.R"))
 
 copynumber_data_dir <- here(external_data_dir, "CopyNumber")
 output_data_dir <- output_data_base_dir

@@ -11,8 +11,8 @@ library(pROC)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
-source(here("parameters.R"))
-source(here("buffering_ratio.R"))
+source(here("Code", "parameters.R"))
+source(here("Code", "buffering_ratio.R"))
 
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Univariate")
