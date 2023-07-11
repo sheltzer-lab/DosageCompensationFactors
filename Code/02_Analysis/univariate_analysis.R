@@ -184,7 +184,7 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
   set.seed(42)
   dataset <- dataset %>%
     filter_func()
-  results <- data.frame(DosageCompensation.Factor = factor(),
+  results <- data.frame(DosageCompensation.Factor = character(),
                         DosageCompensation.Factor.ROC.AUC = numeric(),
                         Bootstrap.Sample = integer())
   pb <- txtProgressBar(min = 0, max = n, style = 3)
@@ -199,103 +199,105 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
     })
     setTxtProgressBar(pb, i)
   }
+  results <- results %>%
+    mutate(DosageCompensation.Factor = factor(DosageCompensation.Factor,
+                                              levels = sort(unique(DosageCompensation.Factor))))
   close(pb)
   return(results)
 }
 
-n <- 100
+rank_factors_per_sample <- function(df) {
+  df %>%
+    group_by(Bootstrap.Sample) %>%
+    mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
+    ungroup() %>%
+    arrange(DosageCompensation.Factor, Bootstrap.Sample) %>%
+    select(Bootstrap.Sample, DosageCompensation.Factor.Rank) %>%
+    split(~Bootstrap.Sample) %>%
+    sapply(\(df) list(df$DosageCompensation.Factor.Rank))
+}
+
+rank_factors_average <- function(df) {
+  df %>%
+    group_by(DosageCompensation.Factor) %>%
+    summarize(DosageCompensation.Factor.ROC.AUC = mean(DosageCompensation.Factor.ROC.AUC)) %>%
+    mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
+    ungroup() %>%
+    arrange(DosageCompensation.Factor)
+}
+
+n <- 20
 sample_prop <- 0.9
 
 results_chr_gain <- expr_buf_goncalves %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Average.Class,
-                            filter_func = filter_arm_gain_gene_avg,
-                            n = n, sample_prop = sample_prop)
-
-results_chr_gain_ranked <- results_chr_gain %>%
-  group_by(Bootstrap.Sample) %>%
-  mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-  ungroup() %>%
-  arrange(DosageCompensation.Factor, Bootstrap.Sample) %>%
-  select(Bootstrap.Sample, DosageCompensation.Factor.Rank) %>%
-  split(~ Bootstrap.Sample) %>%
-  sapply(\(df) list(df$DosageCompensation.Factor.Rank))
+  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
+                            filter_func = filter_arm_gain,
+                            n = n, sample_prop = sample_prop) %>%
+  mutate(Condition = "ChrGain")
 
 results_chr_loss <- expr_buf_goncalves %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Average.Class,
-                            filter_func = filter_arm_loss_gene_avg,
-                            n = n, sample_prop = sample_prop)
-
-results_chr_loss_ranked <- results_chr_loss %>%
-  group_by(Bootstrap.Sample) %>%
-  mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-  ungroup() %>%
-  arrange(DosageCompensation.Factor, Bootstrap.Sample) %>%
-  select(Bootstrap.Sample, DosageCompensation.Factor.Rank) %>%
-  split(~ Bootstrap.Sample) %>%
-  sapply(\(df) list(df$DosageCompensation.Factor.Rank))
-
-
+  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
+                            filter_func = filter_arm_loss,
+                            n = n, sample_prop = sample_prop) %>%
+  mutate(Condition = "ChrLoss")
 
 results_cn_gain <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_gain,
-                            n = n, sample_prop = sample_prop)
-
-results_cn_gain_ranked <- results_cn_gain %>%
-  group_by(Bootstrap.Sample) %>%
-  mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-  ungroup() %>%
-  arrange(DosageCompensation.Factor, Bootstrap.Sample) %>%
-  select(Bootstrap.Sample, DosageCompensation.Factor.Rank) %>%
-  split(~ Bootstrap.Sample) %>%
-  sapply(\(df) list(df$DosageCompensation.Factor.Rank))
+                            n = n, sample_prop = sample_prop) %>%
+  mutate(Condition = "CopyNumberGain")
 
 results_cn_loss <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_loss,
-                            n = n, sample_prop = sample_prop)
+                            n = n, sample_prop = sample_prop) %>%
+  mutate(Condition = "CopyNumberLoss")
 
-results_cn_loss_ranked <- results_cn_loss%>%
-  group_by(Bootstrap.Sample) %>%
-  mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-  ungroup() %>%
-  arrange(DosageCompensation.Factor, Bootstrap.Sample) %>%
-  select(Bootstrap.Sample, DosageCompensation.Factor.Rank) %>%
-  split(~ Bootstrap.Sample) %>%
-  sapply(\(df) list(df$DosageCompensation.Factor.Rank))
 
-# ToDo: Problematic, unlisting creates a single vector of all observations across all bootstrap samples
-# Results in each bootstrap sample can be very different
-cor.test(unlist(results_chr_gain_ranked),
-         unlist(results_chr_loss_ranked),
-         method = "kendall")
+results_test <- results_chr_gain %>%
+  bind_rows(results_cn_gain) %>%
+  pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
+                names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+  group_by(DosageCompensation.Factor) %>%
+  summarize(Wilcoxon.p.value = wilcox.test(ChrGain, CopyNumberGain, paired=TRUE)$p.value)
 
-cor.test(unlist(results_cn_gain_ranked),
-         unlist(results_cn_loss_ranked),
-         method = "kendall")
+results_stat <- results_chr_gain %>%
+  group_by(DosageCompensation.Factor) %>%
+  summarize(Mean = mean(DosageCompensation.Factor.ROC.AUC),
+            Median = median(DosageCompensation.Factor.ROC.AUC),
+            StdDev = sd(DosageCompensation.Factor.ROC.AUC))
 
-cor.test(unlist(results_chr_gain_ranked),
-         unlist(results_cn_gain_ranked),
-         method = "kendall")
 
-cor.test(unlist(results_chr_loss_ranked),
-         unlist(results_cn_loss_ranked),
-         method = "kendall")
-
-## Averaged tests
 
 results_chr_gain_avg <- results_chr_gain %>%
-  group_by(DosageCompensation.Factor) %>%
-  summarize(DosageCompensation.Factor.ROC.AUC = mean(DosageCompensation.Factor.ROC.AUC)) %>%
-  mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-  arrange(DosageCompensation.Factor)
+  rank_factors_average()
 
 results_cn_gain_avg <- results_cn_gain %>%
-  group_by(DosageCompensation.Factor) %>%
-  summarize(DosageCompensation.Factor.ROC.AUC = mean(DosageCompensation.Factor.ROC.AUC)) %>%
-  mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-  arrange(DosageCompensation.Factor)
+  rank_factors_average()
 
-cor.test(unlist(results_chr_gain_avg$DosageCompensation.Factor.Rank),
-         unlist(results_cn_gain_avg$DosageCompensation.Factor.Rank),
+results_chr_loss_avg <- results_chr_loss %>%
+  rank_factors_average()
+
+results_cn_loss_avg <- results_cn_loss %>%
+  rank_factors_average()
+
+cor.test(results_chr_gain_avg$DosageCompensation.Factor.Rank,
+         results_chr_loss_avg$DosageCompensation.Factor.Rank,
          method = "kendall")
+
+cor.test(results_cn_gain_avg$DosageCompensation.Factor.Rank,
+         results_cn_loss_avg$DosageCompensation.Factor.Rank,
+         method = "kendall")
+
+cor.test(results_chr_gain_avg$DosageCompensation.Factor.Rank,
+         results_cn_gain_avg$DosageCompensation.Factor.Rank,
+         method = "kendall")
+
+cor.test(results_chr_loss_avg$DosageCompensation.Factor.Rank,
+         results_cn_loss_avg$DosageCompensation.Factor.Rank,
+         method = "kendall")
+
+results_chr_gain %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC.AUC) +
+  geom_violin(trim = FALSE)
