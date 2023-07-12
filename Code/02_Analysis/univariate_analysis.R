@@ -8,6 +8,7 @@ library(assertr)
 library(ggplot2)
 library(limma)
 library(pROC)
+library(skimr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -206,24 +207,53 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
   return(results)
 }
 
-rank_factors_per_sample <- function(df) {
-  df %>%
-    group_by(Bootstrap.Sample) %>%
-    mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-    ungroup() %>%
-    arrange(DosageCompensation.Factor, Bootstrap.Sample) %>%
-    select(Bootstrap.Sample, DosageCompensation.Factor.Rank) %>%
-    split(~Bootstrap.Sample) %>%
-    sapply(\(df) list(df$DosageCompensation.Factor.Rank))
-}
+compare_conditions <- function(df_condition1, df_condition2) {
+  # Merge dataframes for unified handling
+  results_merged <- df_condition1 %>%
+    bind_rows(df_condition2) %>%
+    assertr::verify(length(unique(Condition)) == 2)
 
-rank_factors_average <- function(df) {
-  df %>%
+  conditions <- unique(results_merged$Condition)
+
+  # Compare statistical significance between each factor
+  results_factor_test <- results_merged %>%
+    pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
+                names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
     group_by(DosageCompensation.Factor) %>%
-    summarize(DosageCompensation.Factor.ROC.AUC = mean(DosageCompensation.Factor.ROC.AUC)) %>%
-    mutate(DosageCompensation.Factor.Rank = as.integer(rank(-DosageCompensation.Factor.ROC.AUC))) %>%
-    ungroup() %>%
-    arrange(DosageCompensation.Factor)
+    summarize(Wilcoxon.p.value = wilcox.test(get(conditions[1]), get(conditions[2]), paired = TRUE)$p.value) %>%
+    mutate(Wilcoxon.significant = case_when(
+      Wilcoxon.p.value < 0.0001 ~ "***",
+      Wilcoxon.p.value < 0.001 ~ "**",
+      Wilcoxon.p.value < 0.01 ~ "*",
+      TRUE ~ "N.S."
+    ))
+
+  # Calculate summary statistics for each factor in each condition
+  results_stat <- results_merged %>%
+    pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
+                names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    group_by(DosageCompensation.Factor) %>%
+    skimr::skim(conditions[1], conditions[2]) %>%
+    rename(Condition = skim_variable) %>%
+    ungroup()
+
+  # Compare statistical significance between ranks of median values of factors
+  results_rank_test <- results_stat %>%
+    # Introduce pertubation to avoid equal ranks, otherwise p-value can't be calculated accurately
+    mutate(RankValue = numeric.p50 + runif(length(numeric.p50), min = -1e-10, max = 1e-10)) %>%
+    group_by(Condition) %>%
+    mutate(DosageCompensation.Factor.Rank = as.integer(rank(-RankValue))) %>%
+    select(Condition, DosageCompensation.Factor, DosageCompensation.Factor.Rank) %>%
+    pivot_wider(id_cols = DosageCompensation.Factor,
+                names_from = Condition, values_from = DosageCompensation.Factor.Rank)
+
+  results_rank_test <- cor.test(results_rank_test[[conditions[1]]],
+                                results_rank_test[[conditions[2]]],
+                                method = "kendall")
+
+  return(list(factor_test = results_factor_test,
+              rank_test = results_rank_test,
+              stat_summary = results_stat))
 }
 
 n <- 20
@@ -233,69 +263,121 @@ results_chr_gain <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
                             filter_func = filter_arm_gain,
                             n = n, sample_prop = sample_prop) %>%
-  mutate(Condition = "ChrGain")
+  mutate(Condition = "Chromosome Arm Gain")
 
 results_chr_loss <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
                             filter_func = filter_arm_loss,
                             n = n, sample_prop = sample_prop) %>%
-  mutate(Condition = "ChrLoss")
+  mutate(Condition = "Chromosome Arm Loss")
 
 results_cn_gain <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_gain,
                             n = n, sample_prop = sample_prop) %>%
-  mutate(Condition = "CopyNumberGain")
+  mutate(Condition = "Gene Copy Number Gain")
 
 results_cn_loss <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_loss,
                             n = n, sample_prop = sample_prop) %>%
-  mutate(Condition = "CopyNumberLoss")
+  mutate(Condition = "Gene Copy Number Loss")
+
+## Chr Gain vs. Chr Loss
+results_chrgain_chrloss <- compare_conditions(results_chr_gain, results_chr_loss)
+## CN gain vs. CN loss
+results_cngain_cnloss <- compare_conditions(results_cn_gain, results_cn_loss)
+## Chr gain vs. CN gain
+results_chrgain_cngain <- compare_conditions(results_chr_gain, results_cn_gain)
+## Chr loss vs. CN loss
+results_chrloss_cnloss <- compare_conditions(results_chr_loss, results_cn_loss)
+
+conditions <- unique(results_chrgain_chrloss$stat_summary$Condition)
+
+plot1 <- results_chrgain_chrloss$stat_summary %>%
+  assertr::verify(length(unique(Condition)) == 2) %>%
+  filter(Condition == conditions[1]) %>%
+  arrange(DosageCompensation.Factor) %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = numeric.p50, label = format(round(numeric.p50, 3), nsmall = 3)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = 0.5) +
+  geom_text(color = "white", nudge_y = -0.015) +
+  scale_y_continuous(breaks = seq(0.45, 0.60, 0.05)) +
+  ggtitle(conditions[1]) +
+  xlab("") +
+  ylab("Median ROC AUC") +
+  coord_flip(ylim = c(0.45, 0.60)) +
+  theme_minimal()  +
+  theme(axis.text.y = element_blank())
+
+plot2 <- results_chrgain_chrloss$stat_summary %>%
+  assertr::verify(length(unique(Condition)) == 2) %>%
+  filter(Condition == conditions[2]) %>%
+  arrange(DosageCompensation.Factor) %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = numeric.p50, label = format(round(numeric.p50, 3), nsmall = 3)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = 0.5) +
+  geom_text(color = "white", nudge_y = -0.015) +
+  scale_y_continuous(breaks = seq(0.45, 0.60, 0.05)) +
+  ggtitle(conditions[2]) +
+  xlab("") +
+  ylab("Median ROC AUC") +
+  coord_flip(ylim = c(0.45, 0.60)) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank())
+
+plot_factor_signif <- results_chrgain_chrloss$factor_test %>%
+  arrange(DosageCompensation.Factor) %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = Wilcoxon.p.value,
+      label = Wilcoxon.significant) +
+  geom_text(y = 1, color = "black") +
+  xlab("") +
+  ylab("") +
+  coord_flip(ylim = c(0, 2)) +
+  theme_void() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+plot_labels <- results_chrgain_chrloss$factor_test %>%
+  arrange(DosageCompensation.Factor) %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = Wilcoxon.p.value,
+      label = DosageCompensation.Factor) +
+  geom_text(y = 2, color = "black", hjust = 1) +
+  xlab("") +
+  ylab("") +
+  coord_flip(ylim = c(0, 2)) +
+  theme_void() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+# ToDo: Use geom_bracket from ggpubr
+plot_bracket <- broom::tidy(results_chrgain_chrloss$rank_test) %>%
+  mutate(Label = paste0("p = ", format(round(p.value, 3), nsmall = 3),
+                        ", τ = ", format(round(estimate, 3), nsmall = 3))) %>%
+  ggplot() +
+  aes(x = 0, y = 0, label = Label) +
+  geom_segment(aes(x = 4, y = 1, xend = 8, yend = 1)) +
+  geom_text(x = 6, color = "black", y = 2) +
+  xlab("") +
+  ylab("") +
+  xlim(c(0, 10)) +
+  ylim(c(0, 3)) +
+  theme_void() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
 
-results_test <- results_chr_gain %>%
-  bind_rows(results_cn_gain) %>%
-  pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
-                names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
-  group_by(DosageCompensation.Factor) %>%
-  summarize(Wilcoxon.p.value = wilcox.test(ChrGain, CopyNumberGain, paired=TRUE)$p.value)
+plot_stack1 <- cowplot::plot_grid(plot_labels, plot1, plot_factor_signif, plot2,
+                                  nrow = 1, ncol = 4, align = "h", axis = "l",
+                                  rel_widths = c(0.8, 1, 0.1, 1))
 
-results_stat <- results_chr_gain %>%
-  group_by(DosageCompensation.Factor) %>%
-  summarize(Mean = mean(DosageCompensation.Factor.ROC.AUC),
-            Median = median(DosageCompensation.Factor.ROC.AUC),
-            StdDev = sd(DosageCompensation.Factor.ROC.AUC))
-
-
-
-results_chr_gain_avg <- results_chr_gain %>%
-  rank_factors_average()
-
-results_cn_gain_avg <- results_cn_gain %>%
-  rank_factors_average()
-
-results_chr_loss_avg <- results_chr_loss %>%
-  rank_factors_average()
-
-results_cn_loss_avg <- results_cn_loss %>%
-  rank_factors_average()
-
-cor.test(results_chr_gain_avg$DosageCompensation.Factor.Rank,
-         results_chr_loss_avg$DosageCompensation.Factor.Rank,
-         method = "kendall")
-
-cor.test(results_cn_gain_avg$DosageCompensation.Factor.Rank,
-         results_cn_loss_avg$DosageCompensation.Factor.Rank,
-         method = "kendall")
-
-cor.test(results_chr_gain_avg$DosageCompensation.Factor.Rank,
-         results_cn_gain_avg$DosageCompensation.Factor.Rank,
-         method = "kendall")
-
-cor.test(results_chr_loss_avg$DosageCompensation.Factor.Rank,
-         results_cn_loss_avg$DosageCompensation.Factor.Rank,
-         method = "kendall")
+plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
+                                  nrow = 2, ncol = 1,
+                                  rel_heights = c(0.1, 1))
 
 results_chr_gain %>%
   ggplot() +
