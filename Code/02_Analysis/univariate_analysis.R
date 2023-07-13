@@ -9,19 +9,22 @@ library(ggplot2)
 library(limma)
 library(pROC)
 library(skimr)
+library(cowplot)
+library(broom)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
 source(here("Code", "02_Analysis", "analysis.R"))
-
 
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Univariate")
 goncalves_plots_dir <- here(plots_base_dir, "Univariate", "Goncalves")
 goncalves_chr_plots_dir <- here(goncalves_plots_dir, "ChromosomeArm-Level")
 goncalves_gene_plots_dir <- here(goncalves_plots_dir, "Gene-Level")
+goncalves_comparison_plots_dir <- here(goncalves_plots_dir, "Comparison")
 depmap_plots_dir <- here(plots_base_dir, "Univariate", "DepMap")
 depmap_chr_plots_dir <- here(depmap_plots_dir, "ChromosomeArm-Level")
 depmap_gene_plots_dir <- here(depmap_plots_dir, "Gene-Level")
@@ -30,6 +33,7 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(goncalves_plots_dir, recursive = TRUE)
 dir.create(goncalves_chr_plots_dir, recursive = TRUE)
 dir.create(goncalves_gene_plots_dir, recursive = TRUE)
+dir.create(goncalves_comparison_plots_dir, recursive = TRUE)
 dir.create(depmap_plots_dir, recursive = TRUE)
 dir.create(depmap_chr_plots_dir, recursive = TRUE)
 dir.create(depmap_gene_plots_dir, recursive = TRUE)
@@ -64,7 +68,6 @@ summarize_roc_auc <- function(factor_rocs) {
                                          \(x) list(DosageCompensation.Factor = x$factor,
                                                    DosageCompensation.Factor.ROC.AUC = auc(x$roc)) %>% unlist()))) %>%
     mutate(DosageCompensation.Factor.ROC.AUC = as.numeric(DosageCompensation.Factor.ROC.AUC),
-           ROC.AUC.Label = format(round(DosageCompensation.Factor.ROC.AUC, 3), nsmall = 3),
            DosageCompensation.Factor = factor(DosageCompensation.Factor,
                                               levels = DosageCompensation.Factor[order(DosageCompensation.Factor.ROC.AUC)])) %>%
     arrange(DosageCompensation.Factor.ROC.AUC)
@@ -72,22 +75,14 @@ summarize_roc_auc <- function(factor_rocs) {
 
 plot_roc_auc_summary <- function(roc_auc_summary, plots_dir, filename) {
   roc_auc_summary_plot <- roc_auc_summary %>%
-    ggplot() +
-    aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC.AUC, label = ROC.AUC.Label) +
-    geom_bar(stat = "identity") +
-    geom_hline(yintercept = 0.5) +
-    geom_text(color = "white", nudge_y = -0.01) +
-    scale_y_continuous(breaks = seq(0.45, 0.65, 0.05)) +
-    xlab("") +
-    ylab("ROC AUC") +
-    coord_flip(ylim = c(0.45, 0.65)) +
-    theme_light()
+    vertical_bar_chart(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC,
+                       value_lab = "ROC AUC")
 
   dir.create(plots_dir)
   ggsave(here(plots_dir, filename), plot = roc_auc_summary_plot,
          height = 200, width = 180, units = "mm", dpi = 300)
 
-  return(roc_auc_summary %>% select(-ROC.AUC.Label))
+  return(roc_auc_summary)
 }
 
 roc_auc_summary_score <- function(df) {
@@ -207,29 +202,37 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
   return(results)
 }
 
+# Notes for Statistical Tests and Multiple Testing Correction
+# * Bootstrapping values independently samples values from the same distribution (with replacement) => iid.
+# ** Proof: Show that sampling is iid. (linear map from set of indices to set of objects)
+# * Check : ROC AUC of factors may be correlated -> Not independent!
+
 compare_conditions <- function(df_condition1, df_condition2) {
   # Merge dataframes for unified handling
-  results_merged <- df_condition1 %>%
+  df_merged <- df_condition1 %>%
     bind_rows(df_condition2) %>%
     assertr::verify(length(unique(Condition)) == 2)
 
-  conditions <- unique(results_merged$Condition)
+  conditions <- unique(df_merged$Condition)
 
   # Compare statistical significance between each factor
-  results_factor_test <- results_merged %>%
+  df_factor_test <- df_merged %>%
     pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
                 names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
     group_by(DosageCompensation.Factor) %>%
     summarize(Wilcoxon.p.value = wilcox.test(get(conditions[1]), get(conditions[2]), paired = TRUE)$p.value) %>%
+    # ToDo: Check Assumptions
+    ## Hochberg's and Hommel's methods are valid when the hypothesis tests are independent or when they are non-negatively associated
+    mutate(Wilcoxon.p.adjusted = p.adjust(Wilcoxon.p.value, method = "BY")) %>%
     mutate(Wilcoxon.significant = case_when(
-      Wilcoxon.p.value < 0.0001 ~ "***",
-      Wilcoxon.p.value < 0.001 ~ "**",
-      Wilcoxon.p.value < 0.01 ~ "*",
+      Wilcoxon.p.adjusted < 0.0001 ~ "***",
+      Wilcoxon.p.adjusted < 0.001 ~ "**",
+      Wilcoxon.p.adjusted < 0.01 ~ "*",
       TRUE ~ "N.S."
     ))
 
   # Calculate summary statistics for each factor in each condition
-  results_stat <- results_merged %>%
+  df_stat <- df_merged %>%
     pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
                 names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
     group_by(DosageCompensation.Factor) %>%
@@ -238,7 +241,7 @@ compare_conditions <- function(df_condition1, df_condition2) {
     ungroup()
 
   # Compare statistical significance between ranks of median values of factors
-  results_rank_test <- results_stat %>%
+  df_rank_test <- df_stat %>%
     # Introduce pertubation to avoid equal ranks, otherwise p-value can't be calculated accurately
     mutate(RankValue = numeric.p50 + runif(length(numeric.p50), min = -1e-10, max = 1e-10)) %>%
     group_by(Condition) %>%
@@ -247,139 +250,143 @@ compare_conditions <- function(df_condition1, df_condition2) {
     pivot_wider(id_cols = DosageCompensation.Factor,
                 names_from = Condition, values_from = DosageCompensation.Factor.Rank)
 
-  results_rank_test <- cor.test(results_rank_test[[conditions[1]]],
-                                results_rank_test[[conditions[2]]],
-                                method = "kendall")
+  df_rank_test <- cor.test(df_rank_test[[conditions[1]]],
+                           df_rank_test[[conditions[2]]],
+                           method = "kendall")
 
-  return(list(factor_test = results_factor_test,
-              rank_test = results_rank_test,
-              stat_summary = results_stat))
+  return(list(factor_test = df_factor_test,
+              rank_test = df_rank_test,
+              stat_summary = df_stat))
 }
 
-n <- 20
+plot_comparison <- function(comparison_results) {
+  conditions <- unique(comparison_results$stat_summary$Condition)
+
+  plot1 <- comparison_results$stat_summary %>%
+    assertr::verify(length(unique(Condition)) == 2) %>%
+    filter(Condition == conditions[1]) %>%
+    arrange(DosageCompensation.Factor) %>%
+    vertical_bar_chart(DosageCompensation.Factor, numeric.p50,
+                       title = conditions[1], value_lab = "Median ROC AUC") +
+    theme(axis.text.y = element_blank())
+
+  plot2 <- comparison_results$stat_summary %>%
+    filter(Condition == conditions[2]) %>%
+    arrange(DosageCompensation.Factor) %>%
+    vertical_bar_chart(DosageCompensation.Factor, numeric.p50,
+                       title = conditions[2], value_lab = "Median ROC AUC") +
+    theme(axis.text.y = element_blank())
+
+  plot_factor_signif <- comparison_results$factor_test %>%
+    arrange(DosageCompensation.Factor) %>%
+    plot_text_col(DosageCompensation.Factor, Wilcoxon.significant)
+
+  plot_labels <- comparison_results$factor_test %>%
+    arrange(DosageCompensation.Factor) %>%
+    plot_text_col(DosageCompensation.Factor, DosageCompensation.Factor, align = "right")
+
+  plot_bracket <- broom::tidy(comparison_results$rank_test) %>%
+    mutate(Label = paste0("p", if_else(p.value < 0.0001,
+                                        " < 0.0001",
+                                        paste0(" = ", format(round(p.value, 4), nsmall = 4))),
+                          ", τ = ", format(round(estimate, 3), nsmall = 3))) %>%
+    ggplot() +
+    aes(x = 0, y = 0, label = Label) +
+    geom_segment(aes(x = 4, y = 1, xend = 8, yend = 1)) +
+    geom_text(x = 6, color = "black", y = 2) +
+    xlab(NULL) +
+    ylab(NULL) +
+    xlim(c(0, 10)) +
+    ylim(c(0, 3)) +
+    theme_void() +
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+          axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+
+  plot_stack1 <- cowplot::plot_grid(plot_labels, plot1, plot_factor_signif, plot2,
+                                    nrow = 1, ncol = 4, align = "h", axis = "l",
+                                    rel_widths = c(0.75, 1, 0.1, 1))
+  plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
+                                    nrow = 2, ncol = 1,
+                                    rel_heights = c(0.1, 1))
+
+  return(plot_stack2)
+}
+
+n <- 100
 sample_prop <- 0.9
 
-results_chr_gain <- expr_buf_goncalves %>%
+bootstrap_chr_gain <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
                             filter_func = filter_arm_gain,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Chromosome Arm Gain")
 
-results_chr_loss <- expr_buf_goncalves %>%
+bootstrap_chr_loss <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
                             filter_func = filter_arm_loss,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Chromosome Arm Loss")
 
-results_cn_gain <- expr_buf_goncalves %>%
+bootstrap_cn_gain <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_gain,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Gene Copy Number Gain")
 
-results_cn_loss <- expr_buf_goncalves %>%
+bootstrap_cn_loss <- expr_buf_goncalves %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_loss,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Gene Copy Number Loss")
 
-## Chr Gain vs. Chr Loss
-results_chrgain_chrloss <- compare_conditions(results_chr_gain, results_chr_loss)
-## CN gain vs. CN loss
-results_cngain_cnloss <- compare_conditions(results_cn_gain, results_cn_loss)
-## Chr gain vs. CN gain
-results_chrgain_cngain <- compare_conditions(results_chr_gain, results_cn_gain)
-## Chr loss vs. CN loss
-results_chrloss_cnloss <- compare_conditions(results_chr_loss, results_cn_loss)
+## Checkpoint: Save and load bootstrapped results before continuing
+write_parquet(bootstrap_chr_gain, here(output_data_dir, 'bootstrap_univariate_goncalves_chrgain.parquet'),
+              version = "2.6")
+write_parquet(bootstrap_chr_loss, here(output_data_dir, 'bootstrap_univariate_goncalves_chrloss.parquet'),
+              version = "2.6")
+write_parquet(bootstrap_cn_gain, here(output_data_dir, 'bootstrap_univariate_goncalves_cngain.parquet'),
+              version = "2.6")
+write_parquet(bootstrap_cn_loss, here(output_data_dir, 'bootstrap_univariate_goncalves_cnloss.parquet'),
+              version = "2.6")
+bootstrap_chr_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_chrgain.parquet"))
+bootstrap_chr_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_chrloss.parquet"))
+bootstrap_cn_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_cngain.parquet"))
+bootstrap_cn_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_cnloss.parquet"))
 
-conditions <- unique(results_chrgain_chrloss$stat_summary$Condition)
+## Compare statistical results between conditions
+### Chr Gain vs. Chr Loss
+results_chrgain_chrloss <- compare_conditions(bootstrap_chr_gain, bootstrap_chr_loss)
+plot_chrgain_chrloss <- plot_comparison(results_chrgain_chrloss)
+ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrgain_chrloss.png"),
+       plot = plot_chrgain_chrloss,
+       height = 200, width = 320, units = "mm", dpi = 300)
 
-plot1 <- results_chrgain_chrloss$stat_summary %>%
-  assertr::verify(length(unique(Condition)) == 2) %>%
-  filter(Condition == conditions[1]) %>%
-  arrange(DosageCompensation.Factor) %>%
-  ggplot() +
-  aes(x = DosageCompensation.Factor, y = numeric.p50, label = format(round(numeric.p50, 3), nsmall = 3)) +
-  geom_bar(stat = "identity") +
-  geom_hline(yintercept = 0.5) +
-  geom_text(color = "white", nudge_y = -0.015) +
-  scale_y_continuous(breaks = seq(0.45, 0.60, 0.05)) +
-  ggtitle(conditions[1]) +
-  xlab("") +
-  ylab("Median ROC AUC") +
-  coord_flip(ylim = c(0.45, 0.60)) +
-  theme_minimal()  +
-  theme(axis.text.y = element_blank())
+### CN gain vs. CN loss
+results_cngain_cnloss <- compare_conditions(bootstrap_cn_gain, bootstrap_cn_loss)
+plot_cngain_cnloss <- plot_comparison(results_cngain_cnloss)
+ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_cngain_cnloss.png"),
+       plot = plot_cngain_cnloss,
+       height = 200, width = 320, units = "mm", dpi = 300)
 
-plot2 <- results_chrgain_chrloss$stat_summary %>%
-  assertr::verify(length(unique(Condition)) == 2) %>%
-  filter(Condition == conditions[2]) %>%
-  arrange(DosageCompensation.Factor) %>%
-  ggplot() +
-  aes(x = DosageCompensation.Factor, y = numeric.p50, label = format(round(numeric.p50, 3), nsmall = 3)) +
-  geom_bar(stat = "identity") +
-  geom_hline(yintercept = 0.5) +
-  geom_text(color = "white", nudge_y = -0.015) +
-  scale_y_continuous(breaks = seq(0.45, 0.60, 0.05)) +
-  ggtitle(conditions[2]) +
-  xlab("") +
-  ylab("Median ROC AUC") +
-  coord_flip(ylim = c(0.45, 0.60)) +
-  theme_minimal() +
-  theme(axis.text.y = element_blank())
+### Chr gain vs. CN gain
+results_chrgain_cngain <- compare_conditions(bootstrap_chr_gain, bootstrap_cn_gain)
+plot_chrgain_cngain <- plot_comparison(results_chrgain_cngain)
+ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrgain_cngain.png"),
+       plot = plot_chrgain_cngain,
+       height = 200, width = 320, units = "mm", dpi = 300)
 
-plot_factor_signif <- results_chrgain_chrloss$factor_test %>%
-  arrange(DosageCompensation.Factor) %>%
-  ggplot() +
-  aes(x = DosageCompensation.Factor, y = Wilcoxon.p.value,
-      label = Wilcoxon.significant) +
-  geom_text(y = 1, color = "black") +
-  xlab("") +
-  ylab("") +
-  coord_flip(ylim = c(0, 2)) +
-  theme_void() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
-
-plot_labels <- results_chrgain_chrloss$factor_test %>%
-  arrange(DosageCompensation.Factor) %>%
-  ggplot() +
-  aes(x = DosageCompensation.Factor, y = Wilcoxon.p.value,
-      label = DosageCompensation.Factor) +
-  geom_text(y = 2, color = "black", hjust = 1) +
-  xlab("") +
-  ylab("") +
-  coord_flip(ylim = c(0, 2)) +
-  theme_void() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
-
-# ToDo: Use geom_bracket from ggpubr
-plot_bracket <- broom::tidy(results_chrgain_chrloss$rank_test) %>%
-  mutate(Label = paste0("p = ", format(round(p.value, 3), nsmall = 3),
-                        ", τ = ", format(round(estimate, 3), nsmall = 3))) %>%
-  ggplot() +
-  aes(x = 0, y = 0, label = Label) +
-  geom_segment(aes(x = 4, y = 1, xend = 8, yend = 1)) +
-  geom_text(x = 6, color = "black", y = 2) +
-  xlab("") +
-  ylab("") +
-  xlim(c(0, 10)) +
-  ylim(c(0, 3)) +
-  theme_void() +
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank())
+### Chr loss vs. CN loss
+results_chrloss_cnloss <- compare_conditions(bootstrap_chr_loss, bootstrap_cn_loss)
+plot_chrloss_cnloss <- plot_comparison(results_chrloss_cnloss)
+ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"),
+       plot = plot_chrloss_cnloss,
+       height = 200, width = 320, units = "mm", dpi = 300)
 
 
-plot_stack1 <- cowplot::plot_grid(plot_labels, plot1, plot_factor_signif, plot2,
-                                  nrow = 1, ncol = 4, align = "h", axis = "l",
-                                  rel_widths = c(0.8, 1, 0.1, 1))
+# ToDo: Correlation Matrix between factors
 
-plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
-                                  nrow = 2, ncol = 1,
-                                  rel_heights = c(0.1, 1))
-
-results_chr_gain %>%
+bootstrap_chr_gain %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = DosageCompensation.Factor.ROC.AUC) +
   geom_violin(trim = FALSE)
