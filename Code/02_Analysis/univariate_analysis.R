@@ -221,8 +221,6 @@ compare_conditions <- function(df_condition1, df_condition2) {
                 names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
     group_by(DosageCompensation.Factor) %>%
     summarize(Wilcoxon.p.value = wilcox.test(get(conditions[1]), get(conditions[2]), paired = TRUE)$p.value) %>%
-    # ToDo: Check Assumptions
-    ## Hochberg's and Hommel's methods are valid when the hypothesis tests are independent or when they are non-negatively associated
     mutate(Wilcoxon.p.adjusted = p.adjust(Wilcoxon.p.value, method = "BY")) %>%
     mutate(Wilcoxon.significant = case_when(
       Wilcoxon.p.adjusted < 0.0001 ~ "***",
@@ -267,6 +265,7 @@ plot_comparison <- function(comparison_results) {
     filter(Condition == conditions[1]) %>%
     arrange(DosageCompensation.Factor) %>%
     vertical_bar_chart(DosageCompensation.Factor, numeric.p50,
+                       error_low_col = numeric.p25, error_high_col = numeric.p75,
                        title = conditions[1], value_lab = "Median ROC AUC") +
     theme(axis.text.y = element_blank())
 
@@ -274,6 +273,7 @@ plot_comparison <- function(comparison_results) {
     filter(Condition == conditions[2]) %>%
     arrange(DosageCompensation.Factor) %>%
     vertical_bar_chart(DosageCompensation.Factor, numeric.p50,
+                       error_low_col = numeric.p25, error_high_col = numeric.p75,
                        title = conditions[2], value_lab = "Median ROC AUC") +
     theme(axis.text.y = element_blank())
 
