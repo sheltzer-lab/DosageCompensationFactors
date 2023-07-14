@@ -47,3 +47,19 @@ plot_text_col <- function(df, x_col, label_col, align = "center") {
     theme(axis.text.y = element_blank(),
           axis.ticks.y = element_blank())
 }
+
+violin_plot <- function(df, x, y) {
+  df %>%
+    ggplot() +
+    aes(x = { { x } }, y = { { y } }) +
+    geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
+                color = "#4080DB") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+plot_correlation <- function(df, method = "spearman") {
+  df %>%
+    cor(method = method) %>%
+    corrplot(type = "upper", order = "hclust",
+             tl.col = "black", tl.srt = 45)
+}

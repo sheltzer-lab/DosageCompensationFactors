@@ -52,7 +52,7 @@ plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1
   plot_ly(y = ~expr_diff, x = ~cn_diff, z = ~br, type = 'surface')
 }
 
-plot_buffering_ratio <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
+plot_buffering_ratio_expr <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
                                  buffered_threshold = 0.3349625, anti_scaling_threshold = 0.6849625) {
   expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
   expr_base <- rep(2, length(expr_diff))
@@ -67,6 +67,23 @@ plot_buffering_ratio <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
     geom_hline(yintercept = buffered_threshold, color = "orange", linetype = "dashed") +
     geom_hline(yintercept = anti_scaling_threshold, color = "red", linetype = "dashed") +
     scale_x_continuous(limits = expr_lim, breaks = seq(expr_lim[1], expr_lim[2], 0.2))
+}
+
+plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1),
+                                    buffered_threshold = 0.3349625, anti_scaling_threshold = 0.6849625) {
+  cn_diff <- seq(cn_lim[1], cn_lim[2], by = 0.01)
+  cn_base <- rep(2, length(cn_diff))
+  expr_diff <- rep(expr_diff, length(cn_diff))
+  expr_base <- rep(2, length(expr_diff))
+  br_values <- br_func(expr_var = expr_diff + expr_base, cn_var = cn_diff + cn_base,
+                       expr_base = expr_base, cn_base = cn_base)
+
+  ggplot() +
+    aes(x = cn_diff, y = br_values) +
+    geom_line() +
+    geom_hline(yintercept = buffered_threshold, color = "orange", linetype = "dashed") +
+    geom_hline(yintercept = anti_scaling_threshold, color = "red", linetype = "dashed") +
+    scale_x_continuous(limits = cn_lim, breaks = seq(cn_lim[1], cn_lim[2], 0.2))
 }
 
 buffering_example <- function() {

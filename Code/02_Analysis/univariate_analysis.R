@@ -385,12 +385,6 @@ ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.p
        height = 200, width = 320, units = "mm", dpi = 300)
 
 ## Investigate correlation of ROC AUC of factors
-plot_correlation <- function(df, method = "spearman") {
-  df %>%
-    cor(method = method) %>%
-    corrplot(type = "upper", order = "hclust",
-             tl.col = "black", tl.srt = 45)
-}
 corrplot_chr_gain <- bootstrap_chr_gain %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
@@ -412,16 +406,6 @@ corrplot_cn_loss <- bootstrap_cn_loss %>%
   plot_correlation()
 
 ## Plot distribution of ROC AUC of factors
-
-violin_plot <- function(df, x, y) {
-  df %>%
-    ggplot() +
-    aes(x = { { x } }, y = { { y } }) +
-    geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
-                color = "#4080DB") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}
-
 dist_chr_gain <- bootstrap_chr_gain %>%
   violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC)
 dist_chr_loss <- bootstrap_chr_loss %>%
