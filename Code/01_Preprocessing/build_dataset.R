@@ -85,7 +85,7 @@ filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
 
 build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
   df %>%
-    inner_join(y = copy_number, by = c(quo_name(enquo(cellline_col)), "Gene.Symbol"),
+    inner_join(y = df_copy_number, by = c(quo_name(enquo(cellline_col)), "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
     # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
     filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
@@ -112,39 +112,9 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
                                                                         cn_base = ChromosomeArm.CopyNumber.Baseline,
                                                                         cn_var = ChromosomeArm.CopyNumber)) %>%
-    left_join(y = dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+    left_join(y = df_dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
               na_matches = "never", relationship = "many-to-one")
 }
-
-
-# === Summarize Distribution of Obersavtions ===
-
-summary_tbl_depmap <- expr_buf_depmap %>%
-  tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Normalized, Protein.Expression.Average,
-                          Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
-                          Log2FC, Log2FC.Average,
-                          Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
-                          Buffering.ChrArmLevel.Average.Class),
-              by = ChromosomeArm.CNA) %>%
-  modify_header(label = "**Chromosome Arm CNA**") %>%
-  bold_labels()
-
-summary_tbl_goncalves <- expr_buf_goncalves %>%
-  tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Normalized, Protein.Expression.Average,
-                          Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
-                          Log2FC, Log2FC.Average,
-                          Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
-                          Buffering.ChrArmLevel.Average.Class),
-              by = ChromosomeArm.CNA) %>%
-  modify_header(label = "**Chromosome Arm CNA**") %>%
-  bold_labels()
-
-summary_tbl_merged <-   tbl_merge(
-    tbls = list(summary_tbl_depmap, summary_tbl_goncalves),
-    tab_spanner = c("**DepMap**", "**ProCan (Goncalves)**")
-  )
-
-summary_tbl_merged
 
 # === Process & Write datasets to disk ===
 
