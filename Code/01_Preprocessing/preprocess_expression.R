@@ -15,6 +15,7 @@ source(here("Code", "annotation.R"))
 
 
 expression_data_dir <- here(external_data_dir, "Expression")
+copynumber_data_dir <- here(external_data_dir, "CopyNumber")
 output_data_dir <- output_data_base_dir
 plots_dir <- plots_base_dir
 
@@ -26,6 +27,11 @@ dir.create(plots_dir, recursive = TRUE)
 procan_expr_avg <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.xlsx"))
 ## Load Proteomics dataset from DepMap
 depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics.csv"))
+### Loaad cell line model file from DepMap
+df_celllinenames <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
+  select(ModelID, CellLineName) %>%
+  rename(CellLine.DepMapModelId = "ModelID",
+         CellLine.Name = "CellLineName")
 
 # === Tidy Datasets ===
 
@@ -100,11 +106,13 @@ depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   normalize_celllines(CellLine.DepMapModelId, Protein.Expression.Log2, UniqueProtId,
                       normalized_colname = "Protein.Expression.Normalized") %>%
+  left_join(y = df_celllinenames, by = "CellLine.DepMapModelId",
+               relationship = "many-to-one", na_matches = "never") %>%
   select(-UniqueProtId)
 
 
 # === Quality Control ===
-
+# ToDo: Why are there only 616 cell lines?
 procan_expr_dist <- procan_expr_avg_processed %>%
   ggplot() +
   geom_density(na.rm = TRUE, aes(Protein.Expression.Log2, color = "Non-Normalized"), show.legend = TRUE) +
