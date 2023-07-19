@@ -1,6 +1,7 @@
 library(ggplot2)
 library(dplyr)
 library(rlang)
+library(EnhancedVolcano)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -62,4 +63,45 @@ plot_correlation <- function(df, method = "spearman") {
     cor(method = method) %>%
     corrplot(type = "upper", order = "hclust",
              tl.col = "black", tl.srt = 45)
+}
+
+plot_volcano <- function(df, value_col, signif_col, label_col,
+                         value_threshold = 1.2, signif_threshold = 0.05,
+                         title = NULL, subtitle = NULL,
+                         alpha_low = 0.3, alpha_high = 0.6) {
+  # Scale points according to absolute distance from value_threshold
+  min_pointsize <- 1
+  max_pointsize <- 6
+  max_value <- max(df[[quo_name(enquo(value_col))]], na.rm = TRUE)
+  min_value <- min(df[[quo_name(enquo(value_col))]], na.rm = TRUE)
+  max_abs_value <- max(abs(min_value), abs(max_value))
+  value_cutoff_dist <- (abs(df[[quo_name(enquo(value_col))]]) - value_threshold) / max_abs_value
+  point_scaling <- ifelse(abs(df[[quo_name(enquo(value_col))]]) > value_threshold,
+                          value_cutoff_dist * (max_pointsize - min_pointsize) + min_pointsize,
+                          min_pointsize)
+
+  # Define plot
+  volc <- df %>%
+    EnhancedVolcano(
+      lab = df[[quo_name(enquo(label_col))]],
+      x = quo_name(enquo(value_col)),
+      y = quo_name(enquo(signif_col)),
+      title = title,
+      subtitle = subtitle,
+      caption = bquote("Value cutoff: " ~ .(value_threshold) ~ "; Significance cutoff: " ~ .(signif_threshold)),
+      pCutoff = signif_threshold,
+      FCcutoff = value_threshold,
+      labSize = 3,
+      xlim = c(-max_abs_value - 0.1, max_abs_value + 0.1),
+      ylim = c(0, max(-log10(df[[quo_name(enquo(signif_col))]]) + 0.1, na.rm = TRUE)),
+      pointSize = point_scaling,
+      col = c('darkgrey', 'darkgrey', 'pink', 'red'),
+      colAlpha = ifelse(abs(df[[quo_name(enquo(value_col))]]) > value_threshold &
+                          df[[quo_name(enquo(signif_col))]] < signif_threshold,
+                        alpha_high,
+                        alpha_low),
+      drawConnectors = TRUE,
+      widthConnectors = 0.2,
+      arrowheads = FALSE
+    )
 }

@@ -38,3 +38,7 @@ test <- expr_buf_goncalves %>%
   summarize(TTest.p = t.test(Buffering.GeneLevel.Ratio, mu = 0)$p.value,
             Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio)) %>%
   mutate(TTest.p.adjusted = p.adjust(TTest.p, method = "BY"))
+
+plot <- test %>%
+  plot_volcano(Buffering.GeneLevel.Ratio.Average, TTest.p.adjusted, Gene.Symbol,
+               value_threshold = 0.3349625)
