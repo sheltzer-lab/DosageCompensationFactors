@@ -14,6 +14,7 @@ external_data_dir <- here(input_data_dir, "External")
 output_data_base_dir <- here("Output", "Data")
 plots_base_dir <- here("Output", "Plots")
 tables_base_dir <- here("Output", "Tables")
+reports_base_dir <- here("Output", "Reports")
 
 # === Theme Defaults ===
 theme_set(theme_light())

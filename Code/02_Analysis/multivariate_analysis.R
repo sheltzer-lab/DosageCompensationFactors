@@ -34,6 +34,7 @@ shuffle_rows <- function(df) {
   df[sample(nrow(df), replace = FALSE),]
 }
 
+# ToDo: Explore further imputation methods
 impute_na <- function(df) {
   df %>%
     mutate_if(is.numeric, \(x) replace_na(x, median(x, na.rm = TRUE)))
@@ -201,17 +202,17 @@ for (analysis in analysis_list) {
 }
 
 ### Use goncalves gain model for evaluating depmap gene-level gain data
-model_goncalves_filtered <- readRDS(here(models_base_dir, "model_rf_GoncalvesGene-LevelFiltered.rds"))
+model_goncalves_filtered_gain <- readRDS(here(models_base_dir, "model_rf_GoncalvesGene-LevelFilteredGain.rds"))
 
 test_data <- expr_buf_depmap %>%
-  filter_cn_diff_quantiles() %>%
+  filter_cn_gain() %>%
   clean_data(Buffering.GeneLevel.Class) %>%
   impute_na() %>%
   shuffle_rows()
 
-eval_dir <- here(plots_dir, "Goncalves", "Gene-Level", "Filtered", "Eval-DepMap")
+eval_dir <- here(plots_dir, "Goncalves", "Gene-Level", "FilteredGain", "Eval-DepMap")
 dir.create(eval_dir, recursive = TRUE)
-evaluate_model(model_goncalves_filtered, test_data, eval_dir)
+evaluate_model(model_goncalves_filtered_gain, test_data, eval_dir)
 
 
 ## Neural Network

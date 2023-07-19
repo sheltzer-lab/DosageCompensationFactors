@@ -18,11 +18,13 @@ source(here("Code", "02_Analysis", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
-plots_dir <- here(plots_base_dir, "Univariate", "Goncalves")
+plots_dir <- here(plots_base_dir, "CellLine")
+reports_dir <- reports_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(tables_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
+dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
 
@@ -93,3 +95,35 @@ cellline_buf_waterfall_depmap <- cellline_buf_depmap %>%
 ggsave(here(plots_dir, "cellline_buffering_waterfall_depmap.png"),
        plot = cellline_buf_waterfall_depmap,
        height = 200, width = 200, units = "mm", dpi = 300)
+
+
+# === Rank Correlation ===
+
+cellline_buf_merged <- cellline_buf_goncalves %>%
+  select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore") %>%
+  inner_join(y = cellline_buf_depmap %>% select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore"),
+             by = "CellLine.Name", relationship = "one-to-one", na_matches = "never") %>%
+  arrange(CellLine.Name) %>%
+  rename(ProCan = Buffering.CellLine.Ratio.ZScore.x,
+         DepMap = Buffering.CellLine.Ratio.ZScore.y)
+
+cellline_dist <- cellline_buf_merged %>%
+  pivot_longer(c(ProCan, DepMap), names_to = "Dataset", values_to = "Buffering.CellLine.Ratio.ZScore") %>%
+  violin_plot(Dataset, Buffering.CellLine.Ratio.ZScore)
+
+ggsave(here(plots_dir, "cellline_buffering_distribution.png"),
+       plot = cellline_dist,
+       height = 200, width = 200, units = "mm", dpi = 300)
+
+cellline_kendall <- cor.test(x = cellline_buf_merged$ProCan,
+                             y = cellline_buf_merged$DepMap,
+                             method = "kendall")
+
+cellline_pearson <- cor.test(x = cellline_buf_merged$ProCan,
+                             y = cellline_buf_merged$DepMap,
+                             method = "pearson")
+
+cat(capture.output(cellline_kendall), file = here(reports_dir, "cellline_buffering_correlation.txt"),
+    append = FALSE, sep = "\n")
+cat(capture.output(cellline_pearson), file = here(reports_dir, "cellline_buffering_correlation.txt"),
+    append = TRUE, sep = "\n")

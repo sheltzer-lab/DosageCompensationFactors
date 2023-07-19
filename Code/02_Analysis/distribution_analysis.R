@@ -8,6 +8,7 @@ library(ggplot2)
 library(ggrepel)
 library(skimr)
 library(openxlsx)
+library(gtsummary)
 
 here::i_am("DosageCompensationFactors.Rproj")
 

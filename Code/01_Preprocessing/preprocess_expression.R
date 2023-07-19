@@ -24,6 +24,7 @@ dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
 ## Load dataset from Goncalves et al. (DOI: https://doi.org/10.6084/m9.figshare.19345397.v1)
+# ToDo: evaluate use of dataset containing 8498 proteins per cell line
 procan_expr_avg <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.xlsx"))
 ## Load Proteomics dataset from DepMap
 depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics.csv"))
@@ -94,9 +95,12 @@ remove_noisefloor <- function(df, value_col, percentile_cutoff = 0.0001) {
 }
 
 # ToDo: Evaluate if applying batch effect correction unaveraged dataset and then averaging it is a better approach
+# ToDo: Evaluate if an additional normalization round with both datasets together improves comparability
 procan_expr_avg_processed <- procan_expr_avg_tidy %>%
   filter(str_detect(Protein.Uniprot.Id, "HUMAN")) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
+  # ToDo: Reconsider standardization
+  # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
   normalize_celllines(CellLine.SangerModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
                       normalized_colname = "Protein.Expression.Normalized") %>%
   mapIds("UNIPROT", "SYMBOL",
@@ -104,6 +108,8 @@ procan_expr_avg_processed <- procan_expr_avg_tidy %>%
 
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
+  # ToDo: Reconsider standardization
+  # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
   normalize_celllines(CellLine.DepMapModelId, Protein.Expression.Log2, UniqueProtId,
                       normalized_colname = "Protein.Expression.Normalized") %>%
   left_join(y = df_celllinenames, by = "CellLine.DepMapModelId",

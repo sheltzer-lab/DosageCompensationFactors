@@ -7,7 +7,6 @@ library(readxl)
 library(assertr)
 library(ggplot2)
 library(limma)
-library(gtsummary)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
