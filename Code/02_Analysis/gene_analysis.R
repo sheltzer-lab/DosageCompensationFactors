@@ -35,6 +35,8 @@ test <- expr_buf_goncalves %>%
   select(Gene.Symbol, Buffering.GeneLevel.Ratio) %>%
   drop_na() %>%
   group_by(Gene.Symbol) %>%
+  add_count(Gene.Symbol) %>%
+  filter(n > 1) %>%
   summarize(TTest.p = t.test(Buffering.GeneLevel.Ratio, mu = 0)$p.value,
             Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio)) %>%
   mutate(TTest.p.adjusted = p.adjust(TTest.p, method = "BY"))
