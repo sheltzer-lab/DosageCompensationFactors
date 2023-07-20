@@ -30,9 +30,13 @@ get_chromosome_arms <- function(df, mart = ensembl_mart, symbol_col = "Gene.Symb
                                               NA))) %>%
     unite("Gene.ChromosomeArm", Gene.Chromosome, Gene.ChromosomeArm,
           sep = "", remove = FALSE) %>%
-    mutate_all(na_if,"") %>%
+    mutate_all(na_if, "") %>%
     drop_na() %>%
-    distinct()
+    distinct() %>%
+    # Remove genes that may be located on multiple chromosomes
+    add_count(Gene.Symbol) %>%
+    filter(n == 1) %>%
+    select(-n)
 
   df <- df %>%
     mutate(Gene.Symbol = .data[[symbol_col]]) %>% # Ensure correct column name
