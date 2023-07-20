@@ -105,3 +105,41 @@ plot_volcano <- function(df, value_col, signif_col, label_col,
       arrowheads = FALSE
     )
 }
+
+scatter_plot_regression <- function(df, x_col, y_col, formula, label_coords = c(0, 0)) {
+  df <- df %>%
+    select({ { x_col } }, { { y_col } }) %>%
+    drop_na()
+
+  regression <- lm(formula, df)
+  pred.int <- predict(regression, interval = "prediction")
+  regression_summary <- summary(regression)
+  df <- cbind(df, pred.int)
+  slope <- regression$coefficients[[quo_name(enquo(x_col))]]
+  intercept <- regression$coefficients[["(Intercept)"]]
+
+  regression_plot <- df %>%
+    ggplot() +
+    aes(x = { { x_col } }, y = { { y_col } }) +
+    geom_point(alpha = 0.3, size = 0.3) +
+    geom_density_2d(color = "white", alpha = 0.6, linewidth = 0.4) +
+    stat_smooth(method = lm, color = "blue") +
+    geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
+    geom_line(aes(y = upr), color = "red", linetype = "dashed") +
+    ggplot2::annotate("text", x = label_coords[1], y = label_coords[2], color = "blue",
+                      label = paste("y =", format(round(slope, 5), nsmall = 5),
+                                    "* x +", format(round(intercept, 5), nsmall = 5),
+                                    ", R² = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
+                      )) +
+    xlab(quo_name(enquo(x_col))) +
+    ylab(quo_name(enquo(y_col)))
+
+  return(regression_plot)
+}
+
+save_plot <- function(plot, filename, dir = plots_dir,
+                      height = 200, width = 200, dpi = 300) {
+  ggsave(here(dir, filename), plot = plot,
+       height = height, width = width, units = "mm", dpi = dpi)
+  return(plot)
+}

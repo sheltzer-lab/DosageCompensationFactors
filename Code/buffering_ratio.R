@@ -90,11 +90,13 @@ buffering_example <- function() {
   df1 <- data.frame(ExprBase = c(10, 10, 10, 10), ExprVar = c(10, 15, 20, 30),
                     CNBase = c(2, 2, 2, 2), CNVar = c(3, 3, 3, 3))
   df2 <- data.frame(ExprBase = c(10, 15, 20, 30), ExprVar = c(10, 10, 10, 10),
+                    CNBase = c(2, 2, 2, 2), CNVar = c(1, 1, 1, 1))
+  df3 <- data.frame(ExprBase = c(10, 15, 20, 30), ExprVar = c(10, 10, 10, 10),
                     CNBase = c(3, 3, 3, 3), CNVar = c(2, 2, 2, 2))
-  df3 <- data.frame(ExprBase = c(10, 10, 10, 10), ExprVar = c(10, 15, 20, 40),
+  df4 <- data.frame(ExprBase = c(10, 10, 10, 10), ExprVar = c(10, 15, 20, 40),
                     CNBase = c(2, 2, 2, 2), CNVar = c(4, 4, 4, 4))
 
-  for (df in list(df1, df2, df3)) {
+  for (df in list(df1, df2, df3, df4)) {
     df_buff <- df %>%
       mutate(BR = buffering_ratio(ExprBase, ExprVar, CNBase, CNVar)) %>%
       mutate(BC = buffering_class(BR)) %>%
