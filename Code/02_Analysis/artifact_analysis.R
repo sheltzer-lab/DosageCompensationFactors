@@ -271,3 +271,27 @@ expr_buf_goncalves %>%
                           Buffering.GeneLevel.Ratio ~ Log2FC,
                           label_coords = c(4, 10)) %>%
   save_plot("regression_log2fc_br_cn-loss.png")
+
+expr_buf_goncalves %>%
+  group_by(Gene.Symbol) %>%
+  summarize(Log2FC.Average = mean(Log2FC, na.rm = TRUE),
+            Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE)) %>%
+  scatter_plot_regression(Log2FC.Average, Buffering.GeneLevel.Ratio.Average,
+                          Buffering.GeneLevel.Ratio.Average ~ Log2FC.Average,
+                          label_coords = c(1, 2)) %>%
+  save_plot("regression_log2fc_br_avg.png")
+
+## bonus
+expr_buf_goncalves %>%
+  select(Protein.Expression.Normalized, Buffering.GeneLevel.Ratio) %>%
+  slice_sample(n = 800000) %>%
+  drop_na() %>%
+  ggplot() +
+  aes(x = Protein.Expression.Normalized, y = Buffering.GeneLevel.Ratio) +
+  geom_density_2d_filled() +
+  geom_point(alpha = 0.05, size = 0.05, color = "white") +
+  geom_density_2d_filled(alpha = 0.4) +
+  xlab(NULL) +
+  ylab(NULL) +
+  theme_void() +
+  theme(legend.position = "none")

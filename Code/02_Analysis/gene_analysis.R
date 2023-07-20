@@ -30,19 +30,50 @@ dir.create(reports_dir, recursive = TRUE)
 
 expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
 
-# ToDo: Check for gain and loss
-test <- expr_buf_goncalves %>%
-  select(Gene.Symbol, Buffering.GeneLevel.Ratio) %>%
+signif_buf_genes <- function(df, buffering_col, gene_col) {
+  df %>%
+  select({ { gene_col } }, { { buffering_col } }) %>%
   drop_na() %>%
-  group_by(Gene.Symbol) %>%
+  group_by({ { gene_col } }) %>%
   # Avoid having not enough samples for t-test
-  add_count(Gene.Symbol) %>%
+  add_count({ { gene_col } }) %>%
   filter(n > 1) %>%
-  summarize(TTest.p = t.test(Buffering.GeneLevel.Ratio, mu = 0)$p.value,
-            Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio)) %>%
+  summarize(TTest.p = t.test({ { buffering_col } }, mu = 0)$p.value,
+            Buffering.Ratio.Average = mean({ { buffering_col } })) %>%
   mutate(TTest.p.adjusted = p.adjust(TTest.p, method = "BY"))
+}
 
-# ToDo: Adjust labels
-plot <- test %>%
-  plot_volcano(Buffering.GeneLevel.Ratio.Average, TTest.p.adjusted, Gene.Symbol,
-               value_threshold = 0.3349625)
+test_all <- expr_buf_goncalves %>%
+  signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
+
+plot_all <- test_all %>%
+  plot_volcano(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol,
+               value_threshold = 0.3349625) %>%
+  save_plot("volcano_buffering_all.png")
+
+test_gain <- expr_buf_goncalves %>%
+  filter_cn_gain() %>%
+  signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
+
+plot_gain <- test_gain %>%
+  plot_volcano(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol,
+               value_threshold = 0.3349625) %>%
+  save_plot("volcano_buffering_cn-gain.png")
+
+test_loss <- expr_buf_goncalves %>%
+  filter_cn_loss() %>%
+  signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
+
+plot_loss <- test_loss %>%
+  plot_volcano(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol,
+               value_threshold = 0.3349625) %>%
+  save_plot("volcano_buffering_cn-loss.png")
+
+test_filtered <- expr_buf_goncalves %>%
+  filter_cn_diff_quantiles() %>%
+  signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
+
+plot_filtered <- test_filtered %>%
+  plot_volcano(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol,
+               value_threshold = 0.3349625) %>%
+  save_plot("volcano_buffering_cn-filtered.png")
