@@ -65,45 +65,44 @@ plot_correlation <- function(df, method = "spearman") {
              tl.col = "black", tl.srt = 45)
 }
 
-plot_volcano <- function(df, value_col, signif_col, label_col,
-                         value_threshold = 1.2, signif_threshold = 0.05,
-                         title = NULL, subtitle = NULL,
-                         alpha_low = 0.3, alpha_high = 0.6) {
-  # Scale points according to absolute distance from value_threshold
-  min_pointsize <- 1
-  max_pointsize <- 6
-  max_value <- max(df[[quo_name(enquo(value_col))]], na.rm = TRUE)
-  min_value <- min(df[[quo_name(enquo(value_col))]], na.rm = TRUE)
-  max_abs_value <- max(abs(min_value), abs(max_value))
-  value_cutoff_dist <- (abs(df[[quo_name(enquo(value_col))]]) - value_threshold) / max_abs_value
-  point_scaling <- ifelse(abs(df[[quo_name(enquo(value_col))]]) > value_threshold,
-                          value_cutoff_dist * (max_pointsize - min_pointsize) + min_pointsize,
-                          min_pointsize)
 
-  # Define plot
-  volc <- df %>%
-    EnhancedVolcano(
-      lab = df[[quo_name(enquo(label_col))]],
-      x = quo_name(enquo(value_col)),
-      y = quo_name(enquo(signif_col)),
-      title = title,
-      subtitle = subtitle,
-      caption = bquote("Value cutoff: " ~ .(value_threshold) ~ "; Significance cutoff: " ~ .(signif_threshold)),
-      pCutoff = signif_threshold,
-      FCcutoff = value_threshold,
-      labSize = 3,
-      xlim = c(-max_abs_value - 0.1, max_abs_value + 0.1),
-      ylim = c(0, max(-log10(df[[quo_name(enquo(signif_col))]]) + 0.1, na.rm = TRUE)),
-      pointSize = point_scaling,
-      col = c('darkgrey', 'darkgrey', 'pink', 'red'),
-      colAlpha = ifelse(abs(df[[quo_name(enquo(value_col))]]) > value_threshold &
-                          df[[quo_name(enquo(signif_col))]] < signif_threshold,
-                        alpha_high,
-                        alpha_low),
-      drawConnectors = TRUE,
-      widthConnectors = 0.2,
-      arrowheads = FALSE
-    )
+plot_volcano_buffered <- function(df, ratio_col, signif_col, label_col, class_col,
+                                  color_mapping = NULL,
+                                  value_threshold = log2fc_threshold, signif_threshold = p_threshold,
+                                  title = NULL, subtitle = NULL) {
+  buffering_levels <- c("N.S.", "Scaling", "Buffered", "Anti-Scaling")
+  color_palette <- c("darkgrey", "#0E992C", "#E6C45A", "#E64356")
+  names(color_palette) <- buffering_levels
+  color_mapping <- scale_colour_manual(name = "Buffering Class", values = color_palette)
+
+  df %>%
+    mutate(Buffering.Class = if_else(TTest.p.adjusted > p_threshold, "N.S.", Buffering.Class)) %>%
+    mutate(Buffering.Class = factor({ { class_col } }, levels = buffering_levels)) %>%
+    mutate(Label = if_else(Buffering.Class %in% c("Buffered", "Anti-Scaling"),
+                           { { label_col } }, NA)) %>%
+    plot_volcano({ { ratio_col } }, { { signif_col } }, Label, Buffering.Class,
+                 color_mapping = color_mapping,
+                 value_threshold = value_threshold, signif_threshold = signif_threshold,
+                 title = title, subtitle = subtitle)
+}
+
+plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
+                         color_mapping = NULL,
+                         value_threshold = log2fc_threshold, signif_threshold = p_threshold,
+                         title = NULL, subtitle = NULL) {
+  df %>%
+    mutate(`-Log10(p)` = -log10({ { signif_col } })) %>%
+    ggplot() +
+    aes(x = { { value_col } }, y = `-Log10(p)`,
+        label = { { label_col } }, color = { { color_col } }) +
+    geom_point(alpha = 0.5, size = 1) +
+    color_mapping +
+    geom_hline(yintercept = -log10(signif_threshold),
+               linetype = "dashed", color = "black") +
+    geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
+                     seed = 42, max.iter = 30000, max.time = 1.5,
+                     point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
+                     force = 2, max.overlaps = 20)
 }
 
 scatter_plot_regression <- function(df, x_col, y_col, formula, label_coords = c(0, 0)) {
