@@ -1,19 +1,10 @@
-library(here)
-library(tidyr)
+#!/usr/bin/env Rscript
 library(dplyr)
+library(tidyr)
 library(arrow)
 library(stringr)
 
-here::i_am("DosageCompensationFactors.Rproj")
-
-source(here("Code", "parameters.R"))
-
-copynumber_data_dir <- here(external_data_dir, "CopyNumber")
-output_data_dir <- output_data_base_dir
-plots_dir <- plots_base_dir
-
-dir.create(output_data_dir, recursive = TRUE)
-dir.create(plots_dir, recursive = TRUE)
+args <- commandArgs(trailingOnly = TRUE)
 
 ensembl_mart <- biomaRt::useMart("ENSEMBL_MART_ENSEMBL", "hsapiens_gene_ensembl")
 
@@ -46,13 +37,13 @@ get_chromosome_arms <- function(df, mart = ensembl_mart, symbol_col = "Gene.Symb
   return(df)
 }
 
-df_model <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
+df_model <- read_csv_arrow(args[1]) %>%
   select(ModelID, SangerModelID) %>%
   rename(CellLine.DepMapModelId = "ModelID",
          CellLine.SangerModelId = "SangerModelID")
 
 # NOTE! Chromosomes 13p, 14p, 15p, 21p, 22p, X, Y missing!
-df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv")) %>%
+df_arm_level_cna <- read_csv_arrow(args[2]) %>%
   rename(CellLine.DepMapModelId = 1) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
                names_to = "Gene.ChromosomeArm", values_to = "ChromosomeArm.CNA") %>%
@@ -60,7 +51,7 @@ df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv
   mutate(ChromosomeArm.CopyNumber.Baseline = 2L,
          ChromosomeArm.CopyNumber = 2L + ChromosomeArm.CNA)
 
-df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
+df_aneuploidy <- read_csv_arrow(args[3]) %>%
   rename(CellLine.DepMapModelId = 1,
          CellLine.AneuploidyScore = "Aneuploidy score",
          CellLine.Ploidy = "Ploidy",
@@ -69,7 +60,7 @@ df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
 # NOTE! SIDM00018 has a different cell line name in DepMap and expression datasets (KO52 vs K052)!!!
 df_cn <-
   read.csv(
-    here(copynumber_data_dir, "Copy_Number_Public_23Q2.csv"),
+    args[4],
     row.names = 1,
     check.names = FALSE
   ) %>%
@@ -86,5 +77,4 @@ df_cn <-
     inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
                na_matches = "never", relationship = "many-to-one")
 
-write_parquet(df_cn, here(output_data_dir, 'copy_number.parquet'),
-              version = "2.6")
+write_parquet(df_cn, 'copy_number.parquet', version = "2.6")
