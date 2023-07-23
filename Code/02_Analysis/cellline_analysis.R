@@ -68,10 +68,12 @@ remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
 
 ## Combine datasets
 expr_buf_goncalves_filtered <- expr_buf_goncalves %>%
+  filter_cn_diff(remove_between = c(-0, 0.0246)) %>% # Remove noise from discontinuity points of buffering ratio
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(ProCan = "Buffering.GeneLevel.Ratio")
 expr_buf_depmap_filtered <- expr_buf_depmap %>%
+  filter_cn_diff(remove_between = c(-0, 0.0246)) %>% # Remove noise from discontinuity points of buffering ratio
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(DepMap = "Buffering.GeneLevel.Ratio")
@@ -91,6 +93,14 @@ cellline_buf_filtered_goncalves <- expr_buf_filtered %>%
 cellline_buf_filtered_depmap <- expr_buf_filtered %>%
   analyze_cellline_buffering(DepMap)
 
+cellline_buf_merged <- cellline_buf_filtered_goncalves %>%
+  select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore") %>%
+  inner_join(y = cellline_buf_filtered_depmap %>% select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore"),
+             by = "CellLine.Name", relationship = "one-to-one", na_matches = "never") %>%
+  arrange(CellLine.Name) %>%
+  rename(ProCan = Buffering.CellLine.Ratio.ZScore.x,
+         DepMap = Buffering.CellLine.Ratio.ZScore.y)
+
 ## Save results
 write.xlsx(cellline_buf_goncalves, here(tables_base_dir, "cellline_buffering_goncalves.xlsx"),
            colNames = TRUE)
@@ -101,6 +111,8 @@ write.xlsx(cellline_buf_filtered_goncalves, here(tables_base_dir, "cellline_buff
            colNames = TRUE)
 write.xlsx(cellline_buf_filtered_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
            colNames = TRUE)
+write.xlsx(cellline_buf_merged, here(tables_base_dir, "cellline_buffering_z-scores_merged.xlsx"),
+           colNames = TRUE)
 
 ## Create plots
 cellline_buf_waterfall_goncalves <- cellline_buf_goncalves %>%
@@ -110,23 +122,15 @@ cellline_buf_waterfall_depmap <- cellline_buf_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_depmap.png")
 
-cellline_buf_waterfall_merged_goncalves <- cellline_buf_filtered_goncalves %>%
+cellline_buf_waterfall_filtered_goncalves <- cellline_buf_filtered_goncalves %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_goncalves.png")
-cellline_buf_waterfall_merged_depmap <- cellline_buf_filtered_depmap %>%
+cellline_buf_waterfall_filtered_depmap <- cellline_buf_filtered_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_depmap.png")
 
 
 # === Determine Correlation between Datasets ===
-cellline_buf_merged <- cellline_buf_filtered_goncalves %>%
-  select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore") %>%
-  inner_join(y = cellline_buf_filtered_depmap %>% select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore"),
-             by = "CellLine.Name", relationship = "one-to-one", na_matches = "never") %>%
-  arrange(CellLine.Name) %>%
-  rename(ProCan = Buffering.CellLine.Ratio.ZScore.x,
-         DepMap = Buffering.CellLine.Ratio.ZScore.y)
-
 cellline_dist <- cellline_buf_merged %>%
   pivot_longer(c(ProCan, DepMap), names_to = "Dataset", values_to = "Buffering.CellLine.Ratio.ZScore") %>%
   violin_plot(Dataset, Buffering.CellLine.Ratio.ZScore)

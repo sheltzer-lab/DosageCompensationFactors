@@ -83,7 +83,7 @@ plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1),
     geom_line() +
     geom_hline(yintercept = buffered_threshold, color = "orange", linetype = "dashed") +
     geom_hline(yintercept = anti_scaling_threshold, color = "red", linetype = "dashed") +
-    scale_x_continuous(limits = cn_lim, breaks = seq(cn_lim[1], cn_lim[2], 0.2))
+    scale_x_continuous(limits = cn_lim, breaks = seq(cn_lim[1], cn_lim[2], 0.1))
 }
 
 buffering_example <- function() {
