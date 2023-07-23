@@ -33,13 +33,13 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 
 # === Analyze Dosage Compensation on Cell Line level ===
 
-analyze_cellline_buffering <- function(df, buffering_ratio_col) {
+analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = CellLine.Name) {
   mean_pop <- mean(df[[quo_name(enquo(buffering_ratio_col))]], na.rm = TRUE)
   sd_pop <- sd(df[[quo_name(enquo(buffering_ratio_col))]], na.rm = TRUE)
 
   cellline_buf_avg <- df %>%
-    select(UniqueId, starts_with("CellLine"), { { buffering_ratio_col } }) %>%
-    group_by(CellLine.Name) %>%
+    select({ { cellline_col } }, { { buffering_ratio_col } }) %>%
+    group_by({ { cellline_col } }) %>%
     summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE)) %>%
     mutate(Buffering.CellLine.Ratio.ZScore = (Buffering.CellLine.Ratio - mean_pop) / sd_pop,
            Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore))) %>%
@@ -48,28 +48,7 @@ analyze_cellline_buffering <- function(df, buffering_ratio_col) {
   return(cellline_buf_avg)
 }
 
-waterfall_plot <- function(df, value_col, rank_col, label_col) {
-  xlim <- c(0, max(df[[quo_name(enquo(rank_col))]]))
-  label_nudge_x <- floor(xlim[2] / 5)
-
-  ylim1 <- c(min(df[[quo_name(enquo(value_col))]]),
-             (df %>% filter({ { rank_col } } == label_nudge_x))[[quo_name(enquo(value_col))]])
-  ylim2 <- c((df %>% filter({ { rank_col } } == xlim[2] - label_nudge_x))[[quo_name(enquo(value_col))]],
-             max(df[[quo_name(enquo(value_col))]]))
-
-  df %>%
-    ggplot() +
-    aes(x = { { rank_col } }, y = { { value_col } }, label = { { label_col } }) +
-    geom_hline(yintercept = 0, color = "red") +
-    geom_point(size = 0.3) +
-    geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = 5),
-                    xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
-                    seed = 42, color = "darkblue") +
-    geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = 5),
-                    xlim = xlim, ylim = ylim2, direction = "y", nudge_x = -label_nudge_x,
-                    seed = 42, color = "darkred")
-}
-
+# Note: Not required when merging datasets to match genes and cell lines
 filter_genes <- function (df, gene_col = Gene.Symbol, value_col = Protein.Expression.Normalized, keep = "90%") {
   df %>%
     group_by({ { gene_col } }) %>%
@@ -78,46 +57,71 @@ filter_genes <- function (df, gene_col = Gene.Symbol, value_col = Protein.Expres
     filter(CV < quantile(CV, probs = seq(0, 1, 0.01))[keep])
 }
 
-goncalves_filtered <- expr_buf_goncalves %>%
-  filter_genes(keep = "73%")
-depmap_filtered <- expr_buf_depmap %>%
-  filter_genes(keep = "73%")
+# Note: Does not seem to improve correlation
+remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
+  df %>%
+    group_by({{gene_col}}) %>%
+    mutate(AvgBuf = mean({{buffering_col}}, na.rm = TRUE)) %>%
+    filter(buffering_class(AvgBuf) != "Anti-Scaling") %>%
+    select(-AvgBuf)
+}
 
-# ToDo: Consider using inner join instead
-common_genes <- intersect(
-  unique(goncalves_filtered$Gene.Symbol),
-  unique(depmap_filtered$Gene.Symbol)
-)
+## Combine datasets
+expr_buf_goncalves_filtered <- expr_buf_goncalves %>%
+  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
+  drop_na() %>%
+  rename(ProCan = "Buffering.GeneLevel.Ratio")
+expr_buf_depmap_filtered <- expr_buf_depmap %>%
+  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
+  drop_na() %>%
+  rename(DepMap = "Buffering.GeneLevel.Ratio")
 
-cellline_buf_goncalves <- goncalves_filtered %>%
-  filter(Gene.Symbol %in% common_genes) %>%
+expr_buf_filtered <- expr_buf_goncalves_filtered %>%
+  inner_join(y = expr_buf_depmap_filtered, by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
+             relationship = "one-to-one", na_matches = "never")
+
+## Calculate Cell Line level Dosage Compensation
+cellline_buf_goncalves <- expr_buf_goncalves %>%
+  analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
+cellline_buf_depmap <- expr_buf_depmap %>%
   analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
 
-cellline_buf_depmap <- depmap_filtered %>%
-  filter(Gene.Symbol %in% common_genes) %>%
-  analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
+cellline_buf_filtered_goncalves <- expr_buf_filtered %>%
+  analyze_cellline_buffering(ProCan)
+cellline_buf_filtered_depmap <- expr_buf_filtered %>%
+  analyze_cellline_buffering(DepMap)
 
-
+## Save results
 write.xlsx(cellline_buf_goncalves, here(tables_base_dir, "cellline_buffering_goncalves.xlsx"),
            colNames = TRUE)
-
 write.xlsx(cellline_buf_depmap, here(tables_base_dir, "cellline_buffering_depmap.xlsx"),
            colNames = TRUE)
 
+write.xlsx(cellline_buf_filtered_goncalves, here(tables_base_dir, "cellline_buffering_filtered_goncalves.xlsx"),
+           colNames = TRUE)
+write.xlsx(cellline_buf_filtered_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
+           colNames = TRUE)
+
+## Create plots
 cellline_buf_waterfall_goncalves <- cellline_buf_goncalves %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_goncalves.png")
-
 cellline_buf_waterfall_depmap <- cellline_buf_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_depmap.png")
 
+cellline_buf_waterfall_merged_goncalves <- cellline_buf_filtered_goncalves %>%
+  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  save_plot("cellline_buffering_waterfall_filtered_goncalves.png")
+cellline_buf_waterfall_merged_depmap <- cellline_buf_filtered_depmap %>%
+  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  save_plot("cellline_buffering_waterfall_filtered_depmap.png")
 
-# === Correlation ===
 
-cellline_buf_merged <- cellline_buf_goncalves %>%
+# === Determine Correlation between Datasets ===
+cellline_buf_merged <- cellline_buf_filtered_goncalves %>%
   select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore") %>%
-  inner_join(y = cellline_buf_depmap %>% select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore"),
+  inner_join(y = cellline_buf_filtered_depmap %>% select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore"),
              by = "CellLine.Name", relationship = "one-to-one", na_matches = "never") %>%
   arrange(CellLine.Name) %>%
   rename(ProCan = Buffering.CellLine.Ratio.ZScore.x,
@@ -143,59 +147,3 @@ cat(capture.output(cellline_kendall), file = here(reports_dir, "cellline_bufferi
     append = FALSE, sep = "\n")
 cat(capture.output(cellline_pearson), file = here(reports_dir, "cellline_buffering_correlation.txt"),
     append = TRUE, sep = "\n")
-
-
-## Grid search
-run_test_analysis <- function(keep) {
-  keep <- paste0(keep, "%")
-
-  goncalves_filtered <- expr_buf_goncalves %>%
-    filter_genes(keep = keep)
-  depmap_filtered <- expr_buf_depmap %>%
-    filter_genes(keep = keep)
-
-  common_genes <- intersect(
-    unique(goncalves_filtered$Gene.Symbol),
-    unique(depmap_filtered$Gene.Symbol)
-  )
-
-  cellline_buf_goncalves <- goncalves_filtered %>%
-    filter(Gene.Symbol %in% common_genes) %>%
-    analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
-
-  cellline_buf_depmap <- depmap_filtered %>%
-    filter(Gene.Symbol %in% common_genes) %>%
-    analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
-
-  cellline_buf_merged <- cellline_buf_goncalves %>%
-    select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore") %>%
-    inner_join(y = cellline_buf_depmap %>% select("CellLine.Name", "Buffering.CellLine.Ratio.ZScore"),
-               by = "CellLine.Name", relationship = "one-to-one", na_matches = "never") %>%
-    arrange(CellLine.Name) %>%
-    rename(ProCan = Buffering.CellLine.Ratio.ZScore.x,
-           DepMap = Buffering.CellLine.Ratio.ZScore.y)
-
-  cellline_pearson <- cor.test(x = cellline_buf_merged$ProCan,
-                               y = cellline_buf_merged$DepMap,
-                               method = "pearson")
-
-  return(cellline_pearson$estimate[["cor"]])
-}
-
-grid_search <- function(param_range) {
-  values <- NULL
-  pb <- txtProgressBar(min = min(param_range), max = max(param_range), style = 3)
-
-  for (param in param_range) {
-    setTxtProgressBar(pb, param)
-    new_value <- run_test_analysis(param)
-    values <- c(values, new_value)
-  }
-
-  names(values) <- param_range
-  close(pb)
-
-  return(values)
-}
-
-param_results <- grid_search(seq(0.6, 0.85, 0.01) * 100)

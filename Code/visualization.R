@@ -136,6 +136,28 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, label_coords = c(
   return(regression_plot)
 }
 
+waterfall_plot <- function(df, value_col, rank_col, label_col) {
+  xlim <- c(0, max(df[[quo_name(enquo(rank_col))]]))
+  label_nudge_x <- floor(xlim[2] / 5)
+
+  ylim1 <- c(min(df[[quo_name(enquo(value_col))]]),
+             (df %>% filter({ { rank_col } } == label_nudge_x))[[quo_name(enquo(value_col))]])
+  ylim2 <- c((df %>% filter({ { rank_col } } == xlim[2] - label_nudge_x))[[quo_name(enquo(value_col))]],
+             max(df[[quo_name(enquo(value_col))]]))
+
+  df %>%
+    ggplot() +
+    aes(x = { { rank_col } }, y = { { value_col } }, label = { { label_col } }) +
+    geom_hline(yintercept = 0, color = "red") +
+    geom_point(size = 0.3) +
+    geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = 5),
+                    xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
+                    seed = 42, color = "darkblue") +
+    geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = 5),
+                    xlim = xlim, ylim = ylim2, direction = "y", nudge_x = -label_nudge_x,
+                    seed = 42, color = "darkred")
+}
+
 save_plot <- function(plot, filename, dir = plots_dir,
                       height = 200, width = 200, dpi = 300) {
   ggsave(here(dir, filename), plot = plot,
