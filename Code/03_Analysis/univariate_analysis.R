@@ -18,7 +18,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
-source(here("Code", "02_Analysis", "analysis.R"))
+source(here("Code", "03_Analysis", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Univariate")
@@ -385,32 +385,44 @@ ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.p
        height = 200, width = 320, units = "mm", dpi = 300)
 
 ## Investigate correlation of ROC AUC of factors
+png(here(goncalves_comparison_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_gain <- bootstrap_chr_gain %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
+dev.off()
 
+png(here(goncalves_comparison_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_loss <- bootstrap_chr_loss %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
+dev.off()
 
+png(here(goncalves_comparison_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_gain <- bootstrap_cn_gain %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
+dev.off()
 
+png(here(goncalves_comparison_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_loss <- bootstrap_cn_loss %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
+dev.off()
 
 ## Plot distribution of ROC AUC of factors
 dist_chr_gain <- bootstrap_chr_gain %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC)
+  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+  save_plot("roc-auc_distribution_chrgain.png", goncalves_comparison_plots_dir)
 dist_chr_loss <- bootstrap_chr_loss %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC)
+  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+  save_plot("roc-auc_distribution_chrloss.png", goncalves_comparison_plots_dir)
 dist_cn_gain <- bootstrap_cn_gain %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC)
+  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+  save_plot("roc-auc_distribution_cngain.png", goncalves_comparison_plots_dir)
 dist_cn_loss <- bootstrap_cn_loss %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC)
+  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+  save_plot("roc-auc_distribution_cnloss.png", goncalves_comparison_plots_dir)
