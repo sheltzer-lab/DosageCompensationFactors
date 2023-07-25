@@ -57,3 +57,16 @@ summary_tbl_merged <- tbl_merge(tbls = list(summary_tbl_depmap, summary_tbl_gonc
 summary_tbl_merged %>%
   as_gt() %>%
   gt::gtsave(filename = here(tables_dir, "summary_table.html"))
+
+## Plot Copy Number Distribution and Filter Thresholds
+cn_diff_quantiles <- quantile(expr_buf_goncalves$Gene.CopyNumber - expr_buf_goncalves$Gene.CopyNumber.Baseline,
+                              probs = seq(0, 1, 0.01))
+cn_dist <- expr_buf_goncalves %>%
+  mutate(Log2FC.CopyNumber =  Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  ggplot() +
+  aes(x = Log2FC.CopyNumber) +
+  geom_density() +
+  geom_vline(xintercept = cn_diff_quantiles["5%"], linetype = "dashed", color = "red") +
+  geom_vline(xintercept = cn_diff_quantiles["95%"], linetype = "dashed", color = "red") +
+  scale_x_continuous(breaks = seq(-2, 6, 0.5))
+save_plot(cn_dist, "copy_number_distribution.png", width = 300)

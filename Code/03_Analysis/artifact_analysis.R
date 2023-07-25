@@ -249,6 +249,40 @@ expr_buf_goncalves %>%
                           label_coords = c(1, 2)) %>%
   save_plot("regression_log2fc_cn_avg.png")
 
+## Buffering Ratio vs. Copy Number Diff
+expr_buf_goncalves %>%
+  mutate(Log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  scatter_plot_regression(Log2FC.CopyNumber, Buffering.GeneLevel.Ratio,
+                          Buffering.GeneLevel.Ratio ~ Log2FC.CopyNumber,
+                          label_coords = c(4, 10)) %>%
+  save_plot("regression_br_cn-diff.png")
+
+expr_buf_goncalves %>%
+  filter_cn_gain(remove_below = "50%") %>%
+  mutate(Log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  scatter_plot_regression(Log2FC.CopyNumber, Buffering.GeneLevel.Ratio,
+                          Buffering.GeneLevel.Ratio ~ Log2FC.CopyNumber,
+                          label_coords = c(4, 10)) %>%
+  save_plot("regression_br_cn-diff_gain.png")
+
+expr_buf_goncalves %>%
+  filter_cn_loss(remove_above = "50%") %>%
+  mutate(Log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  scatter_plot_regression(Log2FC.CopyNumber, Buffering.GeneLevel.Ratio,
+                          Buffering.GeneLevel.Ratio ~ Log2FC.CopyNumber,
+                          label_coords = c(-0.5, 10)) %>%
+  save_plot("regression_br_cn-diff_loss.png")
+
+expr_buf_goncalves %>%
+  mutate(log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  group_by(Gene.Symbol) %>%
+  summarize(Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
+            Log2FC.CopyNumber.Average = mean(Log2FC.CopyNumber, na.rm = TRUE)) %>%
+  scatter_plot_regression(Log2FC.CopyNumber.Average, Buffering.GeneLevel.Ratio.Average,
+                          Buffering.GeneLevel.Ratio.Average ~ Log2FC.CopyNumber.Average,
+                          label_coords = c(0, 2)) %>%
+  save_plot("regression_br_cn-diff_avg.png")
+
 
 ## Buffering Ratio vs. Log2FC
 expr_buf_goncalves %>%

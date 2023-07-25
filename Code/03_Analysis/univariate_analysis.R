@@ -314,7 +314,7 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
-n <- 100
+n <- 1000
 sample_prop <- 0.9
 
 bootstrap_chr_gain <- expr_buf_goncalves %>%
