@@ -117,6 +117,7 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
 
 # === Process & Write datasets to disk ===
 
+# Note: DepMap copy number data does not cover all cell lines in ProCan (333 cell lines lost here)
 procan_expr_avg %>%
   build_dataset(CellLine.SangerModelId, copy_number, dc_factors) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_goncalves.parquet'), version = "2.6")

@@ -88,3 +88,5 @@ df_cn <-
 
 write_parquet(df_cn, here(output_data_dir, 'copy_number.parquet'),
               version = "2.6")
+
+# ToDo: Use different copy number datasets for ProCan and DepMap
