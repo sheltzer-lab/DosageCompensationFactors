@@ -134,6 +134,19 @@ write.xlsx(cellline_buf_filtered_depmap, here(tables_base_dir, "cellline_bufferi
 write.xlsx(cellline_buf_merged, here(tables_base_dir, "cellline_buffering_z-scores_merged.xlsx"),
            colNames = TRUE)
 
+write_parquet(cellline_buf_goncalves, here(output_data_dir, "cellline_buffering_goncalves.parquet"),
+              version = "2.6")
+write_parquet(cellline_buf_depmap, here(output_data_dir, "cellline_buffering_depmap.parquet"),
+              version = "2.6")
+write_parquet(cellline_buf_gene_filtered_goncalves, here(output_data_dir, "cellline_buffering_gene_filtered_goncalves.parquet"),
+              version = "2.6")
+write_parquet(cellline_buf_gene_filtered_depmap, here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"),
+              version = "2.6")
+write_parquet(cellline_buf_filtered_goncalves, here(output_data_dir, "cellline_buffering_filtered_goncalves.parquet"),
+              version = "2.6")
+write_parquet(cellline_buf_filtered_depmap, here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"),
+              version = "2.6")
+
 ## Create plots
 cellline_buf_waterfall_goncalves <- cellline_buf_goncalves %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
