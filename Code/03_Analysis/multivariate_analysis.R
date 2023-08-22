@@ -32,6 +32,18 @@ dir.create(plots_dir, recursive = TRUE)
 expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
+# === Combine Datasets ===
+common_celllines <- intersect(unique(expr_buf_goncalves$CellLine.Name),
+                          unique(expr_buf_depmap$CellLine.Name))
+common_genes <- intersect(unique(expr_buf_goncalves$Gene.Symbol),
+                          unique(expr_buf_depmap$Gene.Symbol))
+
+expr_buf_combined <- expr_buf_goncalves %>%
+  bind_rows(expr_buf_depmap) %>%
+  filter(Gene.Symbol %in% common_genes)
+
+# === Define Functions ===
+
 shuffle_rows <- function(df) {
   df[sample(nrow(df), replace = FALSE),]
 }
@@ -103,6 +115,7 @@ clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_co
   dataset %>%
     filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
     mutate(Buffered = factor({ { buffering_class_col } }, levels = c("Scaling", "Buffered"))) %>%
+    mutate_if(is.numeric, \(x) as.numeric(x)) %>%
     drop_na(Buffered) %>%
     select(Buffered, all_of(factor_cols)) %>%
     janitor::clean_names()
@@ -139,7 +152,7 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
 
   # Prepare dataset for training and split into training and test set
   datasets <- prepare_datasets(dataset, { { buffering_class_col } }, filter_func,
-                               factor_cols = dc_factor_cols, training_set_ratio = 0.8, target_balance = 0.7)
+                               factor_cols = factor_cols, training_set_ratio = 0.8, target_balance = 0.7)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
   # ToDo: Save datasets
@@ -198,7 +211,24 @@ analysis_list <- list(
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
        sub_dir = list("DepMap", "ChromosomeArm-Level", "GainAverage")),
   list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       sub_dir = list("DepMap", "ChromosomeArm-Level", "LossAverage"))
+       sub_dir = list("DepMap", "ChromosomeArm-Level", "LossAverage")),
+
+  # list(dataset = expr_buf_combined, buffering = "Buffering.GeneLevel.Class", filter = identity,
+  #      sub_dir =  list("Combined", "Gene-Level", "Unfiltered")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+       sub_dir =  list("Combined", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+       sub_dir =  list("Combined", "Gene-Level", "FilteredGain")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+       sub_dir =  list("Combined", "Gene-Level", "FilteredLoss")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+       sub_dir =  list("Combined", "ChromosomeArm-Level", "Gain")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+       sub_dir =  list("Combined", "ChromosomeArm-Level", "Loss")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+       sub_dir = list("Combined", "ChromosomeArm-Level", "GainAverage")),
+  list(dataset = expr_buf_combined, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+       sub_dir = list("Combined", "ChromosomeArm-Level", "LossAverage"))
 )
 
 ## Define training parameters
@@ -216,12 +246,15 @@ tc_nn["number"] <- 3
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base),
+  list(modelName = "xgbLinear", tc = tc_base)
   # list(modelName = "rf", tc = tc_base),
-  list(modelName = "pcaNNet", tc = tc_nn)
+  # list(modelName = "pcaNNet", tc = tc_nn)
 )
 
 ## Training & Evaluation Loop
+### Test robustness of models by excluding certain factors
+excluded_factors <- c("Homology Score")
+
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(analysis_list) * 3,
                      style = 3)
@@ -233,6 +266,7 @@ for (model in models) {
       suppressWarnings({
       results <- run_analysis(dataset = analysis$dataset,
                               buffering_class_col = get(analysis$buffering),
+                              factor_cols = dc_factor_cols[!dc_factor_cols %in% excluded_factors],
                               filter_func = analysis$filter,
                               model_name = model$modelName,
                               train_control = model$tc,
@@ -251,11 +285,12 @@ close(pb)
 ## ToDo: Train a "universal" model (multiple conditions, or multiple datasets, or both)
 
 # Use goncalves gain model for evaluating depmap gene-level gain data
-model_goncalves_filtered_gain_rf <- readRDS(here(models_base_dir, "model_rf_GoncalvesChromosomeArm-LevelGain.rds"))
-model_goncalves_filtered_gain_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_GoncalvesChromosomeArm-LevelGain.rds"))
-model_goncalves_filtered_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_GoncalvesChromosomeArm-LevelGain.rds"))
+model_goncalves_arm_gain_rf <- readRDS(here(models_base_dir, "model_rf_GoncalvesChromosomeArm-LevelGain.rds"))
+model_goncalves_arm_gain_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_GoncalvesChromosomeArm-LevelGain.rds"))
+model_goncalves_arm_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_GoncalvesChromosomeArm-LevelGain.rds"))
+model_combined_arm_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_CombinedChromosomeArm-LevelGain.rds"))
 
-test_data <- expr_buf_depmap %>%
+test_data_depmap <- expr_buf_depmap %>%
   filter_arm_gain() %>%
   clean_data(Buffering.ChrArmLevel.Class) %>%
   impute_na() %>%
@@ -263,6 +298,18 @@ test_data <- expr_buf_depmap %>%
 
 eval_dir <- here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Gain", "Eval-DepMap")
 dir.create(eval_dir, recursive = TRUE)
-evaluate_model(model_goncalves_filtered_gain_rf, test_data, eval_dir, filename = "ROC-Curve_rf.png")
-evaluate_model(model_goncalves_filtered_gain_pcaNN, test_data, eval_dir, filename = "ROC-Curve_pcaNNet.png")
-evaluate_model(model_goncalves_filtered_gain_xgb, test_data, eval_dir, filename = "ROC-Curve_xgbLinear.png")
+evaluate_model(model_goncalves_arm_gain_rf, test_data_depmap, eval_dir, filename = "ROC-Curve_rf.png")
+evaluate_model(model_goncalves_arm_gain_pcaNN, test_data_depmap, eval_dir, filename = "ROC-Curve_pcaNNet.png")
+evaluate_model(model_goncalves_arm_gain_xgb, test_data_depmap, eval_dir, filename = "ROC-Curve_xgbLinear.png")
+
+eval_dir <- here(plots_dir, "Combined", "ChromosomeArm-Level", "Gain", "Eval")
+dir.create(eval_dir, recursive = TRUE)
+
+test_data_goncalves <- expr_buf_goncalves %>%
+  filter_arm_gain() %>%
+  clean_data(Buffering.ChrArmLevel.Class) %>%
+  impute_na() %>%
+  shuffle_rows()
+
+evaluate_model(model_combined_arm_gain_xgb, test_data_depmap, eval_dir, filename = "ROC-Curve_xgbLinear_DepMap.png")
+evaluate_model(model_combined_arm_gain_xgb, test_data_goncalves, eval_dir, filename = "ROC-Curve_xgbLinear_Goncalves.png")
