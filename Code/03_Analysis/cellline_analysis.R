@@ -167,7 +167,7 @@ cellline_buf_waterfall_filtered_depmap <- cellline_buf_filtered_depmap %>%
 # === Determine Correlation between Datasets ===
 cellline_dist <- cellline_buf_merged %>%
   violin_plot(Dataset, Buffering.CellLine.Ratio.ZScore) %>%
-  save_plot(here(plots_dir, "cellline_buffering_distribution.png"))
+  save_plot("cellline_buffering_distribution.png")
 
 
 cellline_kendall <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
