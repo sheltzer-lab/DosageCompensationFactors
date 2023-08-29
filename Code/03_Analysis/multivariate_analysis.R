@@ -253,6 +253,7 @@ models <- list(
 
 ## Training & Evaluation Loop
 ### Test robustness of models by excluding certain factors
+### ToDo: Test this separately
 excluded_factors <- c("Homology Score")
 
 pb <- txtProgressBar(min = 0,
