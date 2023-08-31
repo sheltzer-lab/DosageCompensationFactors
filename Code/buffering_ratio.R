@@ -7,6 +7,12 @@ buffering_ratio <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
   ifelse(cn_var > cn_base, br, -br)
 }
 
+buffering_score <- function(log2fc_expr, log2fc_cn) {
+  corr <- cor(log2fc_expr, log2fc_cn,
+              method = "pearson", use = "na.or.complete")
+  return(corr)
+}
+
 buffering_ratio_old <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
   br <- 1 - (expr_var / expr_base) * (cn_base / cn_var)
   ifelse(cn_var > cn_base, br, -br)
@@ -16,6 +22,12 @@ buffering_class <- function(buffering_ratio) {
   ifelse(buffering_ratio > 0.6849625, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
          ifelse(buffering_ratio > 0.3349625, "Buffered",    # Less expression in trisomy than expected
                 "Scaling"))                                  # Expression level as expected or higher
+}
+
+buffering_score_class <- function(buffering_score) {
+  ifelse(buffering_score > 0.333, "Scaling",
+         ifelse(buffering_score > -0.333, "Buffered",
+                "Anti-Scaling"))
 }
 
 buffering_class_old <- function(buffering_ratio) {

@@ -30,6 +30,11 @@ dir.create(plots_dir, recursive = TRUE)
 expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
+buf_score_goncalves <- expr_buf_goncalves %>%
+  calculate_buffering()
+buf_score_depmap <- expr_buf_depmap %>%
+  calculate_buffering()
+
 shuffle_rows <- function(df) {
   df[sample(nrow(df), replace = FALSE),]
 }
@@ -178,12 +183,17 @@ analysis_list <- list(
   #      sub_dir =  list("DepMap", "Gene-Level", "FilteredLoss")),
   # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
   #      sub_dir =  list("DepMap", "ChromosomeArm-Level", "Gain")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-       sub_dir =  list("DepMap", "ChromosomeArm-Level", "Loss")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-       sub_dir =  list("DepMap", "ChromosomeArm-Level", "GainAverage")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       sub_dir =  list("DepMap", "ChromosomeArm-Level", "LossAverage"))
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+  #      sub_dir =  list("DepMap", "ChromosomeArm-Level", "Loss")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+  #      sub_dir =  list("DepMap", "ChromosomeArm-Level", "GainAverage")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+  #      sub_dir =  list("DepMap", "ChromosomeArm-Level", "LossAverage")),
+
+  list(dataset = buf_score_goncalves, buffering = "Buffering.Score.Class", filter = identity,
+       sub_dir = list("Goncalves", "Gene-Level", "ScoreGain")),
+  list(dataset = buf_score_depmap, buffering = "Buffering.Score.Class", filter = identity,
+       sub_dir = list("DepMap", "Gene-Level", "ScoreGain"))
 )
 
 
