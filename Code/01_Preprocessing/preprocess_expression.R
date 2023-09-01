@@ -118,7 +118,6 @@ depmap_expr_processed <- depmap_expr_tidy %>%
 
 
 # === Quality Control ===
-# ToDo: Why are there only 616 cell lines?
 procan_expr_dist <- procan_expr_avg_processed %>%
   ggplot() +
   geom_density(na.rm = TRUE, aes(Protein.Expression.Log2, color = "Non-Normalized"), show.legend = TRUE) +

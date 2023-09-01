@@ -12,6 +12,11 @@ buffering_ratio_old <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
   ifelse(cn_var > cn_base, br, -br)
 }
 
+scaling_factor <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
+  sf <- ((expr_var / expr_base) - 1) / ((cn_var / cn_base) - 1)
+  ifelse(is.finite(sf), sf, NA)
+}
+
 buffering_class <- function(buffering_ratio) {
   ifelse(buffering_ratio > 0.6849625, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
          ifelse(buffering_ratio > 0.3349625, "Buffered",    # Less expression in trisomy than expected
@@ -22,6 +27,12 @@ buffering_class_old <- function(buffering_ratio) {
     ifelse(buffering_ratio > 0.377978, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
          ifelse(buffering_ratio > 0.2071953, "Buffered",    # Less expression in trisomy than expected
                 "Scaling"))                                  # Expression level as expected or higher
+}
+
+buffering_class_sf <- function(scaling_factor) {
+    ifelse(scaling_factor >= 1, "Scaling",
+         ifelse(scaling_factor >= 0, "Buffered",
+                "Anti-Scaling"))
 }
 
 # Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) on chromosome arm gain (inverted for arm loss):
@@ -40,7 +51,7 @@ buffering_class_log2fc <- function (log2fc, cn_base = 2, cn_var = 3) {
 
 # === Example Code ===
 
-plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
+plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-0.99, 0.99), expr_lim = c(-1, 1)) {
   cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
   cn_base <- rep(2, length(cn_diff))
   expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
@@ -97,11 +108,15 @@ buffering_example <- function() {
                     CNBase = c(2, 2, 2, 2), CNVar = c(4, 4, 4, 4))
 
   for (df in list(df1, df2, df3, df4)) {
-    df_buff <- df %>%
-      mutate(BR = buffering_ratio(ExprBase, ExprVar, CNBase, CNVar)) %>%
-      mutate(BC = buffering_class(BR)) %>%
-      mutate(Log2FC = log2(ExprVar) - log2(ExprBase)) %>%
-      mutate(Log2FC_BC = buffering_class_log2fc(Log2FC, CNBase, CNVar))
-    print(df_buff)
+    df %>%
+      mutate(Log2FC = log2(ExprVar) - log2(ExprBase),
+             BR = buffering_ratio(ExprBase, ExprVar, CNBase, CNVar),
+             BR_old = buffering_ratio_old(ExprBase, ExprVar, CNBase, CNVar),
+             SF = scaling_factor(ExprBase, ExprVar, CNBase, CNVar)) %>%
+      mutate(Log2FC_BC = buffering_class_log2fc(Log2FC, CNBase, CNVar),
+             BC = buffering_class(BR),
+             BC_old = buffering_class_old(BR_old),
+             BC_sf = buffering_class_sf(SF)) %>%
+      print()
   }
 }

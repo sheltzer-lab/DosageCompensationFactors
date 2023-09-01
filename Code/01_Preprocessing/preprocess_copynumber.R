@@ -8,7 +8,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 
-copynumber_data_dir <- here(external_data_dir, "CopyNumber")
+copynumber_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 output_data_dir <- output_data_base_dir
 plots_dir <- plots_base_dir
 
@@ -67,24 +67,25 @@ df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
          CellLine.WGD = "Genome doublings")
 
 # NOTE! SIDM00018 has a different cell line name in DepMap and expression datasets (KO52 vs K052)!!!
-df_cn <-
-  read.csv(
-    here(copynumber_data_dir, "Copy_Number_Public_23Q2.csv"),
-    row.names = 1,
-    check.names = FALSE
-  ) %>%
-    as.matrix() %>%
-    as.table() %>%
-    as.data.frame() %>%
-    setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber")) %>%
-    inner_join(y = df_model, by = "CellLine.DepMapModelId",
-               na_matches = "never", relationship = "many-to-one") %>%
-    get_chromosome_arms() %>%
-    # ToDo: Consider Left Join
-    inner_join(y = df_arm_level_cna, by = c("CellLine.DepMapModelId", "Gene.ChromosomeArm"),
-               na_matches = "never", relationship = "many-to-one") %>%
-    inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
-               na_matches = "never", relationship = "many-to-one")
+read.csv(
+  here(copynumber_data_dir, "Copy_Number_Public_23Q2.csv"),
+  row.names = 1,
+  check.names = FALSE
+) %>%
+  as.matrix() %>%
+  as.table() %>%
+  as.data.frame() %>%
+  setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber")) %>%
+  inner_join(y = df_model, by = "CellLine.DepMapModelId",
+             na_matches = "never", relationship = "many-to-one") %>%
+  get_chromosome_arms() %>%
+  # ToDo: Consider Left Join
+  inner_join(y = df_arm_level_cna, by = c("CellLine.DepMapModelId", "Gene.ChromosomeArm"),
+             na_matches = "never", relationship = "many-to-one") %>%
+  inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
+             na_matches = "never", relationship = "many-to-one") %>%
+  # filter(CellLine.Ploidy < 3.5) %>%     # Removing near-tetraploid cell lines is detrimental for factor prediction
+  write_parquet(here(output_data_dir, 'copy_number.parquet'),
+                version = "2.6")
 
-write_parquet(df_cn, here(output_data_dir, 'copy_number.parquet'),
-              version = "2.6")
+# ToDo: Use different copy number datasets for ProCan and DepMap
