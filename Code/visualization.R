@@ -181,11 +181,19 @@ plot_rocs <- function(rocs) {
     roc_data <- rbind(roc_data, roc_df)
   }
 
+  df_label <- roc_data %>%
+    distinct(Name, AUC) %>%
+    arrange(desc(Name)) %>%
+    mutate(x = 0.1,
+           y = seq(0.05, 0.75, 0.1)[seq_along(unique(roc_data$Name))],
+           AUC = paste0("AUC = ", format(round(AUC, 3), nsmall = 3)))
+
   plot <- roc_data %>%
     arrange(Sensitivity) %>%
     ggplot() +
     aes(x = Specificity, y = Sensitivity, color = Name) +
     geom_line() +
+    geom_label(data = df_label, mapping = aes(color = Name, label = AUC, x = x, y = y)) +
     scale_x_reverse(limits = c(1, 0)) +
     labs(x = "Specificity", y = "Sensitivity", color = "Model")
 

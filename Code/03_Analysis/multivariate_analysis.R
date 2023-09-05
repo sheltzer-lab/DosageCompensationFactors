@@ -137,7 +137,7 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
   # Split training & test data
   train_size <- ceiling(nrow(df_prep) * training_set_ratio)
   test_size <- nrow(df_prep) - train_size
-  datasets <- list(train = df_prep[1:train_size,],
+  datasets <- list(training = df_prep[1:train_size,],
                    test = df_prep[(train_size + 1):(train_size + test_size),])
 
   return(datasets)
@@ -155,14 +155,15 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
                                factor_cols = factor_cols, training_set_ratio = 0.8, target_balance = 0.7)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
-  # ToDo: Save datasets
-
   # Train model
   model <- caret::train(buffered ~ .,
-                        data = datasets$train,
+                        data = datasets$training,
                         method = model_name,
                         trControl = train_control,
                         metric = "ROC")
+
+  # Add datasets to model
+  model$datasets <- datasets
 
   # Save Model
   saveRDS(model, here(models_dir, paste0("model_", model_name, "_", paste0(sub_dir, collapse = ""), ".rds")))
@@ -281,6 +282,12 @@ for (model in models) {
   }
 }
 close(pb)
+
+rocs <- list()
+for (name in names(analysis_results)) {
+  rocs[[name]] <- analysis_results[[name]]$roc
+}
+plot_rocs(rocs)
 
 ## ToDo: Train and compare a set of models on one dataset (or multiple)
 ## ToDo: Train a "universal" model (multiple conditions, or multiple datasets, or both)
