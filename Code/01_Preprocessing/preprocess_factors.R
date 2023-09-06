@@ -160,11 +160,12 @@ df_mobidb <- mobidb %>%
          "Protein.Uniprot.Accession", "Gene.Symbol")
 
 ## Prepare NED data
+delta_score_col <- paste0(enc2utf8("\u0394"), "-score")
 df_ned <- ned_human %>%
-  select("Protein IDs (Uniprot)", "Gene names", "Δ-score") %>%
+  select("Protein IDs (Uniprot)", "Gene names", delta_score_col) %>%
   rename(Protein.Uniprot.Accession = "Protein IDs (Uniprot)",
          Gene.Symbol = "Gene names",
-         `Non-Exponential Decay Delta` = "Δ-score") %>%
+         `Non-Exponential Decay Delta` = delta_score_col) %>%
   separate_longer_delim(Gene.Symbol, delim = ";") %>%
   drop_na() %>%
   mapIds("SYMBOL", "ENSEMBL",
@@ -241,7 +242,9 @@ df_dc_factors <- df_dc_factors_ptm %>%
 
 # === Quality Control ===
 # Check for unmatched and ambiguous rows
-ambig <- df_dc_factors_other %>% add_count(Gene.Symbol, Protein.Uniprot.Accession) %>% filter(n > 1)
+ambig <- df_dc_factors_other %>%
+  add_count(Gene.Symbol, Protein.Uniprot.Accession) %>%
+  filter(n > 1)
 
 ## Determine amount of missing data
 df_dc_factors_values <- df_dc_factors %>% select(where(is.numeric))

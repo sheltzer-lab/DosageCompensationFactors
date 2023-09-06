@@ -15,7 +15,7 @@ source(here("Code", "annotation.R"))
 
 
 expression_data_dir <- here(external_data_dir, "Expression")
-copynumber_data_dir <- here(external_data_dir, "CopyNumber")
+copynumber_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 output_data_dir <- output_data_base_dir
 plots_dir <- plots_base_dir
 

@@ -1,6 +1,10 @@
 library(ggplot2)
 library(RColorBrewer)
 
+ # === Set UTF-8 Encoding ===
+options(encoding = "utf-8")
+Sys.setlocale(category="LC_ALL", locale = "English_United States.1252")
+
 # === Define Thresholds ===
 log2fc_threshold <- 1     # Log2FC threshold, Default: 1 (= 2-fold change)
 p_threshold <- 0.05       # p-value threshold, Default: 0.05
