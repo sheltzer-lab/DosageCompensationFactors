@@ -28,7 +28,7 @@ dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
 ## ToDo: Sanitize Cell Line names
-expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
 # === Analyze Dosage Compensation on Cell Line level ===
@@ -67,7 +67,7 @@ remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
 }
 
 ## Combine datasets
-expr_buf_goncalves_filtered <- expr_buf_goncalves %>%
+expr_buf_procan_filtered <- expr_buf_procan %>%
   filter_cn_diff(remove_between = c(-0, 0.0246)) %>% # Remove noise from discontinuity points of buffering ratio
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
@@ -78,20 +78,20 @@ expr_buf_depmap_filtered <- expr_buf_depmap %>%
   drop_na() %>%
   rename(DepMap = "Buffering.GeneLevel.Ratio")
 
-expr_buf_filtered <- expr_buf_goncalves_filtered %>%
+expr_buf_filtered <- expr_buf_procan_filtered %>%
   inner_join(y = expr_buf_depmap_filtered, by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
              relationship = "one-to-one", na_matches = "never")
 
-common_genes <- intersect(unique(expr_buf_goncalves$Gene.Symbol),
+common_genes <- intersect(unique(expr_buf_procan$Gene.Symbol),
                           unique(expr_buf_depmap$Gene.Symbol))
 
 ## Calculate Cell Line level Dosage Compensation
-cellline_buf_goncalves <- expr_buf_goncalves %>%
+cellline_buf_procan <- expr_buf_procan %>%
   analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
 cellline_buf_depmap <- expr_buf_depmap %>%
   analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
 
-cellline_buf_gene_filtered_goncalves <- expr_buf_goncalves_filtered %>%
+cellline_buf_gene_filtered_procan <- expr_buf_procan_filtered %>%
   filter(Gene.Symbol %in% common_genes) %>%
   analyze_cellline_buffering(ProCan) %>%
   mutate(Dataset = "ProCan")
@@ -100,18 +100,18 @@ cellline_buf_gene_filtered_depmap <- expr_buf_depmap_filtered %>%
   analyze_cellline_buffering(DepMap) %>%
   mutate(Dataset = "DepMap")
 
-cellline_buf_filtered_goncalves <- expr_buf_filtered %>%
+cellline_buf_filtered_procan <- expr_buf_filtered %>%
   analyze_cellline_buffering(ProCan) %>%
   mutate(Dataset = "ProCan")
 cellline_buf_filtered_depmap <- expr_buf_filtered %>%
   analyze_cellline_buffering(DepMap) %>%
   mutate(Dataset = "DepMap")
 
-cellline_buf_merged <- cellline_buf_filtered_goncalves %>%
+cellline_buf_merged <- cellline_buf_filtered_procan %>%
   bind_rows(cellline_buf_filtered_depmap) %>%
   arrange(CellLine.Name)
 
-cellline_buf_merged_gene <- cellline_buf_gene_filtered_goncalves %>%
+cellline_buf_merged_gene <- cellline_buf_gene_filtered_procan %>%
   bind_rows(cellline_buf_gene_filtered_depmap) %>%
   pivot_wider(id_cols = "CellLine.Name",
               names_from = "Dataset",
@@ -119,46 +119,46 @@ cellline_buf_merged_gene <- cellline_buf_gene_filtered_goncalves %>%
   arrange(CellLine.Name)
 
 ## Save results
-write.xlsx(cellline_buf_goncalves, here(tables_base_dir, "cellline_buffering_goncalves.xlsx"),
+write.xlsx(cellline_buf_procan, here(tables_base_dir, "cellline_buffering_procan.xlsx"),
            colNames = TRUE)
 write.xlsx(cellline_buf_depmap, here(tables_base_dir, "cellline_buffering_depmap.xlsx"),
            colNames = TRUE)
-write.xlsx(cellline_buf_gene_filtered_goncalves, here(tables_base_dir, "cellline_buffering_gene_filtered_goncalves.xlsx"),
+write.xlsx(cellline_buf_gene_filtered_procan, here(tables_base_dir, "cellline_buffering_gene_filtered_procan.xlsx"),
            colNames = TRUE)
 write.xlsx(cellline_buf_gene_filtered_depmap, here(tables_base_dir, "cellline_buffering_gene_filtered_depmap.xlsx"),
            colNames = TRUE)
-write.xlsx(cellline_buf_filtered_goncalves, here(tables_base_dir, "cellline_buffering_filtered_goncalves.xlsx"),
+write.xlsx(cellline_buf_filtered_procan, here(tables_base_dir, "cellline_buffering_filtered_procan.xlsx"),
            colNames = TRUE)
 write.xlsx(cellline_buf_filtered_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
            colNames = TRUE)
 write.xlsx(cellline_buf_merged, here(tables_base_dir, "cellline_buffering_z-scores_merged.xlsx"),
            colNames = TRUE)
 
-write_parquet(cellline_buf_goncalves, here(output_data_dir, "cellline_buffering_goncalves.parquet"),
+write_parquet(cellline_buf_procan, here(output_data_dir, "cellline_buffering_procan.parquet"),
               version = "2.6")
 write_parquet(cellline_buf_depmap, here(output_data_dir, "cellline_buffering_depmap.parquet"),
               version = "2.6")
-write_parquet(cellline_buf_gene_filtered_goncalves, here(output_data_dir, "cellline_buffering_gene_filtered_goncalves.parquet"),
+write_parquet(cellline_buf_gene_filtered_procan, here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"),
               version = "2.6")
 write_parquet(cellline_buf_gene_filtered_depmap, here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"),
               version = "2.6")
-write_parquet(cellline_buf_filtered_goncalves, here(output_data_dir, "cellline_buffering_filtered_goncalves.parquet"),
+write_parquet(cellline_buf_filtered_procan, here(output_data_dir, "cellline_buffering_filtered_procan.parquet"),
               version = "2.6")
 write_parquet(cellline_buf_filtered_depmap, here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"),
               version = "2.6")
 
 ## Create plots
-cellline_buf_waterfall_goncalves <- cellline_buf_goncalves %>%
+cellline_buf_waterfall_procan <- cellline_buf_procan %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
-  save_plot("cellline_buffering_waterfall_goncalves.png")
+  save_plot("cellline_buffering_waterfall_procan.png")
 cellline_buf_waterfall_depmap <- cellline_buf_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_depmap.png")
 
 # ToDo: Facetted waterfall plot
-cellline_buf_waterfall_filtered_goncalves <- cellline_buf_filtered_goncalves %>%
+cellline_buf_waterfall_filtered_procan <- cellline_buf_filtered_procan %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
-  save_plot("cellline_buffering_waterfall_filtered_goncalves.png")
+  save_plot("cellline_buffering_waterfall_filtered_procan.png")
 cellline_buf_waterfall_filtered_depmap <- cellline_buf_filtered_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_depmap.png")

@@ -19,7 +19,7 @@ source(here("Code", "03_Analysis", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
-plots_dir <- here(plots_base_dir, "Univariate", "Goncalves")
+plots_dir <- here(plots_base_dir, "Univariate", "ProCan")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(tables_dir, recursive = TRUE)
@@ -27,7 +27,7 @@ dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
 
-expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
 # === Summarize Distribution of Obersavtions ===
@@ -42,7 +42,7 @@ summary_tbl_depmap <- expr_buf_depmap %>%
   modify_header(label = "**Chromosome Arm CNA**") %>%
   bold_labels()
 
-summary_tbl_goncalves <- expr_buf_goncalves %>%
+summary_tbl_procan <- expr_buf_procan %>%
   tbl_summary(include = c(Gene.CopyNumber, Protein.Expression.Log2, Protein.Expression.Normalized, Protein.Expression.Average,
                           Protein.Expression.Baseline, Protein.Expression.Baseline.Unweighted,
                           Log2FC, Log2FC.Average,
@@ -52,16 +52,16 @@ summary_tbl_goncalves <- expr_buf_goncalves %>%
   modify_header(label = "**Chromosome Arm CNA**") %>%
   bold_labels()
 
-summary_tbl_merged <- tbl_merge(tbls = list(summary_tbl_depmap, summary_tbl_goncalves),
-                                tab_spanner = c("**DepMap**", "**ProCan (Goncalves)**"))
+summary_tbl_merged <- tbl_merge(tbls = list(summary_tbl_depmap, summary_tbl_procan),
+                                tab_spanner = c("**DepMap**", "**ProCan**"))
 summary_tbl_merged %>%
   as_gt() %>%
   gt::gtsave(filename = here(tables_dir, "summary_table.html"))
 
 ## Plot Copy Number Distribution and Filter Thresholds
-cn_diff_quantiles <- quantile(expr_buf_goncalves$Gene.CopyNumber - expr_buf_goncalves$Gene.CopyNumber.Baseline,
+cn_diff_quantiles <- quantile(expr_buf_procan$Gene.CopyNumber - expr_buf_procan$Gene.CopyNumber.Baseline,
                               probs = seq(0, 1, 0.01))
-cn_dist <- expr_buf_goncalves %>%
+cn_dist <- expr_buf_procan %>%
   mutate(Log2FC.CopyNumber =  Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
   ggplot() +
   aes(x = Log2FC.CopyNumber) +

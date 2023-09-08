@@ -25,8 +25,8 @@ dir.create(plots_dir, recursive = TRUE)
 dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
 
-procan_expr_avg <- read_parquet(here(output_data_dir, "expression_average_goncalves.parquet"))
-depmap_expr <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
+expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
+expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 
@@ -118,10 +118,10 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
 # === Process & Write datasets to disk ===
 
 # Note: DepMap copy number data does not cover all cell lines in ProCan (333 cell lines lost here)
-procan_expr_avg %>%
+expr_procan %>%
   build_dataset(CellLine.SangerModelId, copy_number, dc_factors) %>%
-  write_parquet(here(output_data_dir, 'expression_buffering_goncalves.parquet'), version = "2.6")
+  write_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'), version = "2.6")
 
-depmap_expr %>%
+expr_depmap %>%
   build_dataset(CellLine.DepMapModelId, copy_number, dc_factors) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")

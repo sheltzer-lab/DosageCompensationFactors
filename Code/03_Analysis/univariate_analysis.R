@@ -22,26 +22,26 @@ source(here("Code", "03_Analysis", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Univariate")
-goncalves_plots_dir <- here(plots_base_dir, "Univariate", "Goncalves")
-goncalves_chr_plots_dir <- here(goncalves_plots_dir, "ChromosomeArm-Level")
-goncalves_gene_plots_dir <- here(goncalves_plots_dir, "Gene-Level")
-goncalves_comparison_plots_dir <- here(goncalves_plots_dir, "Comparison")
+procan_plots_dir <- here(plots_base_dir, "Univariate", "ProCan")
+procan_chr_plots_dir <- here(procan_plots_dir, "ChromosomeArm-Level")
+procan_gene_plots_dir <- here(procan_plots_dir, "Gene-Level")
+procan_comparison_plots_dir <- here(procan_plots_dir, "Comparison")
 depmap_plots_dir <- here(plots_base_dir, "Univariate", "DepMap")
 depmap_chr_plots_dir <- here(depmap_plots_dir, "ChromosomeArm-Level")
 depmap_gene_plots_dir <- here(depmap_plots_dir, "Gene-Level")
 
 dir.create(output_data_dir, recursive = TRUE)
-dir.create(goncalves_plots_dir, recursive = TRUE)
-dir.create(goncalves_chr_plots_dir, recursive = TRUE)
-dir.create(goncalves_gene_plots_dir, recursive = TRUE)
-dir.create(goncalves_comparison_plots_dir, recursive = TRUE)
+dir.create(procan_plots_dir, recursive = TRUE)
+dir.create(procan_chr_plots_dir, recursive = TRUE)
+dir.create(procan_gene_plots_dir, recursive = TRUE)
+dir.create(procan_comparison_plots_dir, recursive = TRUE)
 dir.create(depmap_plots_dir, recursive = TRUE)
 dir.create(depmap_chr_plots_dir, recursive = TRUE)
 dir.create(depmap_gene_plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
 
-expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
 # === Define Processing Functions ===
@@ -132,22 +132,22 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, dir = NULL) 
 
 # === Calculate ROC for all factors in all datasets ===
 analysis_list <- list(
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = identity,
-       dir = here(plots_dir, "Goncalves", "Gene-Level", "Unfiltered")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-       dir = here(plots_dir, "Goncalves", "Gene-Level", "Filtered")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
-       dir = here(plots_dir, "Goncalves", "Gene-Level", "FilteredGain")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
-       dir = here(plots_dir, "Goncalves", "Gene-Level", "FilteredLoss")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Gain")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "Loss")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "GainAverage")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       dir = here(plots_dir, "Goncalves", "ChromosomeArm-Level", "LossAverage")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = identity,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "Unfiltered")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "FilteredGain")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "FilteredLoss")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "GainAverage")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "LossAverage")),
 
   list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
        dir = here(plots_dir, "DepMap", "Gene-Level", "Unfiltered")),
@@ -317,96 +317,96 @@ plot_comparison <- function(comparison_results) {
 n <- 1000
 sample_prop <- 0.9
 
-bootstrap_chr_gain <- expr_buf_goncalves %>%
+bootstrap_chr_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
                             filter_func = filter_arm_gain,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Chromosome Arm Gain")
 
-bootstrap_chr_loss <- expr_buf_goncalves %>%
+bootstrap_chr_loss <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
                             filter_func = filter_arm_loss,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Chromosome Arm Loss")
 
-bootstrap_cn_gain <- expr_buf_goncalves %>%
+bootstrap_cn_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_gain,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Gene Copy Number Gain")
 
-bootstrap_cn_loss <- expr_buf_goncalves %>%
+bootstrap_cn_loss <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_loss,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Gene Copy Number Loss")
 
 ## Checkpoint: Save and load bootstrapped results before continuing
-write_parquet(bootstrap_chr_gain, here(output_data_dir, 'bootstrap_univariate_goncalves_chrgain.parquet'),
+write_parquet(bootstrap_chr_gain, here(output_data_dir, 'bootstrap_univariate_procan_chrgain.parquet'),
               version = "2.6")
-write_parquet(bootstrap_chr_loss, here(output_data_dir, 'bootstrap_univariate_goncalves_chrloss.parquet'),
+write_parquet(bootstrap_chr_loss, here(output_data_dir, 'bootstrap_univariate_procan_chrloss.parquet'),
               version = "2.6")
-write_parquet(bootstrap_cn_gain, here(output_data_dir, 'bootstrap_univariate_goncalves_cngain.parquet'),
+write_parquet(bootstrap_cn_gain, here(output_data_dir, 'bootstrap_univariate_procan_cngain.parquet'),
               version = "2.6")
-write_parquet(bootstrap_cn_loss, here(output_data_dir, 'bootstrap_univariate_goncalves_cnloss.parquet'),
+write_parquet(bootstrap_cn_loss, here(output_data_dir, 'bootstrap_univariate_procan_cnloss.parquet'),
               version = "2.6")
-bootstrap_chr_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_chrgain.parquet"))
-bootstrap_chr_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_chrloss.parquet"))
-bootstrap_cn_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_cngain.parquet"))
-bootstrap_cn_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_goncalves_cnloss.parquet"))
+bootstrap_chr_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_chrgain.parquet"))
+bootstrap_chr_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_chrloss.parquet"))
+bootstrap_cn_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_cngain.parquet"))
+bootstrap_cn_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_cnloss.parquet"))
 
 ## Compare statistical results between conditions
 ### Chr Gain vs. Chr Loss
 results_chrgain_chrloss <- compare_conditions(bootstrap_chr_gain, bootstrap_chr_loss)
 plot_chrgain_chrloss <- plot_comparison(results_chrgain_chrloss)
-ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrgain_chrloss.png"),
+ggsave(here(procan_comparison_plots_dir, "roc-auc_comparison_chrgain_chrloss.png"),
        plot = plot_chrgain_chrloss,
        height = 200, width = 320, units = "mm", dpi = 300)
 
 ### CN gain vs. CN loss
 results_cngain_cnloss <- compare_conditions(bootstrap_cn_gain, bootstrap_cn_loss)
 plot_cngain_cnloss <- plot_comparison(results_cngain_cnloss)
-ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_cngain_cnloss.png"),
+ggsave(here(procan_comparison_plots_dir, "roc-auc_comparison_cngain_cnloss.png"),
        plot = plot_cngain_cnloss,
        height = 200, width = 320, units = "mm", dpi = 300)
 
 ### Chr gain vs. CN gain
 results_chrgain_cngain <- compare_conditions(bootstrap_chr_gain, bootstrap_cn_gain)
 plot_chrgain_cngain <- plot_comparison(results_chrgain_cngain)
-ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrgain_cngain.png"),
+ggsave(here(procan_comparison_plots_dir, "roc-auc_comparison_chrgain_cngain.png"),
        plot = plot_chrgain_cngain,
        height = 200, width = 320, units = "mm", dpi = 300)
 
 ### Chr loss vs. CN loss
 results_chrloss_cnloss <- compare_conditions(bootstrap_chr_loss, bootstrap_cn_loss)
 plot_chrloss_cnloss <- plot_comparison(results_chrloss_cnloss)
-ggsave(here(goncalves_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"),
+ggsave(here(procan_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"),
        plot = plot_chrloss_cnloss,
        height = 200, width = 320, units = "mm", dpi = 300)
 
 ## Investigate correlation of ROC AUC of factors
-png(here(goncalves_comparison_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
+png(here(procan_comparison_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_gain <- bootstrap_chr_gain %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
 dev.off()
 
-png(here(goncalves_comparison_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
+png(here(procan_comparison_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_loss <- bootstrap_chr_loss %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
 dev.off()
 
-png(here(goncalves_comparison_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
+png(here(procan_comparison_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_gain <- bootstrap_cn_gain %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
 dev.off()
 
-png(here(goncalves_comparison_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
+png(here(procan_comparison_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_loss <- bootstrap_cn_loss %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
@@ -416,13 +416,13 @@ dev.off()
 ## Plot distribution of ROC AUC of factors
 dist_chr_gain <- bootstrap_chr_gain %>%
   violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_chrgain.png", goncalves_comparison_plots_dir)
+  save_plot("roc-auc_distribution_chrgain.png", procan_comparison_plots_dir)
 dist_chr_loss <- bootstrap_chr_loss %>%
   violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_chrloss.png", goncalves_comparison_plots_dir)
+  save_plot("roc-auc_distribution_chrloss.png", procan_comparison_plots_dir)
 dist_cn_gain <- bootstrap_cn_gain %>%
   violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_cngain.png", goncalves_comparison_plots_dir)
+  save_plot("roc-auc_distribution_cngain.png", procan_comparison_plots_dir)
 dist_cn_loss <- bootstrap_cn_loss %>%
   violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_cnloss.png", goncalves_comparison_plots_dir)
+  save_plot("roc-auc_distribution_cnloss.png", procan_comparison_plots_dir)

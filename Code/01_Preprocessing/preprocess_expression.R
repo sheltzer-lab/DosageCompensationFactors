@@ -124,7 +124,7 @@ procan_expr_dist <- procan_expr_avg_processed %>%
   geom_density(na.rm = TRUE, aes(Protein.Expression.Normalized, color = "Normalized"), show.legend = TRUE) +
   xlab("Protein Expression")
 
-ggsave(here(plots_dir, "expression_distributions_goncalves.png"), plot = procan_expr_dist,
+ggsave(here(plots_dir, "expression_distributions_procan.png"), plot = procan_expr_dist,
        height = 200, width = 300, units = "mm", dpi = 300)
 
 depmap_expr_dist <- depmap_expr_processed %>%
@@ -140,7 +140,7 @@ ggsave(here(plots_dir, "expression_distributions_depmap.png"), plot = depmap_exp
 
 # === Write Processed dataset to disk ===
 
-write_parquet(procan_expr_avg_processed, here(output_data_dir, 'expression_average_goncalves.parquet'),
+write_parquet(procan_expr_avg_processed, here(output_data_dir, 'expression_procan.parquet'),
               version = "2.6")
 
 write_parquet(depmap_expr_processed, here(output_data_dir, 'expression_depmap.parquet'),

@@ -23,14 +23,14 @@ dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
 drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet"))
-cellline_buf_filtered_goncalves <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_goncalves.parquet"))
+cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 
-sensitivity_goncalves <- cellline_buf_filtered_goncalves %>%
+sensitivity_procan <- cellline_buf_filtered_procan %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never")
 
-drug_dc_corr_goncalves <- sensitivity_goncalves %>%
+drug_dc_corr_procan <- sensitivity_procan %>%
   group_by(Drug.ID, Drug.Name) %>%
   summarize(Correlation.Sensitivity_Buffering = cor.test(Buffering.CellLine.Ratio, Drug.MFI.Log2FC,
                                                          method = "pearson")$estimate[["cor"]]) %>%
@@ -47,11 +47,11 @@ drug_dc_corr_depmap <- sensitivity_depmap %>%
   arrange(Drug.Name)
 
 cor.test(drug_dc_corr_depmap$Correlation.Sensitivity_Buffering,
-         drug_dc_corr_goncalves$Correlation.Sensitivity_Buffering,
+         drug_dc_corr_procan$Correlation.Sensitivity_Buffering,
          method = "pearson")
 
 # === Write results ===
-write.xlsx(drug_dc_corr_goncalves, here(tables_base_dir, "sensitivity_correlation_goncalves_gene_filtered.xlsx"),
+write.xlsx(drug_dc_corr_procan, here(tables_base_dir, "sensitivity_correlation_procan_gene_filtered.xlsx"),
            colNames = TRUE)
 write.xlsx(drug_dc_corr_depmap, here(tables_base_dir, "sensitivity_correlation_depmap_gene_filtered.xlsx"),
            colNames = TRUE)

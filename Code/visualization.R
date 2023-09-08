@@ -185,13 +185,14 @@ plot_rocs <- function(rocs) {
     distinct(Name, AUC) %>%
     arrange(desc(Name)) %>%
     mutate(x = 0.1,
-           y = seq(0.05, 0.75, 0.1)[seq_along(unique(roc_data$Name))],
+           y = seq(0.05, 0.75, 0.05)[seq_along(unique(roc_data$Name))],
            AUC = paste0("AUC = ", format(round(AUC, 3), nsmall = 3)))
 
   plot <- roc_data %>%
     arrange(Sensitivity) %>%
     ggplot() +
     aes(x = Specificity, y = Sensitivity, color = Name) +
+    geom_abline(slope = 1, intercept = 1, color = "grey") +
     geom_line() +
     geom_label(data = df_label, mapping = aes(color = Name, label = AUC, x = x, y = y)) +
     scale_x_reverse(limits = c(1, 0)) +

@@ -28,7 +28,7 @@ dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
 
-expr_buf_goncalves <- read_parquet(here(output_data_dir, "expression_buffering_goncalves.parquet"))
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 
 # === Determine Genes that are significantly Buffered on average ===
 
@@ -47,7 +47,7 @@ signif_buf_genes <- function(df, buffering_col, gene_col) {
 
 # ToDo: Repeat analysis with Log2FC (Gene Level & Chromosome Level)
 
-test_all <- expr_buf_goncalves %>%
+test_all <- expr_buf_procan %>%
   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
 
 plot_all <- test_all %>%
@@ -55,7 +55,7 @@ plot_all <- test_all %>%
   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
   save_plot("volcano_buffering_all.png")
 
-test_gain <- expr_buf_goncalves %>%
+test_gain <- expr_buf_procan %>%
   filter_cn_gain() %>%
   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
 
@@ -64,7 +64,7 @@ plot_gain <- test_gain %>%
   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
   save_plot("volcano_buffering_cn-gain.png")
 
-test_loss <- expr_buf_goncalves %>%
+test_loss <- expr_buf_procan %>%
   filter_cn_loss() %>%
   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
 
@@ -73,7 +73,7 @@ plot_loss <- test_loss %>%
   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
   save_plot("volcano_buffering_cn-loss.png")
 
-test_filtered <- expr_buf_goncalves %>%
+test_filtered <- expr_buf_procan %>%
   filter_cn_diff_quantiles() %>%
   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
 
