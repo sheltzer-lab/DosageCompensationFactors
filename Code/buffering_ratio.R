@@ -30,8 +30,8 @@ buffering_class_old <- function(buffering_ratio) {
 }
 
 buffering_class_sf <- function(scaling_factor) {
-    ifelse(scaling_factor >= 1, "Scaling",
-         ifelse(scaling_factor >= 0, "Buffered",
+    ifelse(scaling_factor > 0.3784142, "Scaling",
+         ifelse(scaling_factor > -0.133934, "Buffered",
                 "Anti-Scaling"))
 }
 
