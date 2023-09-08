@@ -7,7 +7,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 
-copynumber_data_dir <- here(external_data_dir, "CopyNumber")
+copynumber_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")
 output_data_dir <- output_data_base_dir
 plots_dir <- plots_base_dir

@@ -137,7 +137,7 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
   # Split training & test data
   train_size <- ceiling(nrow(df_prep) * training_set_ratio)
   test_size <- nrow(df_prep) - train_size
-  datasets <- list(train = df_prep[1:train_size,],
+  datasets <- list(training = df_prep[1:train_size,],
                    test = df_prep[(train_size + 1):(train_size + test_size),])
 
   return(datasets)
@@ -155,14 +155,15 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
                                factor_cols = factor_cols, training_set_ratio = 0.8, target_balance = 0.7)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
-  # ToDo: Save datasets
-
   # Train model
   model <- caret::train(buffered ~ .,
-                        data = datasets$train,
+                        data = datasets$training,
                         method = model_name,
                         trControl = train_control,
                         metric = "ROC")
+
+  # Add datasets to model
+  model$datasets <- datasets
 
   # Save Model
   saveRDS(model, here(models_dir, paste0("model_", model_name, "_", paste0(sub_dir, collapse = ""), ".rds")))
@@ -181,37 +182,37 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
 analysis_list <- list(
   # list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = identity,
   #      sub_dir =  list("Goncalves", "Gene-Level", "Unfiltered")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-       sub_dir = list("Goncalves", "Gene-Level", "Filtered")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
-       sub_dir = list("Goncalves", "Gene-Level", "FilteredGain")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
-       sub_dir = list("Goncalves", "Gene-Level", "FilteredLoss")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-       sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Gain")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-       sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Loss")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-       sub_dir = list("Goncalves", "ChromosomeArm-Level", "GainAverage")),
-  list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       sub_dir = list("Goncalves", "ChromosomeArm-Level", "LossAverage")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+  #      sub_dir = list("Goncalves", "Gene-Level", "Filtered")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+  #      sub_dir = list("Goncalves", "Gene-Level", "FilteredGain")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+  #      sub_dir = list("Goncalves", "Gene-Level", "FilteredLoss")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+  #      sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Gain")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+  #      sub_dir =  list("Goncalves", "ChromosomeArm-Level", "Loss")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+  #      sub_dir = list("Goncalves", "ChromosomeArm-Level", "GainAverage")),
+  # list(dataset = expr_buf_goncalves, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+  #      sub_dir = list("Goncalves", "ChromosomeArm-Level", "LossAverage")),
 
   # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
   #      sub_dir =  list("DepMap", "Gene-Level", "Unfiltered")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-       sub_dir =  list("DepMap", "Gene-Level", "Filtered")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
-       sub_dir =  list("DepMap", "Gene-Level", "FilteredGain")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
-       sub_dir =  list("DepMap", "Gene-Level", "FilteredLoss")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-       sub_dir =  list("DepMap", "ChromosomeArm-Level", "Gain")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-       sub_dir =  list("DepMap", "ChromosomeArm-Level", "Loss")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-       sub_dir = list("DepMap", "ChromosomeArm-Level", "GainAverage")),
-  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-       sub_dir = list("DepMap", "ChromosomeArm-Level", "LossAverage")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+  #      sub_dir =  list("DepMap", "Gene-Level", "Filtered")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+  #      sub_dir =  list("DepMap", "Gene-Level", "FilteredGain")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+  #      sub_dir =  list("DepMap", "Gene-Level", "FilteredLoss")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+  #      sub_dir =  list("DepMap", "ChromosomeArm-Level", "Gain")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+  #      sub_dir =  list("DepMap", "ChromosomeArm-Level", "Loss")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+  #      sub_dir = list("DepMap", "ChromosomeArm-Level", "GainAverage")),
+  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+  #      sub_dir = list("DepMap", "ChromosomeArm-Level", "LossAverage")),
 
   # list(dataset = expr_buf_combined, buffering = "Buffering.GeneLevel.Class", filter = identity,
   #      sub_dir =  list("Combined", "Gene-Level", "Unfiltered")),
@@ -246,8 +247,8 @@ tc_nn["number"] <- 3
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base)
-  # list(modelName = "rf", tc = tc_base),
+  #list(modelName = "xgbLinear", tc = tc_base),
+  list(modelName = "rf", tc = tc_base)
   # list(modelName = "pcaNNet", tc = tc_nn)
 )
 
@@ -281,6 +282,12 @@ for (model in models) {
   }
 }
 close(pb)
+
+rocs <- list()
+for (name in names(analysis_results)) {
+  rocs[[name]] <- analysis_results[[name]]$roc
+}
+plot_rocs(rocs)
 
 ## ToDo: Train and compare a set of models on one dataset (or multiple)
 ## ToDo: Train a "universal" model (multiple conditions, or multiple datasets, or both)

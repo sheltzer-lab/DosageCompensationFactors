@@ -164,3 +164,38 @@ save_plot <- function(plot, filename, dir = plots_dir,
        height = height, width = width, units = "mm", dpi = dpi)
   return(plot)
 }
+
+
+plot_rocs <- function(rocs) {
+  roc_data <- data.frame()
+
+  # Extract relevant information from ROC objects into data frame
+  for (name in names(rocs)) {
+    current_roc <- rocs[[name]]
+    roc_df <- data.frame(
+      Name = rep(name, length(current_roc$specificities)),
+      Specificity = current_roc$specificities,
+      Sensitivity = current_roc$sensitivities,
+      AUC = rep(auc(current_roc), length(current_roc$specificities))
+    )
+    roc_data <- rbind(roc_data, roc_df)
+  }
+
+  df_label <- roc_data %>%
+    distinct(Name, AUC) %>%
+    arrange(desc(Name)) %>%
+    mutate(x = 0.1,
+           y = seq(0.05, 0.75, 0.1)[seq_along(unique(roc_data$Name))],
+           AUC = paste0("AUC = ", format(round(AUC, 3), nsmall = 3)))
+
+  plot <- roc_data %>%
+    arrange(Sensitivity) %>%
+    ggplot() +
+    aes(x = Specificity, y = Sensitivity, color = Name) +
+    geom_line() +
+    geom_label(data = df_label, mapping = aes(color = Name, label = AUC, x = x, y = y)) +
+    scale_x_reverse(limits = c(1, 0)) +
+    labs(x = "Specificity", y = "Sensitivity", color = "Model")
+
+  return(plot)
+}
