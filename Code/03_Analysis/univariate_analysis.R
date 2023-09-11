@@ -40,6 +40,7 @@ dir.create(depmap_chr_plots_dir, recursive = TRUE)
 dir.create(depmap_gene_plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
+dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
@@ -106,28 +107,13 @@ plot_roc_curves <- function(factor_rocs, dir) {
   return(factor_rocs)
 }
 
-run_analysis <- function(dataset, buffering_class_col, filter_func, dir = NULL) {
-  if (!is.null(dir)) {
-    dir.create(dir, recursive = TRUE)
-
-    roc_auc_summary <- dataset %>%
-    filter_func() %>%
-    reshape_factors({ { buffering_class_col } }) %>%
-    determine_rocs() %>%
-    plot_roc_curves(dir) %>%
-    summarize_roc_auc() %>%
-    plot_roc_auc_summary(dir, "buffering-factors_roc-auc.png")
-
-    return(roc_auc_summary)
-  } else {
-    roc_auc_summary <- dataset %>%
-    filter_func() %>%
-    reshape_factors({ { buffering_class_col } }) %>%
-    determine_rocs() %>%
-    summarize_roc_auc()
-
-    return(roc_auc_summary)
-  }
+run_analysis <- function(dataset, buffering_class_col, filter_func, df_factors = dc_factors) {
+  dataset %>%
+      filter_func() %>%
+      add_factors(df_factors) %>%
+      reshape_factors({ { buffering_class_col } }) %>%
+      determine_rocs() %>%
+      summarize_roc_auc()
 }
 
 # === Calculate ROC for all factors in all datasets ===
@@ -168,19 +154,23 @@ analysis_list <- list(
 )
 
 for (analysis in analysis_list) {
+  dir.create(analysis$dir, recursive = TRUE)
   run_analysis(dataset = analysis$dataset,
                buffering_class_col = get(analysis$buffering),
-               filter_func = analysis$filter,
-               dir = analysis$dir
-  )
+               filter_func = analysis$filter) %>%
+    plot_roc_auc_summary(dir, "buffering-factors_roc-auc.png")
 }
 
 # === Statistically compare results ===
 
-run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func, n, sample_prop) {
+run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
+                                      n, sample_prop, df_factors = dc_factors) {
   set.seed(42)
+
   dataset <- dataset %>%
-    filter_func()
+    filter_func() %>%
+    add_factors(df_factors)
+
   results <- data.frame(DosageCompensation.Factor = character(),
                         DosageCompensation.Factor.ROC.AUC = numeric(),
                         Bootstrap.Sample = integer())
@@ -189,8 +179,9 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
     suppressMessages({
       results <- dataset %>%
         slice_sample(prop = sample_prop, replace = TRUE) %>%
-        run_analysis(buffering_class_col = { { buffering_class_col } },
-                     filter_func = identity) %>%
+        reshape_factors({ { buffering_class_col } }) %>%
+        determine_rocs() %>%
+        summarize_roc_auc() %>%
         mutate(Bootstrap.Sample = i) %>%
         bind_rows(results)
     })

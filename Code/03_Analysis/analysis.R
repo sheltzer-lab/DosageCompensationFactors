@@ -1,3 +1,5 @@
+library(dplyr)
+
 # Dosage Compensation Factors
 dc_factor_cols <- c(
   "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
@@ -13,6 +15,14 @@ dc_factor_cols <- c(
 
 ## Dataset-Specific Dosage Compensation Factors
 dc_factor_cols_specific <- c("Protein Neutral CV")
+
+## Add dosage compensation factors to a dataframe
+add_factors <- function(df, df_factors, factor_cols = dc_factor_cols) {
+  df %>%
+    left_join(y = df_factors %>% select(Protein.Uniprot.Accession, Gene.Symbol, all_of(factor_cols)),
+              by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+              na_matches = "never", relationship = "many-to-one")
+}
 
 # Dataset Filter Functions
 filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {

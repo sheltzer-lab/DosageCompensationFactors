@@ -28,6 +28,7 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
+dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
@@ -122,12 +123,14 @@ clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_co
 }
 
 prepare_datasets <- function(dataset, buffering_class_col, filter_func,
-                             factor_cols = dc_factor_cols, training_set_ratio = 0.8, target_balance = 0.7) {
+                             df_factors = dc_factors, factor_cols = dc_factor_cols,
+                             training_set_ratio = 0.8, target_balance = 0.7) {
   set.seed(42)
 
   # Filter and clean dataset before training
   df_prep <- dataset %>%
     filter_func() %>%
+    add_factors(df_factors, factor_cols = factor_cols) %>%
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
     # ToDo: Only use imputation on training set
     impute_na() %>%

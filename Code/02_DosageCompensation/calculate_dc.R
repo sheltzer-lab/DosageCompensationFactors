@@ -21,8 +21,6 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
-
-dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
 
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
@@ -82,7 +80,7 @@ filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
   return(filtered)
 }
 
-build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
+build_dataset <- function(df, cellline_col, df_copy_number) {
   df %>%
     inner_join(y = df_copy_number, by = c(quo_name(enquo(cellline_col)), "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
@@ -110,18 +108,16 @@ build_dataset <- function(df, cellline_col, df_copy_number, df_dc_factors) {
                                                                 cn_var = ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
                                                                         cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                                        cn_var = ChromosomeArm.CopyNumber)) %>%
-    left_join(y = df_dc_factors, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-              na_matches = "never", relationship = "many-to-one")
+                                                                        cn_var = ChromosomeArm.CopyNumber))
 }
 
 # === Process & Write datasets to disk ===
 
 # Note: DepMap copy number data does not cover all cell lines in ProCan (333 cell lines lost here)
 expr_procan %>%
-  build_dataset(CellLine.SangerModelId, copy_number, dc_factors) %>%
+  build_dataset(CellLine.SangerModelId, copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'), version = "2.6")
 
 expr_depmap %>%
-  build_dataset(CellLine.DepMapModelId, copy_number, dc_factors) %>%
+  build_dataset(CellLine.DepMapModelId, copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")
