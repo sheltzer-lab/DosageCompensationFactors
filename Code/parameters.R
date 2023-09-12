@@ -27,3 +27,19 @@ highlight_color <- "#66CCB4"
 unidirectional_color_pal <- brewer.pal(5, "Greens")
 biderectional_color_pal <- rev(brewer.pal(5, "RdBu"))
 categorical_color_pal <- brewer.pal(12, "Paired")
+
+# === Dosage Compensation Factors ===
+dc_factor_cols <- c(
+  "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
+  "Mean 3'-UTR Length", "Mean 5'-UTR Length",
+  "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
+  "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
+  "mRNA Abundance", "Protein Abundance", "Transcription Rate",
+  "Translation Rate", "Protein Length", "mRNA Length",
+  "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
+  "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
+  "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score"
+)
+
+## Dataset-Specific Dosage Compensation Factors
+dc_factor_cols_specific <- c("Protein Neutral CV")
