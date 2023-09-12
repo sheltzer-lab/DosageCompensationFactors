@@ -14,6 +14,7 @@ source(here("Code", "annotation.R"))
 factor_data_dir <- here(external_data_dir, "Factors")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")
 output_data_dir <- output_data_base_dir
+plots_dir <- plots_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 
@@ -251,6 +252,13 @@ df_dc_factors_values <- df_dc_factors %>% select(where(is.numeric))
 na_counts <- colSums(is.na(df_dc_factors_values))
 total_na_count <- sum(na_counts)
 na_share <- total_na_count / (nrow(df_dc_factors_values) * ncol(df_dc_factors_values))
+
+## Check correlation between factors
+png(here(plots_dir, "factors_correlation.png"), width = 300, height = 300, units = "mm", res = 200)
+df_dc_factors %>%
+  select(all_of(dc_factor_cols)) %>%
+  plot_correlation()
+dev.off()
 
 # === Write combined factors to disk ===
 write_parquet(df_dc_factors, here(output_data_dir, 'dosage_compensation_factors.parquet'),

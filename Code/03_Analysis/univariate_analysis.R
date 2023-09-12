@@ -158,7 +158,7 @@ for (analysis in analysis_list) {
   run_analysis(dataset = analysis$dataset,
                buffering_class_col = get(analysis$buffering),
                filter_func = analysis$filter) %>%
-    plot_roc_auc_summary(dir, "buffering-factors_roc-auc.png")
+    plot_roc_auc_summary(analysis$dir, "buffering-factors_roc-auc.png")
 }
 
 # === Statistically compare results ===

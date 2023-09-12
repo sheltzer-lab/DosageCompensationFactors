@@ -2,6 +2,7 @@ library(ggplot2)
 library(dplyr)
 library(rlang)
 library(EnhancedVolcano)
+library(psych)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -59,10 +60,13 @@ violin_plot <- function(df, x, y) {
 }
 
 plot_correlation <- function(df, method = "spearman") {
-  df %>%
-    cor(method = method) %>%
-    corrplot(type = "upper", order = "hclust",
-             tl.col = "black", tl.srt = 45)
+  cor_matrix <- psych::corr.test(df, method = method,
+                                 adjust = "none")
+
+  corrplot(cor_matrix$r, p.mat = cor_matrix$p,
+         type = "upper", order = "hclust",
+         tl.col = "black", tl.srt = 45,
+         pch.cex = 1, pch.col = "darkgrey")
 }
 
 
