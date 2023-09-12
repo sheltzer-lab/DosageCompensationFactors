@@ -109,7 +109,8 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
                      force = 2, max.overlaps = 20)
 }
 
-scatter_plot_regression <- function(df, x_col, y_col, formula, label_coords = c(0, 0)) {
+scatter_plot_regression <- function(df, x_col, y_col, formula,
+                                    label_coords = c(0, 0), title = NULL) {
   df <- df %>%
     select({ { x_col } }, { { y_col } }) %>%
     drop_na()
@@ -135,7 +136,8 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, label_coords = c(
                                     ", R² = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
                       )) +
     xlab(quo_name(enquo(x_col))) +
-    ylab(quo_name(enquo(y_col)))
+    ylab(quo_name(enquo(y_col))) +
+    ggtitle(title)
 
   return(regression_plot)
 }
