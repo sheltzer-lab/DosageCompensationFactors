@@ -46,11 +46,6 @@ dc_growth_reg <- df_proliferation %>%
   save_plot("dosage_compensation_proliferation_procan_filtered.png")
 
 
-data_density <- df_celllines_filtered %>%
-  summarize_all(~ sum(!is.na(.x)) / nrow(df_celllines_filtered)) %>%
-  pivot_longer(everything(), names_to = "Column", values_to = "Density") %>%
-  arrange(desc(Density))
-
 sorted_violin_plot <- function(df, x, y) {
   df %>%
   add_count({ { x } }) %>%
@@ -72,6 +67,11 @@ df_model <- read_csv_arrow(here(procan_cn_data_dir, "model_list_20230801.csv")) 
 df_celllines_filtered <- df_model %>%
   inner_join(y = cellline_buf_filtered_procan, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never")
+
+data_density <- df_celllines_filtered %>%
+  summarize_all(~ sum(!is.na(.x)) / nrow(df_celllines_filtered)) %>%
+  pivot_longer(everything(), names_to = "Column", values_to = "Density") %>%
+  arrange(desc(Density))
 
 df_metastasis <- df_celllines_filtered %>%
   filter(tissue_status == "Metastasis")
