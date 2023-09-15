@@ -63,7 +63,7 @@ sorted_violin_plot <- function(df, x, y) {
   return(plot)
 }
 
-signif_violin_plot <- function(df, x, y, test = t.test) {
+signif_violin_plot <- function(df, x, y, test = t.test, test.args = NULL) {
   df <- df %>%
     add_count({ { x } }) %>%
     filter(n > 2) %>%
@@ -81,16 +81,14 @@ signif_violin_plot <- function(df, x, y, test = t.test) {
                 color = "#4080DB") +
     geom_signif(
       comparisons = list(levels(df$Label)),
-      map_signif_level = FALSE
+      map_signif_level = FALSE, tip_length = 0,
+      test = test, test.args = test.args
     ) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     xlab(as_name(enquo(x)))
 
   return(plot)
 }
-
-df_procan %>%
-  signif_violin_plot(msi_status, Buffering.CellLine.Ratio)
 
 plot_categorical_properties <- function (df, cols_categorical) {
   plots <- list()
@@ -125,25 +123,27 @@ violoin_plots_procan <- df_procan %>%
 violoin_plots_depmap <- df_depmap %>%
   plot_categorical_properties(cols_depmap)
 
-t.test((df_procan %>% filter(tissue_status == "Metastasis"))$Buffering.CellLine.Ratio,
-       (df_procan %>% filter(tissue_status == "Tumour"))$Buffering.CellLine.Ratio,
-       paired = FALSE, var.equal = TRUE)
+df_procan %>%
+  signif_violin_plot(tissue_status, Buffering.CellLine.Ratio,
+                     test.args = list(var.equal = TRUE))
 
-t.test((df_procan %>% filter(msi_status == "MSI"))$Buffering.CellLine.Ratio,
-       (df_procan %>% filter(msi_status == "MSS"))$Buffering.CellLine.Ratio,
-       paired = FALSE, var.equal = FALSE)
+df_procan %>%
+  signif_violin_plot(msi_status, Buffering.CellLine.Ratio)
 
-t.test((df_procan %>% filter(gender == "Male"))$Buffering.CellLine.Ratio,
-       (df_procan %>% filter(gender == "Female"))$Buffering.CellLine.Ratio,
-       paired = FALSE, var.equal = TRUE)
+df_procan %>%
+  filter(gender != "Unknown") %>%
+  signif_violin_plot(gender, Buffering.CellLine.Ratio,
+                     test.args = list(var.equal = TRUE))
 
-t.test((df_depmap %>% filter(PrimaryOrMetastasis == "Metastatic"))$Buffering.CellLine.Ratio,
-       (df_depmap %>% filter(PrimaryOrMetastasis == "Primary"))$Buffering.CellLine.Ratio,
-       paired = FALSE, var.equal = TRUE)
+df_depmap %>%
+  filter(Sex != "Unknown") %>%
+  signif_violin_plot(Sex, Buffering.CellLine.Ratio,
+                     test.args = list(var.equal = TRUE))
 
-t.test((df_depmap %>% filter(Sex == "Male"))$Buffering.CellLine.Ratio,
-       (df_depmap %>% filter(Sex == "Female"))$Buffering.CellLine.Ratio,
-       paired = FALSE, var.equal = TRUE)
+df_depmap %>%
+  filter(PrimaryOrMetastasis != "NA") %>%
+  signif_violin_plot(PrimaryOrMetastasis, Buffering.CellLine.Ratio,
+                     test.args = list(var.equal = TRUE))
 
 
 df_procan %>%
