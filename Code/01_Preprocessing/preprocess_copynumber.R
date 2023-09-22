@@ -46,12 +46,9 @@ get_chromosome_arms <- function(df, mart = ensembl_mart, symbol_col = "Gene.Symb
   return(df)
 }
 
-df_model <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
-  select(ModelID, SangerModelID) %>%
-  rename(CellLine.DepMapModelId = "ModelID",
-         CellLine.SangerModelId = "SangerModelID")
+df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 
-# NOTE! Chromosomes 13p, 14p, 15p, 21p, 22p, X, Y missing!
+# ToDo: NOTE! Chromosomes 13p, 14p, 15p, 21p, 22p, X, Y missing!
 df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv")) %>%
   rename(CellLine.DepMapModelId = 1) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
@@ -66,7 +63,6 @@ df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
          CellLine.Ploidy = "Ploidy",
          CellLine.WGD = "Genome doublings")
 
-# NOTE! SIDM00018 has a different cell line name in DepMap and expression datasets (KO52 vs K052)!!!
 read.csv(
   here(copynumber_data_dir, "Copy_Number_Public_23Q2.csv"),
   row.names = 1,
@@ -76,7 +72,7 @@ read.csv(
   as.table() %>%
   as.data.frame() %>%
   setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber")) %>%
-  inner_join(y = df_model, by = "CellLine.DepMapModelId",
+  inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
              na_matches = "never", relationship = "many-to-one") %>%
   get_chromosome_arms() %>%
   # ToDo: Consider Left Join

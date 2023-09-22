@@ -29,11 +29,8 @@ dir.create(plots_dir, recursive = TRUE)
 procan_expr <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.xlsx"))
 ## Load Proteomics dataset from DepMap
 depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics.csv"))
-### Loaad cell line model file from DepMap
-df_celllinenames <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
-  select(ModelID, CellLineName) %>%
-  rename(CellLine.DepMapModelId = "ModelID",
-         CellLine.Name = "CellLineName")
+
+df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 
 # === Tidy Datasets ===
 
@@ -47,7 +44,11 @@ procan_expr_tidy <- procan_expr %>%
                        delim = ";",
                        names = c("CellLine.SangerModelId", "CellLine.Name")) %>%
   unite("UniqueId", c("CellLine.SangerModelId", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE)
+        sep = '_', remove = FALSE) %>%
+  # Add cell line identifiers
+  select(-CellLine.Name) %>%
+  inner_join(y = df_celllines, by = "CellLine.SangerModelId",
+             relationship = "many-to-one", na_matches = "never")
 
 depmap_expr_tidy <- depmap_expr %>%
   rename(CellLine.DepMapModelId = 1) %>%
@@ -62,7 +63,10 @@ depmap_expr_tidy <- depmap_expr %>%
         sep = '_', remove = FALSE) %>%
   # This requirement is odd
   unite("UniqueProtId", c("Gene.Symbol", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE)
+        sep = '_', remove = FALSE) %>%
+  # Add cell line identifiers
+  inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
+             relationship = "many-to-one", na_matches = "never")
 
 
 # === Preprocess Datasets ===
@@ -113,8 +117,6 @@ depmap_expr_processed <- depmap_expr_tidy %>%
   # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
   normalize_celllines(CellLine.DepMapModelId, Protein.Expression.Log2, UniqueProtId,
                       normalized_colname = "Protein.Expression.Normalized") %>%
-  left_join(y = df_celllinenames, by = "CellLine.DepMapModelId",
-               relationship = "many-to-one", na_matches = "never") %>%
   select(-UniqueProtId) %>%
   mutate(Dataset = "DepMap")
 
@@ -125,11 +127,11 @@ expr_combined <- procan_expr_processed %>%
   bind_rows(depmap_expr_processed)
 
 ## Matched Cell Lines
-common_celllines <- intersect(unique(procan_expr_processed$CellLine.Name),
-                          unique(depmap_expr_processed$CellLine.Name))
+common_celllines <- intersect(unique(procan_expr_processed$CellLine.CustomId),
+                          unique(depmap_expr_processed$CellLine.CustomId))
 
 expr_combined_celllines <- expr_combined %>%
-  filter(CellLine.Name %in% common_celllines)
+  filter(CellLine.CustomId %in% common_celllines)
 
 ## Matched Genes
 common_genes <- intersect(unique(procan_expr_processed$Gene.Symbol),
@@ -155,7 +157,7 @@ expr_matched <- expr_matched_procan %>%
 ## Matched Genes per matched Cell Line (re-normalized)
 expr_matched_renorm <- expr_matched %>%
   select(-Protein.Expression.Normalized) %>%
-  mutate(CellLine.Name.Unique = paste(CellLine.Name, Dataset, sep = "_")) %>%
+  mutate(CellLine.Name.Unique = paste(CellLine.CustomId, Dataset, sep = "_")) %>%
   normalize_celllines(CellLine.Name.Unique, Protein.Expression.Log2, Protein.Uniprot.Accession,
                       normalized_colname = "Protein.Expression.Normalized") %>%
   select(-CellLine.Name.Unique)

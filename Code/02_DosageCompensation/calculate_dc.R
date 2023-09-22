@@ -21,7 +21,8 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
-copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
+copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
+  select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
 
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
@@ -87,9 +88,9 @@ filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
   return(filtered)
 }
 
-build_dataset <- function(df, cellline_col, df_copy_number) {
+build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId") {
   df %>%
-    inner_join(y = df_copy_number, by = c(quo_name(enquo(cellline_col)), "Gene.Symbol"),
+    inner_join(y = df_copy_number, by = c(cellline_col, "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
     # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
     filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
@@ -122,29 +123,29 @@ build_dataset <- function(df, cellline_col, df_copy_number) {
 
 # Note: DepMap copy number data does not cover all cell lines in ProCan (333 cell lines lost here)
 expr_procan %>%
-  build_dataset(CellLine.SangerModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'), version = "2.6")
 
 expr_depmap %>%
-  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")
 
 expr_combined %>%
-  build_dataset(CellLine.SangerModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_combined.parquet'), version = "2.6")
 
 expr_combined_celllines %>%
-  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_combined_celllines.parquet'), version = "2.6")
 
 expr_combined_genes %>%
-  build_dataset(CellLine.SangerModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_combined_genes.parquet'), version = "2.6")
 
 expr_matched %>%
-  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_matched.parquet'), version = "2.6")
 
 expr_matched_renorm %>%
-  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'), version = "2.6")
