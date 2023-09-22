@@ -26,6 +26,13 @@ copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 
+expr_combined <- read_parquet(here(output_data_dir, "expression_combined.parquet"))
+expr_combined_celllines <- read_parquet(here(output_data_dir, "expression_combined_celllines.parquet"))
+expr_combined_genes <- read_parquet(here(output_data_dir, "expression_combined_genes.parquet"))
+
+expr_matched <- read_parquet(here(output_data_dir, "expression_matched.parquet"))
+expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_renorm.parquet"))
+
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 
 calculate_baseline_copynumber <- function(df, gene_col, copynumber_col) {
@@ -121,3 +128,23 @@ expr_procan %>%
 expr_depmap %>%
   build_dataset(CellLine.DepMapModelId, copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")
+
+expr_combined %>%
+  build_dataset(CellLine.SangerModelId, copy_number) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_combined.parquet'), version = "2.6")
+
+expr_combined_celllines %>%
+  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_combined_celllines.parquet'), version = "2.6")
+
+expr_combined_genes %>%
+  build_dataset(CellLine.SangerModelId, copy_number) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_combined_genes.parquet'), version = "2.6")
+
+expr_matched %>%
+  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_matched.parquet'), version = "2.6")
+
+expr_matched_renorm %>%
+  build_dataset(CellLine.DepMapModelId, copy_number) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'), version = "2.6")

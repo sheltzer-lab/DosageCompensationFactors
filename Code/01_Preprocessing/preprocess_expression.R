@@ -12,6 +12,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "annotation.R"))
+source(here("Code", "visualization.R"))
 
 
 expression_data_dir <- here(external_data_dir, "Expression")
@@ -25,7 +26,7 @@ dir.create(plots_dir, recursive = TRUE)
 # === Load Datasets ===
 ## Load dataset from Goncalves et al. (DOI: https://doi.org/10.6084/m9.figshare.19345397.v1)
 # ToDo: evaluate use of dataset containing 8498 proteins per cell line
-procan_expr_avg <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.xlsx"))
+procan_expr <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.xlsx"))
 ## Load Proteomics dataset from DepMap
 depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics.csv"))
 ### Loaad cell line model file from DepMap
@@ -36,7 +37,7 @@ df_celllinenames <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
 
 # === Tidy Datasets ===
 
-procan_expr_avg_tidy <- procan_expr_avg %>%
+procan_expr_tidy <- procan_expr %>%
   pivot_longer(everything() & !Project_Identifier,
                names_to = "Protein", values_to = "Protein.Expression.Log2") %>%
   separate_wider_delim(Protein,
@@ -95,8 +96,7 @@ remove_noisefloor <- function(df, value_col, percentile_cutoff = 0.0001) {
 }
 
 # ToDo: Evaluate if applying batch effect correction unaveraged dataset and then averaging it is a better approach
-# ToDo: Evaluate if an additional normalization round with both datasets together improves comparability
-procan_expr_avg_processed <- procan_expr_avg_tidy %>%
+procan_expr_processed <- procan_expr_tidy %>%
   filter(str_detect(Protein.Uniprot.Id, "HUMAN")) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   # ToDo: Reconsider standardization
@@ -104,7 +104,8 @@ procan_expr_avg_processed <- procan_expr_avg_tidy %>%
   normalize_celllines(CellLine.SangerModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
                       normalized_colname = "Protein.Expression.Normalized") %>%
   mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol")
+         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
+  mutate(Dataset = "ProCan")
 
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
@@ -114,34 +115,105 @@ depmap_expr_processed <- depmap_expr_tidy %>%
                       normalized_colname = "Protein.Expression.Normalized") %>%
   left_join(y = df_celllinenames, by = "CellLine.DepMapModelId",
                relationship = "many-to-one", na_matches = "never") %>%
-  select(-UniqueProtId)
+  select(-UniqueProtId) %>%
+  mutate(Dataset = "DepMap")
 
+
+# === Create combined datasets ===
+## Unmatched
+expr_combined <- procan_expr_processed %>%
+  bind_rows(depmap_expr_processed)
+
+## Matched Cell Lines
+common_celllines <- intersect(unique(procan_expr_processed$CellLine.Name),
+                          unique(depmap_expr_processed$CellLine.Name))
+
+expr_combined_celllines <- expr_combined %>%
+  filter(CellLine.Name %in% common_celllines)
+
+## Matched Genes
+common_genes <- intersect(unique(procan_expr_processed$Gene.Symbol),
+                          unique(depmap_expr_processed$Gene.Symbol))
+
+expr_combined_genes <- expr_combined %>%
+  filter(Gene.Symbol %in% common_genes)
+
+## Matched Genes per matched Cell Line
+expr_matched_procan <- procan_expr_processed %>%
+  semi_join(y = depmap_expr_processed,
+            by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            na_matches = "never")
+
+expr_matched_depmap <- depmap_expr_processed %>%
+  semi_join(y = procan_expr_processed,
+            by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            na_matches = "never")
+
+expr_matched <- expr_matched_procan %>%
+  bind_rows(expr_matched_depmap)
+
+## Matched Genes per matched Cell Line (re-normalized)
+expr_matched_renorm <- expr_matched %>%
+  select(-Protein.Expression.Normalized) %>%
+  mutate(CellLine.Name.Unique = paste(CellLine.Name, Dataset, sep = "_")) %>%
+  normalize_celllines(CellLine.Name.Unique, Protein.Expression.Log2, Protein.Uniprot.Accession,
+                      normalized_colname = "Protein.Expression.Normalized") %>%
+  select(-CellLine.Name.Unique)
 
 # === Quality Control ===
-procan_expr_dist <- procan_expr_avg_processed %>%
-  ggplot() +
-  geom_density(na.rm = TRUE, aes(Protein.Expression.Log2, color = "Non-Normalized"), show.legend = TRUE) +
-  geom_density(na.rm = TRUE, aes(Protein.Expression.Normalized, color = "Normalized"), show.legend = TRUE) +
-  xlab("Protein Expression")
+plot_expr_dist <- function(df) {
+  df %>%
+    ggplot() +
+    geom_density(na.rm = TRUE, aes(Protein.Expression.Log2, color = "Non-Normalized"), show.legend = TRUE) +
+    geom_density(na.rm = TRUE, aes(Protein.Expression.Normalized, color = "Normalized"), show.legend = TRUE) +
+    xlab("Protein Expression")
+}
 
-ggsave(here(plots_dir, "expression_distributions_procan.png"), plot = procan_expr_dist,
-       height = 200, width = 300, units = "mm", dpi = 300)
+procan_expr_dist <- procan_expr_processed %>%
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_procan.png", height = 200, width = 300)
 
 depmap_expr_dist <- depmap_expr_processed %>%
-  ggplot() +
-  geom_density(na.rm = TRUE, aes(Protein.Expression.Log2, color = "Non-Normalized"), show.legend = TRUE) +
-  geom_density(na.rm = TRUE, aes(Protein.Expression.Normalized, color = "Normalized"), show.legend = TRUE) +
-  xlab("Protein Expression")
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_depmap.png", height = 200, width = 300)
 
-ggsave(here(plots_dir, "expression_distributions_depmap.png"), plot = depmap_expr_dist,
-       height = 200, width = 300, units = "mm", dpi = 300)
+combined_expr_dist <- expr_combined %>%
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_combined.png", height = 200, width = 300)
+
+combined_celllines_expr_dist <- expr_combined_celllines %>%
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_combined_celllines.png", height = 200, width = 300)
+
+combined_genes_expr_dist <- expr_combined_genes %>%
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_combined_genes.png", height = 200, width = 300)
+
+matched_expr_dist <- expr_matched %>%
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_matched.png", height = 200, width = 300)
+
+matched_renorm_expr_dist <- expr_matched_renorm %>%
+  plot_expr_dist() %>%
+  save_plot("expression_distributions_matched_renorm.png", height = 200, width = 300)
 
 ## ToDo: Create & Write report
 
-# === Write Processed dataset to disk ===
+# === Write processed datasets to disk ===
 
-write_parquet(procan_expr_avg_processed, here(output_data_dir, 'expression_procan.parquet'),
+write_parquet(procan_expr_processed, here(output_data_dir, 'expression_procan.parquet'),
+              version = "2.6")
+write_parquet(depmap_expr_processed, here(output_data_dir, 'expression_depmap.parquet'),
               version = "2.6")
 
-write_parquet(depmap_expr_processed, here(output_data_dir, 'expression_depmap.parquet'),
+write_parquet(expr_combined, here(output_data_dir, 'expression_combined.parquet'),
+              version = "2.6")
+write_parquet(expr_combined_celllines, here(output_data_dir, 'expression_combined_celllines.parquet'),
+              version = "2.6")
+write_parquet(expr_combined_genes, here(output_data_dir, 'expression_combined_genes.parquet'),
+              version = "2.6")
+
+write_parquet(expr_matched, here(output_data_dir, 'expression_matched.parquet'),
+              version = "2.6")
+write_parquet(expr_matched_renorm, here(output_data_dir, 'expression_matched_renorm.parquet'),
               version = "2.6")
