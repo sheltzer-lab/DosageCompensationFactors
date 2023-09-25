@@ -33,15 +33,7 @@ dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.pa
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
-# === Combine Datasets ===
-common_celllines <- intersect(unique(expr_buf_procan$CellLine.Name),
-                          unique(expr_buf_depmap$CellLine.Name))
-common_genes <- intersect(unique(expr_buf_procan$Gene.Symbol),
-                          unique(expr_buf_depmap$Gene.Symbol))
-
-expr_buf_combined <- expr_buf_procan %>%
-  bind_rows(expr_buf_depmap) %>%
-  filter(Gene.Symbol %in% common_genes)
+expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'))
 
 # === Define Functions ===
 
@@ -206,7 +198,7 @@ models <- list(
 datasets <- list(
   list(dataset = expr_buf_procan, name = "ProCan"),
   list(dataset = expr_buf_depmap, name = "DepMap"),
-  list(dataset = expr_buf_combined, name = "Combined")
+  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm")
 )
 
 ## Define training data conditions
@@ -267,10 +259,11 @@ close(pb)
 model_procan_arm_gain_rf <- readRDS(here(models_base_dir, "model_rf_ProCan_ChromosomeArm-Level_Gain.rds"))
 model_procan_arm_gain_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_ProCan_ChromosomeArm-Level_Gain.rds"))
 model_procan_arm_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_ProCan_ChromosomeArm-Level_Gain.rds"))
-model_combined_arm_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_Combined_ChromosomeArm-Level_Gain.rds"))
+model_matched_renorm_arm_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_MatchedRenorm_ChromosomeArm-Level_Gain.rds"))
 
 test_data_depmap <- expr_buf_depmap %>%
   filter_arm_gain() %>%
+  add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Class) %>%
   impute_na() %>%
   shuffle_rows()
@@ -281,14 +274,15 @@ evaluate_model(model_procan_arm_gain_rf, test_data_depmap, eval_dir, filename = 
 evaluate_model(model_procan_arm_gain_pcaNN, test_data_depmap, eval_dir, filename = "ROC-Curve_pcaNNet.png")
 evaluate_model(model_procan_arm_gain_xgb, test_data_depmap, eval_dir, filename = "ROC-Curve_xgbLinear.png")
 
-eval_dir <- here(plots_dir, "Combined", "ChromosomeArm-Level", "Gain", "Eval")
+eval_dir <- here(plots_dir, "MatchedRenorm", "ChromosomeArm-Level", "Gain", "Eval")
 dir.create(eval_dir, recursive = TRUE)
 
 test_data_procan <- expr_buf_procan %>%
   filter_arm_gain() %>%
+  add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Class) %>%
   impute_na() %>%
   shuffle_rows()
 
-evaluate_model(model_combined_arm_gain_xgb, test_data_depmap, eval_dir, filename = "ROC-Curve_xgbLinear_DepMap.png")
-evaluate_model(model_combined_arm_gain_xgb, test_data_procan, eval_dir, filename = "ROC-Curve_xgbLinear_ProCan.png")
+evaluate_model(model_matched_renorm_arm_gain_xgb, test_data_depmap, eval_dir, filename = "ROC-Curve_xgbLinear_DepMap.png")
+evaluate_model(model_matched_renorm_arm_gain_xgb, test_data_procan, eval_dir, filename = "ROC-Curve_xgbLinear_ProCan.png")

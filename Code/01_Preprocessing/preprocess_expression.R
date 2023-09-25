@@ -122,6 +122,8 @@ depmap_expr_processed <- depmap_expr_tidy %>%
 
 
 # === Create combined datasets ===
+## ToDo: Expression baseline & averages are calculated across datasets (problematic, different means)
+## ToDo: Consider either renormalizing or merging after DC analysis
 ## Unmatched
 expr_combined <- procan_expr_processed %>%
   bind_rows(depmap_expr_processed)
