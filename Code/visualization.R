@@ -207,3 +207,18 @@ plot_rocs <- function(rocs) {
 
   return(plot)
 }
+
+print_signif <- function(p, digits = 4) {
+  paste0("p ", if_else(p < 10^(-digits),
+                      paste0("< ", format(10^(-digits), nsmall = digits, scientific = FALSE)),
+                      paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE))))
+}
+
+map_signif <- function (p) {
+  case_when(
+      p < 0.0001 ~ "***",
+      p < 0.001 ~ "**",
+      p < 0.01 ~ "*",
+      TRUE ~ "N.S."
+    )
+}

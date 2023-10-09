@@ -214,12 +214,7 @@ compare_conditions <- function(df_condition1, df_condition2) {
     group_by(DosageCompensation.Factor) %>%
     summarize(Wilcoxon.p.value = wilcox.test(get(conditions[1]), get(conditions[2]), paired = TRUE)$p.value) %>%
     mutate(Wilcoxon.p.adjusted = p.adjust(Wilcoxon.p.value, method = "BY")) %>%
-    mutate(Wilcoxon.significant = case_when(
-      Wilcoxon.p.adjusted < 0.0001 ~ "***",
-      Wilcoxon.p.adjusted < 0.001 ~ "**",
-      Wilcoxon.p.adjusted < 0.01 ~ "*",
-      TRUE ~ "N.S."
-    ))
+    mutate(Wilcoxon.significant = map_signif(Wilcoxon.p.adjusted))
 
   # Calculate summary statistics for each factor in each condition
   df_stat <- df_merged %>%
@@ -278,9 +273,7 @@ plot_comparison <- function(comparison_results) {
     plot_text_col(DosageCompensation.Factor, DosageCompensation.Factor, align = "right")
 
   plot_bracket <- broom::tidy(comparison_results$rank_test) %>%
-    mutate(Label = paste0("p", if_else(p.value < 0.0001,
-                                        " < 0.0001",
-                                        paste0(" = ", format(round(p.value, 4), nsmall = 4))),
+    mutate(Label = paste0(print_signif(p.value),
                           ", τ = ", format(round(estimate, 3), nsmall = 3))) %>%
     ggplot() +
     aes(x = 0, y = 0, label = Label) +
