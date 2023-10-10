@@ -48,7 +48,10 @@ procan_expr_tidy <- procan_expr %>%
   # Add cell line identifiers
   select(-CellLine.Name) %>%
   inner_join(y = df_celllines, by = "CellLine.SangerModelId",
-             relationship = "many-to-one", na_matches = "never")
+             relationship = "many-to-one", na_matches = "never") %>%
+  mapIds("UNIPROT", "SYMBOL",
+         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
+  mutate(Dataset = "ProCan")
 
 depmap_expr_tidy <- depmap_expr %>%
   rename(CellLine.DepMapModelId = 1) %>%
@@ -61,13 +64,10 @@ depmap_expr_tidy <- depmap_expr %>%
   mutate(Protein.Uniprot.Accession = gsub("[()]", "", Protein.Uniprot.Accession)) %>%
   unite("UniqueId", c("CellLine.DepMapModelId", "Gene.Symbol", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE) %>%
-  # This requirement is odd
-  unite("UniqueProtId", c("Gene.Symbol", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE) %>%
   # Add cell line identifiers
   inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
-             relationship = "many-to-one", na_matches = "never")
-
+             relationship = "many-to-one", na_matches = "never") %>%
+  mutate(Dataset = "DepMap")
 
 # === Preprocess Datasets ===
 
@@ -106,19 +106,18 @@ procan_expr_processed <- procan_expr_tidy %>%
   # ToDo: Reconsider standardization
   # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
   normalize_celllines(CellLine.SangerModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
-                      normalized_colname = "Protein.Expression.Normalized") %>%
-  mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
-  mutate(Dataset = "ProCan")
+                      normalized_colname = "Protein.Expression.Normalized")
 
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   # ToDo: Reconsider standardization
   # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
+  # This requirement is odd
+  unite("UniqueProtId", c("Gene.Symbol", "Protein.Uniprot.Accession"),
+        sep = '_', remove = FALSE) %>%
   normalize_celllines(CellLine.DepMapModelId, Protein.Expression.Log2, UniqueProtId,
                       normalized_colname = "Protein.Expression.Normalized") %>%
-  select(-UniqueProtId) %>%
-  mutate(Dataset = "DepMap")
+  select(-UniqueProtId)
 
 
 # === Create combined datasets ===
@@ -145,12 +144,12 @@ expr_combined_genes <- expr_combined %>%
 ## Matched Genes per matched Cell Line
 expr_matched_procan <- procan_expr_processed %>%
   semi_join(y = depmap_expr_processed,
-            by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
             na_matches = "never")
 
 expr_matched_depmap <- depmap_expr_processed %>%
   semi_join(y = procan_expr_processed,
-            by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
             na_matches = "never")
 
 expr_matched <- expr_matched_procan %>%
@@ -165,6 +164,7 @@ expr_matched_renorm <- expr_matched %>%
   select(-CellLine.Name.Unique)
 
 # === Quality Control ===
+
 plot_expr_dist <- function(df) {
   df %>%
     ggplot() +
@@ -173,6 +173,53 @@ plot_expr_dist <- function(df) {
     xlab("Protein Expression")
 }
 
+## Check correlation between datasets
+dataset_correlation <- function(df, dataset_col, expr_col, comparison_name, method = "pearson") {
+  test <- df %>%
+    pivot_wider(id_cols = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+                names_from = quo_name(enquo(dataset_col)),
+                values_from = quo_name(enquo(expr_col))) %>%
+    rename(DatasetA = 4,
+           DatasetB = 5) %>%
+    group_by(CellLine.CustomId) %>%
+    summarize(Correlation = cor(DatasetA, DatasetB,
+                                method = method, use = "na.or.complete")) %>%
+    mutate(Comparison = comparison_name)
+}
+
+jittered_boxplot <- function(df, group_col, value_col) {
+  df %>%
+    ggplot() +
+    aes(x = { { group_col } }, y = { { value_col } }) +
+    geom_boxplot(outlier.shape = NA, color = "black") +
+    geom_jitter(fill = "darkgrey", color = "white",
+                shape = 21, alpha = 0.5, width = 0.15) +
+    coord_flip()
+}
+
+corr_combined <- dataset_correlation(expr_combined,
+                                     Dataset, Protein.Expression.Log2,
+                                     "Combined")
+corr_matched <- dataset_correlation(expr_matched,
+                                    Dataset, Protein.Expression.Log2,
+                                    "Matched")
+corr_matched_norm <- dataset_correlation(expr_matched,
+                                         Dataset, Protein.Expression.Normalized,
+                                         "Matched (Normalized)")
+corr_matched_renorm <- dataset_correlation(expr_matched_renorm,
+                                           Dataset, Protein.Expression.Normalized,
+                                           "Matched (Renormalized)")
+
+### Note: Median correlation between ProCan and DepMap lower (0.09) than reported (0.44)
+corr_combined %>%
+  bind_rows(corr_matched) %>%
+  bind_rows(corr_matched_norm) %>%
+  bind_rows(corr_matched_renorm) %>%
+  jittered_boxplot(Comparison, Correlation) %>%
+  save_plot("dataset_correlation.png", height = 100)
+
+
+## Plot distribution
 procan_expr_dist <- procan_expr_processed %>%
   plot_expr_dist() %>%
   save_plot("expression_distributions_procan.png", height = 200, width = 300)
