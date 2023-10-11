@@ -111,9 +111,10 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
            Buffering.ChrArmLevel.Average.Ratio = buffering_ratio(2^Protein.Expression.Baseline.Unweighted, 2^Protein.Expression.Average,
                                                                  ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber)) %>%
     mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
-           Buffering.ChrArmLevel.Class = buffering_class_log2fc(Log2FC,
-                                                                cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                                cn_var = ChromosomeArm.CopyNumber),
+           Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio),
+           Buffering.ChrArmLevel.Log2FC.Class = buffering_class_log2fc(Log2FC,
+                                                                       cn_base = ChromosomeArm.CopyNumber.Baseline,
+                                                                       cn_var = ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
                                                                         cn_base = ChromosomeArm.CopyNumber.Baseline,
                                                                         cn_var = ChromosomeArm.CopyNumber))

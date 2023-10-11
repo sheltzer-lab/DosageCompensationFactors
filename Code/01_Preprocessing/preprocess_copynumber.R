@@ -53,9 +53,7 @@ df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv
   rename(CellLine.DepMapModelId = 1) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
                names_to = "Gene.ChromosomeArm", values_to = "ChromosomeArm.CNA") %>%
-  mutate(ChromosomeArm.CNA = as.integer(ChromosomeArm.CNA)) %>%
-  mutate(ChromosomeArm.CopyNumber.Baseline = 2L,
-         ChromosomeArm.CopyNumber = 2L + ChromosomeArm.CNA)
+  mutate(ChromosomeArm.CNA = as.integer(ChromosomeArm.CNA))
 
 df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
   rename(CellLine.DepMapModelId = 1,
@@ -63,7 +61,7 @@ df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
          CellLine.Ploidy = "Ploidy",
          CellLine.WGD = "Genome doublings")
 
-read.csv(
+copy_number <- read.csv(
   here(copynumber_data_dir, "Copy_Number_Public_23Q2.csv"),
   row.names = 1,
   check.names = FALSE
@@ -80,6 +78,9 @@ read.csv(
              na_matches = "never", relationship = "many-to-one") %>%
   inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
              na_matches = "never", relationship = "many-to-one") %>%
+  # Chromosome arm CNA based on ploidy of cell line
+  mutate(ChromosomeArm.CopyNumber.Baseline = CellLine.Ploidy,
+         ChromosomeArm.CopyNumber = CellLine.Ploidy + ChromosomeArm.CNA) %>%
   # filter(CellLine.Ploidy < 3.5) %>%     # Removing near-tetraploid cell lines is detrimental for factor prediction
   write_parquet(here(output_data_dir, 'copy_number.parquet'),
                 version = "2.6")
