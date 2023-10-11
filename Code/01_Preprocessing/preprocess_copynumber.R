@@ -78,9 +78,6 @@ copy_number <- read.csv(
              na_matches = "never", relationship = "many-to-one") %>%
   inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
              na_matches = "never", relationship = "many-to-one") %>%
-  # Chromosome arm CNA based on ploidy of cell line
-  mutate(ChromosomeArm.CopyNumber.Baseline = CellLine.Ploidy,
-         ChromosomeArm.CopyNumber = CellLine.Ploidy + ChromosomeArm.CNA) %>%
   # filter(CellLine.Ploidy < 3.5) %>%     # Removing near-tetraploid cell lines is detrimental for factor prediction
   write_parquet(here(output_data_dir, 'copy_number.parquet'),
                 version = "2.6")

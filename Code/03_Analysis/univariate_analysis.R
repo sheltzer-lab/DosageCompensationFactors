@@ -128,47 +128,47 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, df_factors =
 
 # === Calculate ROC for all factors in all datasets ===
 analysis_list <- list(
-  # list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = identity,
-  #      dir = here(plots_dir, "ProCan", "Gene-Level", "Unfiltered")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-  #      dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
-  #      dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered_Gain")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
-  #      dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered_Loss")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-  #      dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-  #      dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss")),
-  #   list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_gain,
-  #      dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain_Log2FC")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_loss,
-  #      dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss_Log2FC")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-  #      dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain_Average")),
-  # list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-  #      dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss_Average")),
-  #
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
-  #      dir = here(plots_dir, "DepMap", "Gene-Level", "Unfiltered")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
-  #      dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
-  #      dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered_Gain")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
-  #      dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered_Loss")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
-  #      dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
-  #      dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_gain,
-  #      dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain_Log2FC")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_loss,
-  #      dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss_Log2FC")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
-  #      dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain_Average")),
-  # list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
-  #      dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss_Average")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = identity,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "Unfiltered")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered_Gain")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+       dir = here(plots_dir, "ProCan", "Gene-Level", "Filtered_Loss")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss")),
+    list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain_Log2FC")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss_Log2FC")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain_Average")),
+  list(dataset = expr_buf_procan, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+       dir = here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss_Average")),
+
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = identity,
+       dir = here(plots_dir, "DepMap", "Gene-Level", "Unfiltered")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles,
+       dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain,
+       dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered_Gain")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
+       dir = here(plots_dir, "DepMap", "Gene-Level", "Filtered_Loss")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_gain,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain_Log2FC")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_loss,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss_Log2FC")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Gain_Average")),
+  list(dataset = expr_buf_depmap, buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_loss_gene_avg,
+       dir = here(plots_dir, "DepMap", "ChromosomeArm-Level", "Loss_Average")),
 
   list(dataset = buf_wgd, buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss,
        dir = here(plots_dir, "DepMap-WGD", "Gene-Level", "Filtered_Loss")),
@@ -333,17 +333,17 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
-n <- 100
+n <- 1000
 sample_prop <- 0.9
 
 bootstrap_chr_gain <- expr_buf_procan %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
+  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
                             filter_func = filter_arm_gain,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Chromosome Arm Gain")
 
 bootstrap_chr_loss <- expr_buf_procan %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Class,
+  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
                             filter_func = filter_arm_loss,
                             n = n, sample_prop = sample_prop) %>%
   mutate(Condition = "Chromosome Arm Loss")

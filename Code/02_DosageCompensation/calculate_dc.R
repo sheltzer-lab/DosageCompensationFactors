@@ -12,6 +12,7 @@ library(limma)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
 
 output_data_dir <- output_data_base_dir
@@ -36,31 +37,27 @@ expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_re
 
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 
-calculate_baseline_copynumber <- function(df, gene_col, copynumber_col) {
-  df %>%
-    group_by({{ gene_col }}) %>%
-    mutate(Gene.CopyNumber.Baseline = median({{ copynumber_col }}, na.rm = TRUE)) %>%
-    ungroup()
+calculate_weights <- function(base, var) {
+  distances <- abs(base - var)
+  weights <- (1/(1+distances)) / sum(1/(1+distances), na.rm = TRUE)
+  return(weights)
 }
-
-calculate_baseline_expression <- function(df, gene_col, chr_arm_cna_col, expr_col, aneuploidy_score_col = NULL) {
+calculate_baseline <- function(df, gene_col, chr_arm_cna_col, value_col,
+                               target_colname = "Baseline", ploidy_col = NULL, weighted = TRUE) {
   baseline_expr <- df %>%
-    select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }, { { aneuploidy_score_col } }) %>%
+    select({ { gene_col } }, { { chr_arm_cna_col } }, { { value_col } }, { { ploidy_col } }) %>%
     filter({ { chr_arm_cna_col } } == 0) %>%
     group_by({ { gene_col } }) %>%
-    mutate(Weights = ifelse(is.null({ { aneuploidy_score_col } }),
-                            NA,
-                            (1 / (1 + { { aneuploidy_score_col } })) /
-                              sum(1 / (1 + { { aneuploidy_score_col } }), na.rm = TRUE))) %>%
-    summarize(Protein.Expression.Baseline = ifelse(is.null({ { aneuploidy_score_col } }),
-                                                   mean({ { expr_col } }, na.rm = TRUE),
-                                                   sum({ { expr_col } } * Weights, na.rm = TRUE)),
-              Protein.Expression.Baseline.Unweighted = mean({ { expr_col } }, na.rm = TRUE)) %>%
+    mutate(Weights = calculate_weights(2, { { ploidy_col } })) %>%
+    summarize(!!target_colname := if_else(weighted,
+                                          sum({ { value_col } } * Weights, na.rm = TRUE),
+                                          mean({ { value_col } }, na.rm = TRUE))) %>%
     ungroup()
 
   df %>%
     inner_join(y = baseline_expr, by = quo_name(enquo(gene_col)),
-               unmatched = "error", na_matches = "never", relationship = "many-to-one")
+               unmatched = "error", na_matches = "never", relationship = "many-to-one") %>%
+    rename()
 }
 
 calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col) {
@@ -89,14 +86,25 @@ filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
 }
 
 build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId") {
-  df %>%
+  test <- df %>%
     inner_join(y = df_copy_number, by = c(cellline_col, "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
     # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
     filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
-    calculate_baseline_copynumber(Gene.Symbol, Gene.CopyNumber) %>%
-    calculate_baseline_expression(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                                  aneuploidy_score_col = CellLine.AneuploidyScore) %>%
+    calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, CellLine.Ploidy,
+                       ploidy_col = CellLine.Ploidy, target_colname = "ChromosomeArm.CopyNumber.Baseline",
+                       weighted = TRUE) %>%
+    # Note: Chromosome arm CNA based on ploidy of cell line
+    mutate(ChromosomeArm.CopyNumber = CellLine.Ploidy + ChromosomeArm.CNA) %>%
+    calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
+                       ploidy_col = CellLine.Ploidy, target_colname = "Gene.CopyNumber.Baseline",
+                       weighted = TRUE) %>%
+    calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                       ploidy_col = CellLine.Ploidy, target_colname = "Protein.Expression.Baseline",
+                       weighted = TRUE) %>%
+    calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                       ploidy_col = CellLine.Ploidy, target_colname = "Protein.Expression.Baseline.Unweighted",
+                       weighted = FALSE) %>%
     calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
     group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
     mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
@@ -113,11 +121,11 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
     mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
            Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio),
            Buffering.ChrArmLevel.Log2FC.Class = buffering_class_log2fc(Log2FC,
-                                                                       cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                                       cn_var = ChromosomeArm.CopyNumber),
+                                                                       cn_base = 2L,
+                                                                       cn_var = 2L + ChromosomeArm.CNA),
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
-                                                                        cn_base = ChromosomeArm.CopyNumber.Baseline,
-                                                                        cn_var = ChromosomeArm.CopyNumber))
+                                                                        cn_base = 2L,
+                                                                        cn_var = 2L + ChromosomeArm.CNA))
 }
 
 # === Process & Write datasets to disk ===
@@ -131,22 +139,84 @@ expr_depmap %>%
   build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")
 
-expr_combined %>%
-  build_dataset(copy_number) %>%
-  write_parquet(here(output_data_dir, 'expression_buffering_combined.parquet'), version = "2.6")
-
-expr_combined_celllines %>%
-  build_dataset(copy_number) %>%
-  write_parquet(here(output_data_dir, 'expression_buffering_combined_celllines.parquet'), version = "2.6")
-
-expr_combined_genes %>%
-  build_dataset(copy_number) %>%
-  write_parquet(here(output_data_dir, 'expression_buffering_combined_genes.parquet'), version = "2.6")
-
-expr_matched %>%
-  build_dataset(copy_number) %>%
-  write_parquet(here(output_data_dir, 'expression_buffering_matched.parquet'), version = "2.6")
+# expr_combined %>%
+#   build_dataset(copy_number) %>%
+#   write_parquet(here(output_data_dir, 'expression_buffering_combined.parquet'), version = "2.6")
+#
+# expr_combined_celllines %>%
+#   build_dataset(copy_number) %>%
+#   write_parquet(here(output_data_dir, 'expression_buffering_combined_celllines.parquet'), version = "2.6")
+#
+# expr_combined_genes %>%
+#   build_dataset(copy_number) %>%
+#   write_parquet(here(output_data_dir, 'expression_buffering_combined_genes.parquet'), version = "2.6")
+#
+# expr_matched %>%
+#   build_dataset(copy_number) %>%
+#   write_parquet(here(output_data_dir, 'expression_buffering_matched.parquet'), version = "2.6")
 
 expr_matched_renorm %>%
   build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'), version = "2.6")
+
+
+# === Evaluation ===
+## Copy Number
+df_cn_eval <- expr_depmap %>%
+  select(Gene.Symbol, CellLine.CustomId) %>%
+  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+               na_matches = "never", relationship = "many-to-one") %>%
+  select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber,
+         ChromosomeArm.CNA, CellLine.Ploidy) %>%
+  group_by(Gene.Symbol) %>%
+  mutate(MedianAll = median(Gene.CopyNumber, na.rm = TRUE)) %>%
+  ungroup() %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
+                     ploidy_col = CellLine.Ploidy, target_colname = "WeightedNeutral", weighted = TRUE) %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
+                     ploidy_col = CellLine.Ploidy, target_colname = "MeanNeutral", weighted = FALSE) %>%
+  distinct(Gene.Symbol, .keep_all = TRUE) %>%
+  select(Gene.Symbol, MedianAll, WeightedNeutral, MeanNeutral)
+
+cor.test(df_cn_eval$WeightedNeutral, df_cn_eval$MedianAll, method = "spearman")
+
+cn_baseline_plot <- df_cn_eval %>%
+  pivot_longer(c("MedianAll", "WeightedNeutral", "MeanNeutral"),
+               names_to = "Methods",
+               values_to = "Gene.CopyNumber.Baseline") %>%
+  ggplot() +
+  aes(color = Methods, x = Gene.CopyNumber.Baseline) +
+  geom_density()
+
+cn_baseline_plot %>%
+  save_plot("copynumber_baseline_methods.png")
+
+## Expression
+df_expr_eval <- expr_depmap %>%
+  select(Gene.Symbol, CellLine.CustomId, Protein.Expression.Normalized) %>%
+  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+               na_matches = "never", relationship = "many-to-one") %>%
+  select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA,
+         CellLine.Ploidy, Protein.Expression.Normalized) %>%
+  group_by(Gene.Symbol) %>%
+  mutate(MedianAll = median(Protein.Expression.Normalized, na.rm = TRUE)) %>%
+  ungroup() %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                     ploidy_col = CellLine.Ploidy, target_colname = "WeightedNeutral", weighted = TRUE) %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                     ploidy_col = CellLine.Ploidy, target_colname = "MeanNeutral", weighted = FALSE) %>%
+  distinct(Gene.Symbol, .keep_all = TRUE) %>%
+  select(Gene.Symbol, MedianAll, WeightedNeutral, MeanNeutral)
+
+cor.test(df_expr_eval$WeightedNeutral, df_expr_eval$MeanNeutral, method = "spearman")
+
+expr_baseline_plot <- df_expr_eval %>%
+  pivot_longer(c("MedianAll", "WeightedNeutral", "MeanNeutral"),
+               names_to = "Methods",
+               values_to = "Protein.Expression.Baseline") %>%
+  ggplot() +
+  aes(color = Methods, x = Protein.Expression.Baseline) +
+  geom_density()
+
+expr_baseline_plot %>%
+  save_plot("expression_baseline_methods.png")
