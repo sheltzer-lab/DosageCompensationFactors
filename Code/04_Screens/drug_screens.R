@@ -30,6 +30,7 @@ sensitivity_procan <- cellline_buf_filtered_procan %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never")
 
+# ToDo: Consider using spearman
 drug_dc_corr_procan <- sensitivity_procan %>%
   group_by(Drug.ID, Drug.Name) %>%
   summarize(Correlation.Sensitivity_Buffering = cor.test(Buffering.CellLine.Ratio, Drug.MFI.Log2FC,

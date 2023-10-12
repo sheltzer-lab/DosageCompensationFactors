@@ -111,7 +111,7 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
 }
 
 scatter_plot_regression <- function(df, x_col, y_col, formula,
-                                    label_coords = c(0, 0), title = NULL) {
+                                    label_coords = c(0, 0), title = NULL, point_size = 0.3) {
   df <- df %>%
     select({ { x_col } }, { { y_col } }) %>%
     drop_na()
@@ -126,7 +126,7 @@ scatter_plot_regression <- function(df, x_col, y_col, formula,
   regression_plot <- df %>%
     ggplot() +
     aes(x = { { x_col } }, y = { { y_col } }) +
-    geom_point(alpha = 0.3, size = 0.3) +
+    geom_point(alpha = 0.3, size = point_size) +
     geom_density_2d(color = "white", alpha = 0.6, linewidth = 0.4) +
     stat_smooth(method = lm, color = "blue") +
     geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
