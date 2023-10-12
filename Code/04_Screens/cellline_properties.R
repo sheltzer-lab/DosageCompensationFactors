@@ -180,6 +180,11 @@ df_depmap %>%
   signif_violin_plot(WGD, Buffering.CellLine.Ratio,
                      test = t.test) %>%
   save_plot("cellline_wgd_depmap.png")
+df_depmap %>%
+  filter(CellLine.WGD == 1 | CellLine.WGD == 2) %>%
+  signif_violin_plot(CellLine.WGD, Buffering.CellLine.Ratio,
+                     test = t.test) %>%
+  save_plot("cellline_wgd_levels_depmap.png")
 
 ## Near-tetraploid cell lines
 df_procan %>%
