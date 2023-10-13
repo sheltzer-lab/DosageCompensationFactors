@@ -1,4 +1,5 @@
 library(dplyr)
+library(tidyr)
 library(here)
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -74,4 +75,34 @@ grid_search <- function(func, param_range) {
   close(pb)
 
   return(values)
+}
+
+# === Aggregation & Consensus Methods ===
+
+mean_norm_rank <- function(df, value_col, group_col, id_col) {
+  total_groups <- length(unique(df[[quo_name(enquo(group_col))]]))
+
+  test <- df %>%
+    select({ { value_col } }, { { group_col } }, { { id_col } }) %>%
+    # Calculate Normalized Ranks
+    group_by({ { group_col } }) %>%
+    add_count(name = "n.Features") %>%
+    mutate(Rank = as.integer(rank({ { value_col } })) / n.Features) %>%
+    ungroup() %>%
+    # Remove entries that don't have values for more than half of the samples
+    group_by({ { id_col } }) %>%
+    add_count(name = "n.Samples") %>%
+    filter(n.Samples >= round(total_groups / 2)) %>%
+    # Create NAs for missing samples
+    select(Rank, { { group_col } }, { { id_col } }) %>%
+    pivot_wider(values_from = Rank,
+                names_from = quo_name(enquo(group_col)),
+                id_cols = quo_name(enquo(id_col))) %>%
+    pivot_longer(-{ { id_col } },
+                 values_to = "Rank",
+                 names_to = quo_name(enquo(group_col))) %>%
+    # Impute missing data
+    mutate(Rank = replace_na(Rank, 0.5)) %>%
+    # Aggregate normalized ranks
+    summarize(AggregatedRank = mean(Rank))
 }
