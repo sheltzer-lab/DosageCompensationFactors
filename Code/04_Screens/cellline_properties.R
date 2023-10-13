@@ -40,6 +40,8 @@ df_model_depmap <- read_csv_arrow(here(depmap_cn_data_dir, "Model.csv")) %>%
   filter(n == 1) %>%
   select(-n)
 
+aneuploidy_quant <- quantile(copy_number$CellLine.AneuploidyScore, probs = c(0.25, 0.5, 0.75))
+
 # ToDo: Use Cell Line ID instead of cell line name
 df_procan <- df_model_procan %>%
   inner_join(y = cellline_buf_filtered_procan, by = "CellLine.Name",
@@ -47,7 +49,14 @@ df_procan <- df_model_procan %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, TRUE, FALSE),
-         `Near-Tetraploid` = if_else(ploidy_wes > 3.5, TRUE, FALSE))
+         `Near-Tetraploid` = if_else(ploidy_wes > 3.5, TRUE, FALSE),
+         Aneuploidy = case_when(
+           CellLine.AneuploidyScore > aneuploidy_quant["75%"] ~ "Very High",
+           CellLine.AneuploidyScore > aneuploidy_quant["50%"] ~ "High",
+           CellLine.AneuploidyScore > aneuploidy_quant["25%"] ~ "Low",
+           TRUE ~ "Very Low",
+         ))
+
 
 df_depmap <- df_model_depmap %>%
   inner_join(y = cellline_buf_filtered_depmap, by = "CellLine.Name",
@@ -55,7 +64,13 @@ df_depmap <- df_model_depmap %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, TRUE, FALSE),
-         `Near-Tetraploid` = if_else(CellLine.Ploidy > 3.5, TRUE, FALSE))
+         `Near-Tetraploid` = if_else(CellLine.Ploidy > 3.5, TRUE, FALSE),
+         Aneuploidy = case_when(
+           CellLine.AneuploidyScore > aneuploidy_quant["75%"] ~ "Very High",
+           CellLine.AneuploidyScore > aneuploidy_quant["50%"] ~ "High",
+           CellLine.AneuploidyScore > aneuploidy_quant["25%"] ~ "Low",
+           TRUE ~ "Very Low",
+         ))
 
 
 sorted_violin_plot <- function(df, x, y) {
@@ -130,10 +145,10 @@ data_density_depmap <- df_procan %>%
 
 cols_procan <- c("tissue_status", "cancer_type", "msi_status",
                  "smoking_status", "gender", "ethnicity",
-                 "WGD", "Near-Tetraploid")
+                 "WGD", "Near-Tetraploid", "Aneuploidy")
 
 cols_depmap <- c("PrimaryOrMetastasis", "OncotreeSubtype", "Sex",
-                 "WGD", "Near-Tetraploid")
+                 "WGD", "Near-Tetraploid", "Aneuploidy")
 
 violoin_plots_procan <- df_procan %>%
   plot_categorical_properties(cols_procan)
@@ -158,6 +173,10 @@ df_procan %>%
   signif_violin_plot(msi_status, Buffering.CellLine.Ratio,
                      test = wilcox.test) %>%
   save_plot("cellline_msi_procan.png")
+df_procan %>%
+  signif_violin_plot(msi_status, CellLine.AneuploidyScore,
+                     test = wilcox.test) %>%
+  save_plot("cellline_msi-aneuploidy_procan.png")
 
 ## Sex/Gender
 df_procan %>%
@@ -195,6 +214,18 @@ df_depmap %>%
   signif_violin_plot(`Near-Tetraploid`, Buffering.CellLine.Ratio,
                      test = wilcox.test) %>%
   save_plot("cellline_tetraploidy_depmap.png")
+
+## High vs. Low Aneuploidy Score
+test <- df_procan %>%
+  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
+  signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
+                     test = wilcox.test) %>%
+  save_plot("cellline_aneuploidy-class_procan.png")
+df_depmap %>%
+  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
+  signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
+                     test = wilcox.test) %>%
+  save_plot("cellline_aneuploidy-class_depmap.png")
 
 # Regression analysis
 ## Age
@@ -240,7 +271,7 @@ df_procan %>%
   scatter_plot_regression(age_at_sampling, ploidy_wes, ploidy_wes ~ age_at_sampling,
                           label_coords = c(40, 1))
 
-## Ploidy measurements differ across datasets
+### Ploidy measurements differ across datasets
 df_procan %>%
   scatter_plot_regression(ploidy_wes, CellLine.Ploidy, CellLine.Ploidy ~ ploidy_wes,
                           label_coords = c(3, 6))
