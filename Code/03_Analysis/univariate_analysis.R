@@ -44,6 +44,7 @@ dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.pa
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'))
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 
@@ -120,6 +121,7 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, df_factors =
 datasets <- list(
   list(dataset = expr_buf_procan, name = "ProCan"),
   list(dataset = expr_buf_depmap, name = "DepMap"),
+  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
   list(dataset = buf_wgd, name = "DepMap-WGD"),
   list(dataset = buf_no_wgd, name = "DepMap-NoWGD")
 )

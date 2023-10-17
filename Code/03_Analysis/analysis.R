@@ -6,7 +6,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 
-## Add dosage compensation factors to a dataframe
+# Add dosage compensation factors to a dataframe
 add_factors <- function(df, df_factors, factor_cols = dc_factor_cols) {
   df %>%
     left_join(y = df_factors %>% select(Protein.Uniprot.Accession, Gene.Symbol, all_of(factor_cols)),
@@ -75,6 +75,23 @@ grid_search <- function(func, param_range) {
   close(pb)
 
   return(values)
+}
+
+# Convert list of ROC objects to data frame
+rocs_to_df <- function(rocs) {
+  df_rocs <- data.frame()
+  # Extract relevant information from ROC objects into data frame
+  for (name in names(rocs)) {
+    current_roc <- rocs[[name]]
+    df_current_roc <- data.frame(
+      Name = rep(name, length(current_roc$specificities)),
+      Specificity = current_roc$specificities,
+      Sensitivity = current_roc$sensitivities,
+      AUC = rep(auc(current_roc), length(current_roc$specificities))
+    )
+    df_rocs <- rbind(df_rocs, df_current_roc)
+  }
+  return(df_rocs)
 }
 
 # === Aggregation & Consensus Methods ===
