@@ -82,4 +82,15 @@ copy_number <- read.csv(
   write_parquet(here(output_data_dir, 'copy_number.parquet'),
                 version = "2.6")
 
+# Split dataset based on whole genome doubling status
+copy_number_wgd <- copy_number %>%
+  filter(CellLine.WGD > 0 & CellLine.Ploidy >= 2.9) %>%
+  write_parquet(here(output_data_dir, 'copy_number_wgd.parquet'),
+                version = "2.6")
+
+copy_number_no_wgd <- copy_number %>%
+  filter(CellLine.WGD == 0 | CellLine.Ploidy < 2.9) %>%
+  write_parquet(here(output_data_dir, 'copy_number_no-wgd.parquet'),
+                version = "2.6")
+
 # ToDo: Use different copy number datasets for ProCan and DepMap

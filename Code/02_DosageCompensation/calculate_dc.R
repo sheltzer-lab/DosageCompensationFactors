@@ -24,6 +24,10 @@ dir.create(plots_dir, recursive = TRUE)
 # === Load Datasets ===
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
+copy_number_wgd <- read_parquet(here(output_data_dir, "copy_number_wgd.parquet")) %>%
+  select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
+copy_number_no_wgd <- read_parquet(here(output_data_dir, "copy_number_no-wgd.parquet")) %>%
+  select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
 
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
@@ -159,6 +163,14 @@ expr_matched_renorm %>%
   build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'), version = "2.6")
 
+## Whole Genome Doubling
+expr_depmap %>%
+  build_dataset(copy_number_wgd) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_depmap_wgd.parquet'), version = "2.6")
+
+expr_depmap %>%
+  build_dataset(copy_number_no_wgd) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_depmap_no-wgd.parquet'), version = "2.6")
 
 # === Evaluation ===
 ## Copy Number

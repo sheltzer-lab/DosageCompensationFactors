@@ -44,16 +44,8 @@ dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.pa
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
-
-# === Create custom datasets ===
-# ToDo: Merge before calculating dosage compensation to calculate average and baseline
-# Note: Check if necessary when using buffering ratio results based on cell line basal ploidy
-buf_wgd <- expr_buf_depmap %>%
-  filter(CellLine.WGD > 0) %>%
-  filter(CellLine.Ploidy >= 3)
-buf_no_wgd <- expr_buf_depmap %>%
-  filter(CellLine.WGD == 0) %>%
-  filter(CellLine.Ploidy < 3)
+buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
+buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 
 # === Define Processing Functions ===
 reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
@@ -86,13 +78,10 @@ summarize_roc_auc <- function(factor_rocs) {
 }
 
 plot_roc_auc_summary <- function(roc_auc_summary, plots_dir, filename) {
-  roc_auc_summary_plot <- roc_auc_summary %>%
+  roc_auc_summary %>%
     vertical_bar_chart(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC,
-                       value_lab = "ROC AUC")
-
-  dir.create(plots_dir)
-  ggsave(here(plots_dir, filename), plot = roc_auc_summary_plot,
-         height = 200, width = 180, units = "mm", dpi = 300)
+                       value_lab = "ROC AUC") %>%
+    save_plot(filename = filename, dir = plots_dir, height = 200, width = 180)
 
   return(roc_auc_summary)
 }
@@ -167,10 +156,6 @@ for (dataset in datasets) {
   }
 }
 
-analysis_results <- analysis_results %>%
-  mutate(AnalysisID = as.character(AnalysisID),
-         DosageCompensation.Factor = as.character(DosageCompensation.Factor))
-
 ## Create aggregated ranking between methods
 rank_gain <- analysis_results %>%
   filter(grepl("Gain", AnalysisID) & !grepl("WGD", AnalysisID)) %>%
@@ -190,6 +175,24 @@ rank_loss <- analysis_results %>%
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss.png", height = 200, width = 180)
+
+rank_loss_wgd <- analysis_results %>%
+  filter(grepl("Loss", AnalysisID) & grepl("DepMap-WGD", AnalysisID)) %>%
+  mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
+                 AnalysisID, DosageCompensation.Factor) %>%
+  vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
+                     value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
+                     bar_label_shift = 0.07, line_intercept = 0) %>%
+  save_plot("buffering-factors_rank_loss_wgd.png", height = 200, width = 180)
+
+rank_loss_no_wgd <- analysis_results %>%
+  filter(grepl("Loss", AnalysisID) & grepl("DepMap-NoWGD", AnalysisID)) %>%
+  mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
+                 AnalysisID, DosageCompensation.Factor) %>%
+  vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
+                     value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
+                     bar_label_shift = 0.07, line_intercept = 0) %>%
+  save_plot("buffering-factors_rank_loss_no-wgd.png", height = 200, width = 180)
 
 # === Statistically compare results ===
 
