@@ -82,7 +82,7 @@ grid_search <- function(func, param_range) {
 mean_norm_rank <- function(df, value_col, group_col, id_col) {
   total_groups <- length(unique(df[[quo_name(enquo(group_col))]]))
 
-  test <- df %>%
+  df %>%
     select({ { value_col } }, { { group_col } }, { { id_col } }) %>%
     # Calculate Normalized Ranks
     group_by({ { group_col } }) %>%
@@ -104,5 +104,9 @@ mean_norm_rank <- function(df, value_col, group_col, id_col) {
     # Impute missing data
     mutate(Rank = replace_na(Rank, 0.5)) %>%
     # Aggregate normalized ranks
-    summarize(AggregatedRank = mean(Rank))
+    summarize(AggregatedRank = mean(Rank)) %>%
+    mutate(AggregatedRank = as.numeric(AggregatedRank),
+           { { id_col } } := factor({ { id_col } },
+                                    levels = { { id_col } }[order(AggregatedRank)])) %>%
+    arrange(desc(AggregatedRank))
 }

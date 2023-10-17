@@ -9,7 +9,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 vertical_bar_chart <- function(df, category_col, value_col,
                                error_low_col = NULL, error_high_col = NULL,
-                               value_range = c(0.45, 0.6), break_steps = 0.05,
+                               value_range = c(0.45, 0.65), break_steps = 0.05,
                                line_intercept = 0.5, bar_label_shift = 0.005,
                                title = NULL, category_lab = NULL, value_lab = NULL) {
   df %>%
