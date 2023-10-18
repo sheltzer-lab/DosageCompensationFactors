@@ -94,6 +94,34 @@ rocs_to_df <- function(rocs) {
   return(df_rocs)
 }
 
+# Calculate correlation between datasets (cell lines as separate samples)
+dataset_correlation <- function(df, dataset_col, value_col, comparison_name, method = "pearson") {
+  test <- df %>%
+    pivot_wider(id_cols = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+                names_from = quo_name(enquo(dataset_col)),
+                values_from = quo_name(enquo(value_col))) %>%
+    rename(DatasetA = 4,
+           DatasetB = 5) %>%
+    group_by(CellLine.CustomId) %>%
+    summarize(Correlation = cor(DatasetA, DatasetB,
+                                method = method, use = "na.or.complete")) %>%
+    mutate(Comparison = comparison_name)
+}
+
+# Combine two datasets by matching cell lines and genes for each matched cell line
+match_datasets <- function(df_dataset1, df_dataset2) {
+  matched_set1 <- df_dataset1 %>%
+    semi_join(y = df_dataset2,
+            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            na_matches = "never")
+  matched_set2 <- df_dataset2 %>%
+    semi_join(y = df_dataset1,
+            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            na_matches = "never")
+
+  return(bind_rows(matched_set1, matched_set2))
+}
+
 # === Aggregation & Consensus Methods ===
 
 mean_norm_rank <- function(df, value_col, group_col, id_col) {

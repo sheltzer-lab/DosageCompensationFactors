@@ -232,3 +232,20 @@ expr_baseline_plot <- df_expr_eval %>%
 
 expr_baseline_plot %>%
   save_plot("expression_baseline_methods.png")
+
+## Check correlation between datasets
+buf_matched <- match_datasets(expr_buf_procan, expr_buf_depmap)
+corr_gene <- dataset_correlation(buf_matched,
+                                 Dataset, Buffering.GeneLevel.Ratio,
+                                 "Gene")
+corr_chr <- dataset_correlation(buf_matched,
+                                Dataset, Buffering.ChrArmLevel.Ratio,
+                                "Chromosome Arm")
+corr_chr_avg <- dataset_correlation(buf_matched,
+                                    Dataset, Buffering.ChrArmLevel.Average.Ratio,
+                                    "Chromosome Arm (Average)")
+
+corr_gene %>%
+  bind_rows(corr_chr, corr_chr_avg) %>%
+  jittered_boxplot(Comparison, Correlation) %>%
+  save_plot("dc_dataset_correlation.png", height = 100)

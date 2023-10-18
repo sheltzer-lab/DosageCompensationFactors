@@ -207,3 +207,13 @@ map_signif <- function (p) {
       TRUE ~ "N.S."
     )
 }
+
+jittered_boxplot <- function(df, group_col, value_col) {
+  df %>%
+    ggplot() +
+    aes(x = { { group_col } }, y = { { value_col } }) +
+    geom_boxplot(outlier.shape = NA, color = "black") +
+    geom_jitter(fill = "darkgrey", color = "white",
+                shape = 21, alpha = 0.5, width = 0.15) +
+    coord_flip()
+}

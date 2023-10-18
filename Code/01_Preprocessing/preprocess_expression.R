@@ -13,7 +13,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "annotation.R"))
 source(here("Code", "visualization.R"))
-
+source(here("Code", "analysis.R"))
 
 expression_data_dir <- here(external_data_dir, "Expression")
 copynumber_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
@@ -142,18 +142,7 @@ expr_combined_genes <- expr_combined %>%
   filter(Gene.Symbol %in% common_genes)
 
 ## Matched Genes per matched Cell Line
-expr_matched_procan <- procan_expr_processed %>%
-  semi_join(y = depmap_expr_processed,
-            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
-            na_matches = "never")
-
-expr_matched_depmap <- depmap_expr_processed %>%
-  semi_join(y = procan_expr_processed,
-            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
-            na_matches = "never")
-
-expr_matched <- expr_matched_procan %>%
-  bind_rows(expr_matched_depmap)
+expr_matched <- match_datasets(procan_expr_processed, depmap_expr_processed)
 
 ## Matched Genes per matched Cell Line (re-normalized)
 expr_matched_renorm <- expr_matched %>%
@@ -174,29 +163,6 @@ plot_expr_dist <- function(df) {
 }
 
 ## Check correlation between datasets
-dataset_correlation <- function(df, dataset_col, expr_col, comparison_name, method = "pearson") {
-  test <- df %>%
-    pivot_wider(id_cols = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
-                names_from = quo_name(enquo(dataset_col)),
-                values_from = quo_name(enquo(expr_col))) %>%
-    rename(DatasetA = 4,
-           DatasetB = 5) %>%
-    group_by(CellLine.CustomId) %>%
-    summarize(Correlation = cor(DatasetA, DatasetB,
-                                method = method, use = "na.or.complete")) %>%
-    mutate(Comparison = comparison_name)
-}
-
-jittered_boxplot <- function(df, group_col, value_col) {
-  df %>%
-    ggplot() +
-    aes(x = { { group_col } }, y = { { value_col } }) +
-    geom_boxplot(outlier.shape = NA, color = "black") +
-    geom_jitter(fill = "darkgrey", color = "white",
-                shape = 21, alpha = 0.5, width = 0.15) +
-    coord_flip()
-}
-
 corr_combined <- dataset_correlation(expr_combined,
                                      Dataset, Protein.Expression.Log2,
                                      "Combined")
@@ -216,7 +182,7 @@ corr_combined %>%
   bind_rows(corr_matched_norm) %>%
   bind_rows(corr_matched_renorm) %>%
   jittered_boxplot(Comparison, Correlation) %>%
-  save_plot("dataset_correlation.png", height = 100)
+  save_plot("proteomics_dataset_correlation.png", height = 100)
 
 
 ## Plot distribution

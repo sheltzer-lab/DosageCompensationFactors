@@ -18,7 +18,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "buffering_ratio.R"))
 source(here("Code", "visualization.R"))
-source(here("Code", "03_Analysis", "analysis.R"))
+source(here("Code", "analysis.R"))
 
 models_base_dir <- here("Output", "Models")
 output_data_dir <- output_data_base_dir
