@@ -14,6 +14,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
+source(here("Code", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 plots_dir <- plots_base_dir
@@ -31,12 +32,6 @@ copy_number_no_wgd <- read_parquet(here(output_data_dir, "copy_number_no-wgd.par
 
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
-
-expr_combined <- read_parquet(here(output_data_dir, "expression_combined.parquet"))
-expr_combined_celllines <- read_parquet(here(output_data_dir, "expression_combined_celllines.parquet"))
-expr_combined_genes <- read_parquet(here(output_data_dir, "expression_combined_genes.parquet"))
-
-expr_matched <- read_parquet(here(output_data_dir, "expression_matched.parquet"))
 expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_renorm.parquet"))
 
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
@@ -60,8 +55,14 @@ calculate_baseline <- function(df, gene_col, chr_arm_cna_col, value_col,
 
   df %>%
     inner_join(y = baseline_expr, by = quo_name(enquo(gene_col)),
-               unmatched = "error", na_matches = "never", relationship = "many-to-one") %>%
-    rename()
+               unmatched = "error", na_matches = "never", relationship = "many-to-one")
+}
+
+calculate_median_baseline <- function(df, gene_col, value_col, target_colname = "Baseline") {
+  df %>%
+    group_by({ { gene_col } }) %>%
+    mutate(!!target_colname := median({ { value_col } }, na.rm = TRUE)) %>%
+    ungroup()
 }
 
 calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col) {
@@ -121,12 +122,12 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
            Buffering.ChrArmLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
                                                          ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Ratio = buffering_ratio(2^Protein.Expression.Baseline.Unweighted, 2^Protein.Expression.Average,
-                                                                 ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber)) %>%
+                                                                 2L, 2L + ChromosomeArm.CNA)) %>%
     mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
            Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio),
            Buffering.ChrArmLevel.Log2FC.Class = buffering_class_log2fc(Log2FC,
-                                                                       cn_base = 2L,
-                                                                       cn_var = 2L + ChromosomeArm.CNA),
+                                                                       cn_base = ChromosomeArm.CopyNumber.Baseline,
+                                                                       cn_var = ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
                                                                         cn_base = 2L,
                                                                         cn_var = 2L + ChromosomeArm.CNA))
@@ -135,40 +136,24 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
 # === Process & Write datasets to disk ===
 
 # Note: DepMap copy number data does not cover all cell lines in ProCan (333 cell lines lost here)
-expr_procan %>%
+expr_buf_procan <- expr_procan %>%
   build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'), version = "2.6")
 
-expr_depmap %>%
+expr_buf_depmap <- expr_depmap %>%
   build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")
 
-# expr_combined %>%
-#   build_dataset(copy_number) %>%
-#   write_parquet(here(output_data_dir, 'expression_buffering_combined.parquet'), version = "2.6")
-#
-# expr_combined_celllines %>%
-#   build_dataset(copy_number) %>%
-#   write_parquet(here(output_data_dir, 'expression_buffering_combined_celllines.parquet'), version = "2.6")
-#
-# expr_combined_genes %>%
-#   build_dataset(copy_number) %>%
-#   write_parquet(here(output_data_dir, 'expression_buffering_combined_genes.parquet'), version = "2.6")
-#
-# expr_matched %>%
-#   build_dataset(copy_number) %>%
-#   write_parquet(here(output_data_dir, 'expression_buffering_matched.parquet'), version = "2.6")
-
-expr_matched_renorm %>%
+expr_buf_matched_renorm <- expr_matched_renorm %>%
   build_dataset(copy_number) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'), version = "2.6")
 
 ## Whole Genome Doubling
-expr_depmap %>%
+buf_wgd <- expr_depmap %>%
   build_dataset(copy_number_wgd) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap_wgd.parquet'), version = "2.6")
 
-expr_depmap %>%
+buf_no_wgd <- expr_depmap %>%
   build_dataset(copy_number_no_wgd) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap_no-wgd.parquet'), version = "2.6")
 
@@ -180,9 +165,7 @@ df_cn_eval <- expr_depmap %>%
                na_matches = "never", relationship = "many-to-one") %>%
   select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber,
          ChromosomeArm.CNA, CellLine.Ploidy) %>%
-  group_by(Gene.Symbol) %>%
-  mutate(MedianAll = median(Gene.CopyNumber, na.rm = TRUE)) %>%
-  ungroup() %>%
+  calculate_median_baseline(Gene.Symbol, Gene.CopyNumber, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
                      ploidy_col = CellLine.Ploidy, target_colname = "WeightedNeutral", weighted = TRUE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
@@ -210,9 +193,7 @@ df_expr_eval <- expr_depmap %>%
                na_matches = "never", relationship = "many-to-one") %>%
   select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA,
          CellLine.Ploidy, Protein.Expression.Normalized) %>%
-  group_by(Gene.Symbol) %>%
-  mutate(MedianAll = median(Protein.Expression.Normalized, na.rm = TRUE)) %>%
-  ungroup() %>%
+  calculate_median_baseline(Gene.Symbol, Protein.Expression.Normalized, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                      ploidy_col = CellLine.Ploidy, target_colname = "WeightedNeutral", weighted = TRUE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
@@ -245,7 +226,35 @@ corr_chr_avg <- dataset_correlation(buf_matched,
                                     Dataset, Buffering.ChrArmLevel.Average.Ratio,
                                     "Chromosome Arm (Average)")
 
+# Median CN, Weighted Mean Expr:
+#   * Chr:    mean = 0.587, median = 0.599, sd = 0.129
+#   * ChrAvg: mean = 0.806, median = 0.811, sd = 0.132
+#   * Gene:   mean = 0.524, median = 0.534, sd = 0.119
+# Weighted CN & Expr (ChrAvg: unweighted expression)
+#   * Chr:    mean = 0.575, median = 0.588, sd = 0.127
+#   * ChrAvg: mean = 0.824, median = 0.847, sd = 0.122
+#   * Gene:   mean = 0.533, median = 0.542, sd = 0.119
+# Weighted CN & Expr (Chr+ChrAvg: Constant CN + CNA)
+#   * Chr:    mean = 0.586, median = 0.599, sd = 0.120
+#   * ChrAvg: mean = 0.936, median = 0.931, sd = 0.032
+#   * Gene:   mean = 0.533, median = 0.542, sd = 0.119
+# Unweighted Mean CN & Expr (Chr.CN = Ploidy + CNA):
+#   * Chr:    mean = 0.486, median = 0.486, sd = 0.120
+#   * ChrAvg: mean = 0.811, median = 0.821, sd = 0.122
+#   * Gene:   mean = 0.408, median = 0.411, sd = 0.114
+# Unweighted Mean CN & Expr (Chr.CN = Baseline + CNA):
+#   * Chr:    mean = 0.494, median = 0.501, sd = 0.106
+#   * ChrAvg: mean = 0.883, median = 0.886, sd = 0.042
+#   * Gene:   mean = 0.408, median = 0.411, sd = 0.114
+
 corr_gene %>%
   bind_rows(corr_chr, corr_chr_avg) %>%
   jittered_boxplot(Comparison, Correlation) %>%
   save_plot("dc_dataset_correlation.png", height = 100)
+
+corr_summary <- list(
+  Chr = list(mean(corr_chr$Correlation, na.rm = TRUE), median(corr_chr$Correlation, na.rm = TRUE), sd(corr_chr$Correlation, na.rm = TRUE)),
+  ChrAvg = list(mean(corr_chr_avg$Correlation, na.rm = TRUE), median(corr_chr_avg$Correlation, na.rm = TRUE), sd(corr_chr_avg$Correlation, na.rm = TRUE)),
+  Gene = list(mean(corr_gene$Correlation, na.rm = TRUE), median(corr_gene$Correlation, na.rm = TRUE), sd(corr_gene$Correlation, na.rm = TRUE))
+)
+
