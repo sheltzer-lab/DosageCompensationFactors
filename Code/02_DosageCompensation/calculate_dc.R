@@ -36,18 +36,17 @@ expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_re
 
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 
-calculate_weights <- function(base, var) {
-  distances <- abs(base - var)
+calculate_weights <- function(distances) {
   weights <- (1/(1+distances)) / sum(1/(1+distances), na.rm = TRUE)
   return(weights)
 }
 calculate_baseline <- function(df, gene_col, chr_arm_cna_col, value_col,
-                               target_colname = "Baseline", ploidy_col = NULL, weighted = TRUE) {
+                               target_colname = "Baseline", aneuploidy_col = NULL, weighted = TRUE) {
   baseline_expr <- df %>%
-    select({ { gene_col } }, { { chr_arm_cna_col } }, { { value_col } }, { { ploidy_col } }) %>%
+    select({ { gene_col } }, { { chr_arm_cna_col } }, { { value_col } }, { { aneuploidy_col } }) %>%
     filter({ { chr_arm_cna_col } } == 0) %>%
     group_by({ { gene_col } }) %>%
-    mutate(Weights = calculate_weights(2, { { ploidy_col } })) %>%
+    mutate(Weights = calculate_weights({ { aneuploidy_col } })) %>%
     summarize(!!target_colname := if_else(weighted,
                                           sum({ { value_col } } * Weights, na.rm = TRUE),
                                           mean({ { value_col } }, na.rm = TRUE))) %>%
@@ -97,18 +96,18 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
     # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
     filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, CellLine.Ploidy,
-                       ploidy_col = CellLine.Ploidy, target_colname = "ChromosomeArm.CopyNumber.Baseline",
+                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "ChromosomeArm.CopyNumber.Baseline",
                        weighted = TRUE) %>%
     # Note: Chromosome arm CNA based on ploidy of cell line
     mutate(ChromosomeArm.CopyNumber = CellLine.Ploidy + ChromosomeArm.CNA) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                       ploidy_col = CellLine.Ploidy, target_colname = "Gene.CopyNumber.Baseline",
+                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Gene.CopyNumber.Baseline",
                        weighted = TRUE) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                       ploidy_col = CellLine.Ploidy, target_colname = "Protein.Expression.Baseline",
+                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline",
                        weighted = TRUE) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                       ploidy_col = CellLine.Ploidy, target_colname = "Protein.Expression.Baseline.Unweighted",
+                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline.Unweighted",
                        weighted = FALSE) %>%
     calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
     group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
@@ -164,12 +163,12 @@ df_cn_eval <- expr_depmap %>%
   inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
   select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber,
-         ChromosomeArm.CNA, CellLine.Ploidy) %>%
+         ChromosomeArm.CNA, CellLine.AneuploidyScore) %>%
   calculate_median_baseline(Gene.Symbol, Gene.CopyNumber, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                     ploidy_col = CellLine.Ploidy, target_colname = "WeightedNeutral", weighted = TRUE) %>%
+                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral", weighted = TRUE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                     ploidy_col = CellLine.Ploidy, target_colname = "MeanNeutral", weighted = FALSE) %>%
+                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   select(Gene.Symbol, MedianAll, WeightedNeutral, MeanNeutral)
 
@@ -192,12 +191,12 @@ df_expr_eval <- expr_depmap %>%
   inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
   select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA,
-         CellLine.Ploidy, Protein.Expression.Normalized) %>%
+         CellLine.AneuploidyScore, Protein.Expression.Normalized) %>%
   calculate_median_baseline(Gene.Symbol, Protein.Expression.Normalized, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                     ploidy_col = CellLine.Ploidy, target_colname = "WeightedNeutral", weighted = TRUE) %>%
+                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral", weighted = TRUE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                     ploidy_col = CellLine.Ploidy, target_colname = "MeanNeutral", weighted = FALSE) %>%
+                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   select(Gene.Symbol, MedianAll, WeightedNeutral, MeanNeutral)
 
@@ -236,7 +235,7 @@ corr_chr_avg <- dataset_correlation(buf_matched,
 #   * Gene:   mean = 0.533, median = 0.542, sd = 0.119
 # Weighted CN & Expr (Chr+ChrAvg: Constant CN + CNA)
 #   * Chr:    mean = 0.586, median = 0.599, sd = 0.120
-#   * ChrAvg: mean = 0.936, median = 0.931, sd = 0.032
+#   * ChrAvg: mean = 0.926, median = 0.931, sd = 0.032
 #   * Gene:   mean = 0.533, median = 0.542, sd = 0.119
 # Unweighted Mean CN & Expr (Chr.CN = Ploidy + CNA):
 #   * Chr:    mean = 0.486, median = 0.486, sd = 0.120
@@ -246,6 +245,15 @@ corr_chr_avg <- dataset_correlation(buf_matched,
 #   * Chr:    mean = 0.494, median = 0.501, sd = 0.106
 #   * ChrAvg: mean = 0.883, median = 0.886, sd = 0.042
 #   * Gene:   mean = 0.408, median = 0.411, sd = 0.114
+# === Weighting Methods ===
+# Ploidy Distance:
+#   * Chr:    mean = 0.575, median = 0.588, sd = 0.127
+#   * ChrAvg: mean = 0.926, median = 0.931, sd = 0.032
+#   * Gene:   mean = 0.533, median = 0.542, sd = 0.119
+# Aneuploidy Score:
+#   * Chr:    mean = 0.574, median = 0.592, sd = 0.132
+#   * ChrAvg: mean = 0.926, median = 0.932, sd = 0.032
+#   * Gene:   mean = 0.537, median = 0.548, sd = 0.122
 
 corr_gene %>%
   bind_rows(corr_chr, corr_chr_avg) %>%
