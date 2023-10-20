@@ -41,12 +41,12 @@ calculate_weights <- function(distances) {
   return(weights)
 }
 calculate_baseline <- function(df, gene_col, chr_arm_cna_col, value_col,
-                               target_colname = "Baseline", aneuploidy_col = NULL, weighted = TRUE) {
+                               target_colname = "Baseline", distance_col = NULL, weighted = FALSE) {
   baseline_expr <- df %>%
-    select({ { gene_col } }, { { chr_arm_cna_col } }, { { value_col } }, { { aneuploidy_col } }) %>%
+    select({ { gene_col } }, { { chr_arm_cna_col } }, { { value_col } }, { { distance_col } }) %>%
     filter({ { chr_arm_cna_col } } == 0) %>%
     group_by({ { gene_col } }) %>%
-    mutate(Weights = calculate_weights({ { aneuploidy_col } })) %>%
+    mutate(Weights = calculate_weights({ { distance_col } })) %>%
     summarize(!!target_colname := if_else(weighted,
                                           sum({ { value_col } } * Weights, na.rm = TRUE),
                                           mean({ { value_col } }, na.rm = TRUE))) %>%
@@ -99,13 +99,13 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
     mutate(ChromosomeArm.CopyNumber.Baseline = round(CellLine.Ploidy),
            ChromosomeArm.CopyNumber = round(CellLine.Ploidy) + ChromosomeArm.CNA) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Gene.CopyNumber.Baseline",
+                       distance_col = CellLine.AneuploidyScore, target_colname = "Gene.CopyNumber.Baseline",
                        weighted = TRUE) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline",
+                       distance_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline",
                        weighted = TRUE) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline.Unweighted",
+                       distance_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline.Unweighted",
                        weighted = FALSE) %>%
     calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
     group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
@@ -160,20 +160,25 @@ df_cn_eval <- expr_depmap %>%
   select(Gene.Symbol, CellLine.CustomId) %>%
   inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
-  select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber,
+  select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber, CellLine.Ploidy,
          ChromosomeArm.CNA, CellLine.AneuploidyScore) %>%
   calculate_median_baseline(Gene.Symbol, Gene.CopyNumber, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral", weighted = TRUE) %>%
+                     distance_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral.AneuploidyScore",
+                     weighted = TRUE) %>%
+  mutate(PloidyDistance = abs(2 - CellLine.Ploidy)) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
+                     distance_col = PloidyDistance, target_colname = "WeightedNeutral.PloidyDistance",
+                     weighted = TRUE) %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
+                     distance_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(Gene.Symbol, MedianAll, WeightedNeutral, MeanNeutral)
+  select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral)
 
-cor.test(df_cn_eval$WeightedNeutral, df_cn_eval$MedianAll, method = "spearman")
+cor.test(df_cn_eval$WeightedNeutral.AneuploidyScore, df_cn_eval$MedianAll, method = "spearman")
 
 cn_baseline_plot <- df_cn_eval %>%
-  pivot_longer(c("MedianAll", "WeightedNeutral", "MeanNeutral"),
+  pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "MeanNeutral"),
                names_to = "Methods",
                values_to = "Gene.CopyNumber.Baseline") %>%
   ggplot() +
@@ -188,20 +193,25 @@ df_expr_eval <- expr_depmap %>%
   select(Gene.Symbol, CellLine.CustomId, Protein.Expression.Normalized) %>%
   inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
-  select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA,
+  select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA, CellLine.Ploidy,
          CellLine.AneuploidyScore, Protein.Expression.Normalized) %>%
   calculate_median_baseline(Gene.Symbol, Protein.Expression.Normalized, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral", weighted = TRUE) %>%
+                     distance_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral.AneuploidyScore",
+                     weighted = TRUE) %>%
+  mutate(PloidyDistance = abs(2 - CellLine.Ploidy)) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                     aneuploidy_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
+                     distance_col = PloidyDistance, target_colname = "WeightedNeutral.PloidyDistance",
+                     weighted = TRUE) %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                     distance_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(Gene.Symbol, MedianAll, WeightedNeutral, MeanNeutral)
+  select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral)
 
-cor.test(df_expr_eval$WeightedNeutral, df_expr_eval$MeanNeutral, method = "spearman")
+cor.test(df_expr_eval$WeightedNeutral.AneuploidyScore, df_expr_eval$MeanNeutral, method = "spearman")
 
 expr_baseline_plot <- df_expr_eval %>%
-  pivot_longer(c("MedianAll", "WeightedNeutral", "MeanNeutral"),
+  pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "MeanNeutral"),
                names_to = "Methods",
                values_to = "Protein.Expression.Baseline") %>%
   ggplot() +
