@@ -223,6 +223,18 @@ corr_chr_avg <- dataset_correlation(buf_matched,
                                     Dataset, Buffering.ChrArmLevel.Average.Ratio,
                                     "Chromosome Arm (Average)")
 
+corr_gene %>%
+  bind_rows(corr_chr, corr_chr_avg) %>%
+  jittered_boxplot(Comparison, Correlation) %>%
+  save_plot("dc_dataset_correlation.png", height = 100)
+
+corr_summary <- list(
+  Chr = list(mean(corr_chr$Correlation, na.rm = TRUE), median(corr_chr$Correlation, na.rm = TRUE), sd(corr_chr$Correlation, na.rm = TRUE)),
+  ChrAvg = list(mean(corr_chr_avg$Correlation, na.rm = TRUE), median(corr_chr_avg$Correlation, na.rm = TRUE), sd(corr_chr_avg$Correlation, na.rm = TRUE)),
+  Gene = list(mean(corr_gene$Correlation, na.rm = TRUE), median(corr_gene$Correlation, na.rm = TRUE), sd(corr_gene$Correlation, na.rm = TRUE))
+)
+
+
 # Median CN, Weighted Mean Expr:
 #   * Chr:    mean = 0.587, median = 0.599, sd = 0.129
 #   * ChrAvg: mean = 0.806, median = 0.811, sd = 0.132
@@ -256,16 +268,3 @@ corr_chr_avg <- dataset_correlation(buf_matched,
 #   * Chr:    mean = 0.573, median = 0.590, sd = 0.124
 #   * ChrAvg: mean = 0.926, median = 0.932, sd = 0.032
 #   * Gene:   mean = 0.537, median = 0.548, sd = 0.122
-
-
-corr_gene %>%
-  bind_rows(corr_chr, corr_chr_avg) %>%
-  jittered_boxplot(Comparison, Correlation) %>%
-  save_plot("dc_dataset_correlation.png", height = 100)
-
-corr_summary <- list(
-  Chr = list(mean(corr_chr$Correlation, na.rm = TRUE), median(corr_chr$Correlation, na.rm = TRUE), sd(corr_chr$Correlation, na.rm = TRUE)),
-  ChrAvg = list(mean(corr_chr_avg$Correlation, na.rm = TRUE), median(corr_chr_avg$Correlation, na.rm = TRUE), sd(corr_chr_avg$Correlation, na.rm = TRUE)),
-  Gene = list(mean(corr_gene$Correlation, na.rm = TRUE), median(corr_gene$Correlation, na.rm = TRUE), sd(corr_gene$Correlation, na.rm = TRUE))
-)
-
