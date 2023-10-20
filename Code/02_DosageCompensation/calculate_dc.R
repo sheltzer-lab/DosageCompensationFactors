@@ -95,11 +95,9 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
                na_matches = "never", relationship = "many-to-one") %>%
     # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
     filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
-    calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, CellLine.Ploidy,
-                       aneuploidy_col = CellLine.AneuploidyScore, target_colname = "ChromosomeArm.CopyNumber.Baseline",
-                       weighted = TRUE) %>%
-    # Note: Chromosome arm CNA based on ploidy of cell line
-    mutate(ChromosomeArm.CopyNumber = CellLine.Ploidy + ChromosomeArm.CNA) %>%
+    # Note: Chromosome arm CNA based on basal (rounded) ploidy of cell line
+    mutate(ChromosomeArm.CopyNumber.Baseline = round(CellLine.Ploidy),
+           ChromosomeArm.CopyNumber = round(CellLine.Ploidy) + ChromosomeArm.CNA) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
                        aneuploidy_col = CellLine.AneuploidyScore, target_colname = "Gene.CopyNumber.Baseline",
                        weighted = TRUE) %>%
@@ -254,6 +252,11 @@ corr_chr_avg <- dataset_correlation(buf_matched,
 #   * Chr:    mean = 0.574, median = 0.592, sd = 0.132
 #   * ChrAvg: mean = 0.926, median = 0.932, sd = 0.032
 #   * Gene:   mean = 0.537, median = 0.548, sd = 0.122
+# Aneuploidy Score (Chr.CN = round(ploidy) + CNA):
+#   * Chr:    mean = 0.573, median = 0.590, sd = 0.124
+#   * ChrAvg: mean = 0.926, median = 0.932, sd = 0.032
+#   * Gene:   mean = 0.537, median = 0.548, sd = 0.122
+
 
 corr_gene %>%
   bind_rows(corr_chr, corr_chr_avg) %>%
