@@ -217,3 +217,29 @@ jittered_boxplot <- function(df, group_col, value_col) {
                 shape = 21, alpha = 0.5, width = 0.15) +
     coord_flip()
 }
+
+plot_pca <- function(pca) {
+  eigenvalues <- pca$eigenvalues
+  df_pca <- pca$df_pca
+
+  df_pca %>%
+    ggplot() +
+    aes(.fittedPC1, .fittedPC2, color = CellLine.Name, label = Sample.Name) +
+    geom_point(size = 1.5) +
+    geom_label_repel(force = 10, seed = 123) +
+    xlab(sprintf("PC1 (%0.1f%% Variance Explained)", eigenvalues[eigenvalues$PC == 1,]$percent * 100)) +
+    ylab(sprintf("PC2 (%0.1f%% Variance Explained)", eigenvalues[eigenvalues$PC == 2,]$percent * 100))
+}
+
+scree_plot <- function(pca) {
+  pca$eigenvalues %>%
+    ggplot(aes(PC, percent)) +
+    geom_col() +
+    scale_x_continuous(breaks = 1:10) +
+    scale_y_continuous(
+      labels = scales::percent_format(),
+      expand = expansion(mult = c(0, 0.01))
+    ) +
+    xlab("Principal Component") +
+    ylab("Explained Variance")
+}

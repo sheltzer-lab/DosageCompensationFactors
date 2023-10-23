@@ -1,6 +1,7 @@
 library(dplyr)
 library(tidyr)
 library(here)
+library(broom)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -108,18 +109,31 @@ dataset_correlation <- function(df, dataset_col, value_col, comparison_name, met
     mutate(Comparison = comparison_name)
 }
 
-# Combine two datasets by matching cell lines and genes for each matched cell line
-match_datasets <- function(df_dataset1, df_dataset2) {
-  matched_set1 <- df_dataset1 %>%
-    semi_join(y = df_dataset2,
-            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
-            na_matches = "never")
-  matched_set2 <- df_dataset2 %>%
-    semi_join(y = df_dataset1,
-            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
-            na_matches = "never")
+calculate_pca <- function(df, sample_col, sample_group_col, value_group_col, value_col) {
+  pca_fit <- df %>%
+    select({ { sample_col } }, { { sample_group_col } }, { { value_group_col } }, { { value_col } }) %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = { { value_col } },
+                id_cols = { { value_group_col } }) %>%
+    drop_na() %>%
+    select(where(is.numeric)) %>%
+    tibble::rownames_to_column() %>%
+    pivot_longer(-rowname) %>%
+    pivot_wider(names_from = rowname, values_from = value) %>%
+    tibble::column_to_rownames(var = "name") %>%
+    scale() %>%
+    prcomp()
 
-  return(bind_rows(matched_set1, matched_set2))
+  sample_metadata <- df %>%
+    distinct({ { sample_col } }, { { sample_group_col } })
+
+  df_pca <- pca_fit %>%
+    augment(sample_metadata) %>%
+    select(-.rownames)
+
+  eigenvalues <- pca_fit %>%
+    tidy(matrix = "eigenvalues")
+
+  return(list(pca = pca_fit, df_pca = df_pca, eigenvalues = eigenvalues))
 }
 
 # === Aggregation & Consensus Methods ===
