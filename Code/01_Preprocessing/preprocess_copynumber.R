@@ -7,6 +7,7 @@ library(stringr)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "annotation.R"))
 
 copynumber_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 output_data_dir <- output_data_base_dir
@@ -14,37 +15,6 @@ plots_dir <- plots_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
-
-ensembl_mart <- biomaRt::useMart("ENSEMBL_MART_ENSEMBL", "hsapiens_gene_ensembl")
-
-get_chromosome_arms <- function(df, mart = ensembl_mart, symbol_col = "Gene.Symbol") {
-  chr_location <- biomaRt::getBM(attributes = c("hgnc_symbol", 'chromosome_name', 'band'),
-                                 filters = 'hgnc_symbol',
-                                 values = unique(df[[symbol_col]]),
-                                 mart = ensembl_mart) %>%
-    rename(Gene.Symbol = "hgnc_symbol",
-           Gene.Chromosome = "chromosome_name",
-           Gene.ChromosomeBand = "band") %>%
-    mutate(Gene.ChromosomeArm = ifelse(str_detect(Gene.ChromosomeBand, "q"), "q",
-                                       ifelse(str_detect(Gene.ChromosomeBand, "p"), "p",
-                                              NA))) %>%
-    unite("Gene.ChromosomeArm", Gene.Chromosome, Gene.ChromosomeArm,
-          sep = "", remove = FALSE) %>%
-    mutate_all(na_if, "") %>%
-    drop_na() %>%
-    distinct() %>%
-    # Remove genes that may be located on multiple chromosomes
-    add_count(Gene.Symbol) %>%
-    filter(n == 1) %>%
-    select(-n)
-
-  df <- df %>%
-    mutate(Gene.Symbol = .data[[symbol_col]]) %>% # Ensure correct column name
-    left_join(y = chr_location, by = "Gene.Symbol",
-              na_matches = "never", relationship = "many-to-one")
-
-  return(df)
-}
 
 df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 

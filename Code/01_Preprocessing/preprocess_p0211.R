@@ -73,6 +73,32 @@ p0211_expr_processed <- p0211_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   normalize_samples(Sample.Name, Protein.Expression.Log2, ProteinGroup.UniprotIDs,
                     normalized_colname = "Protein.Expression.Normalized")
+# No Batch Effect removal, as Proteomics have been measured in one run
+# and defining batches as cell lines would remove differences between them
+
+# === Annotation ===
+annotations <- p0211_expr_processed %>%
+  select(ProteinGroup.UniprotIDs) %>%
+  mutate(Protein.Uniprot.Accession = ProteinGroup.UniprotIDs) %>%
+  separate_rows(Protein.Uniprot.Accession, sep = ";") %>%
+  mutate(Protein.Uniprot.Accession = str_trim(Protein.Uniprot.Accession)) %>%
+  distinct(Protein.Uniprot.Accession, .keep_all = TRUE) %>%
+  mapIds("UNIPROT", "SYMBOL",
+         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
+  drop_na() %>%
+  distinct(Gene.Symbol, .keep_all = TRUE) %>%
+  select(-Protein.Uniprot.Accession) %>%
+  mapIds("SYMBOL", "UNIPROT",
+         "Gene.Symbol", "Protein.Uniprot.Accession") %>%
+  get_chromosome_arms() %>%
+  filter(Gene.Chromosome %in% (1:22))
+  # add_count(ProteinGroup.UniprotIDs) %>%
+  # filter(n > 1)
+
+# ToDo: Avoid duplicate rows, establish one-to-one mapping
+p0211_expr_annotated <- p0211_expr_processed %>%
+  inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
+             na_matches = "never", relationship = "many-to-many")
 
 # === Evaluation & Quality Control ===
 
@@ -100,7 +126,7 @@ plot_sample_expr <- function (df, value_col) {
     geom_boxplot()
 }
 
-plot_protein_states(p0211_expr_tidy)
+protein_states <- plot_protein_states(p0211_expr_tidy)
 plot_expr_dist(p0211_expr_processed)
 p0211_expr_processed %>%
   plot_sample_expr(Protein.Expression.Log2)
@@ -131,4 +157,26 @@ mat_norm <- p0211_expr_processed %>%
 
 pheatmap(mat_norm, show_rownames = F,
          scale = "row", na_col = "black", cluster_cols = T, cluster_rows = F,
+         color = colorRampPalette(c("blue", "white", "red"))(15))
+
+p0211_expr_average <- p0211_expr_annotated %>%
+  group_by(Gene.Symbol, CellLine.Name) %>%
+  mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
+  ungroup()
+
+
+# TODO: Check per sample
+log2fc_trisomy <- p0211_expr_average %>%
+  group_by(Gene.Symbol, Gene.ChromosomeArm) %>%
+  summarize(Log2FC = Protein.Expression.Average[CellLine.Name == "Rtr13"] - Protein.Expression.Average[CellLine.Name == "RPE1"]) %>%
+  distinct()
+
+mat_trisomy <- log2fc_trisomy %>%
+  group_by(Gene.ChromosomeArm) %>%
+  summarize(Log2FC = mean(Log2FC)) %>%
+  column_to_rownames(var = "Gene.ChromosomeArm")
+
+# TODO: Use correct sorting for chromosomes
+pheatmap(mat_trisomy, show_rownames = T,
+         na_col = "black", cluster_cols = F, cluster_rows = F,
          color = colorRampPalette(c("blue", "white", "red"))(15))
