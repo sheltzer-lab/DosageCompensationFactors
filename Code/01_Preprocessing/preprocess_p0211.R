@@ -9,6 +9,8 @@ library(ggplot2)
 library(limma)
 library(tibble)
 library(pheatmap)
+library(circlize)
+
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -91,14 +93,15 @@ annotations <- p0211_expr_processed %>%
   mapIds("SYMBOL", "UNIPROT",
          "Gene.Symbol", "Protein.Uniprot.Accession") %>%
   get_chromosome_arms() %>%
-  filter(Gene.Chromosome %in% (1:22))
-  # add_count(ProteinGroup.UniprotIDs) %>%
-  # filter(n > 1)
+  filter(Gene.Chromosome %in% (1:22)) %>%
+  mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
+  add_count(ProteinGroup.UniprotIDs) %>%
+  filter(n == 1) # ToDo: Only temporary!
 
-# ToDo: Avoid duplicate rows, establish one-to-one mapping
+# ToDo: Avoid duplicate rows, establish many-to-one mapping
 p0211_expr_annotated <- p0211_expr_processed %>%
   inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
-             na_matches = "never", relationship = "many-to-many")
+             na_matches = "never", relationship = "many-to-one")
 
 # === Evaluation & Quality Control ===
 
@@ -159,24 +162,60 @@ pheatmap(mat_norm, show_rownames = F,
          scale = "row", na_col = "black", cluster_cols = T, cluster_rows = F,
          color = colorRampPalette(c("blue", "white", "red"))(15))
 
-p0211_expr_average <- p0211_expr_annotated %>%
-  group_by(Gene.Symbol, CellLine.Name) %>%
-  mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
+p0211_expr_baseline <- p0211_expr_annotated %>%
+  filter(CellLine.Name == "RPE1") %>%
+  group_by(Gene.Symbol) %>%
+  summarize(Protein.Expression.Baseline = mean(Protein.Expression.Normalized, na.rm = TRUE))
+
+p0211_expr_log2fc <- p0211_expr_annotated %>%
+  left_join(y = p0211_expr_baseline, by = "Gene.Symbol",
+            unmatched = "error", na_matches = "never", relationship = "many-to-one") %>%
+  group_by(Gene.Symbol, Sample.Name, Sample.ID, CellLine.Name, Gene.Chromosome, Gene.StartPosition) %>%
+  summarize(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline) %>%
   ungroup()
 
+plot_log2fc_chr <- function(df, sample_id) {
+  df %>%
+    filter(Sample.ID == sample_id) %>%
+    group_by(Gene.Chromosome) %>%
+    mutate(Position = (Gene.StartPosition - min(Gene.StartPosition, na.rm = T)) / max(Gene.StartPosition, na.rm = T),
+           Log2FC.Average = mean(Log2FC, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(Color = if_else(Gene.Chromosome == 13, highlight_color, default_color)) %>%
+    ggplot() +
+    aes(x = Position, y = Log2FC, color = Color) +
+    geom_hline(yintercept = 0, color = default_color) +
+    geom_point(alpha = 0.3) +
+    geom_hline(aes(yintercept = Log2FC.Average), color = "red") +
+    facet_grid(~Gene.Chromosome) +
+    scale_x_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
+    scale_colour_identity() +
+    scale_y_continuous(limits = c(-2, 2), breaks = seq(-2, 2, 1)) +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.spacing = unit(0.25, "mm"))
+}
 
-# TODO: Check per sample
-log2fc_trisomy <- p0211_expr_average %>%
-  group_by(Gene.Symbol, Gene.ChromosomeArm) %>%
-  summarize(Log2FC = Protein.Expression.Average[CellLine.Name == "Rtr13"] - Protein.Expression.Average[CellLine.Name == "RPE1"]) %>%
-  distinct()
+p0211_expr_log2fc %>% plot_log2fc_chr(2)
 
-mat_trisomy <- log2fc_trisomy %>%
-  group_by(Gene.ChromosomeArm) %>%
-  summarize(Log2FC = mean(Log2FC)) %>%
-  column_to_rownames(var = "Gene.ChromosomeArm")
 
-# TODO: Use correct sorting for chromosomes
-pheatmap(mat_trisomy, show_rownames = T,
-         na_col = "black", cluster_cols = F, cluster_rows = F,
-         color = colorRampPalette(c("blue", "white", "red"))(15))
+mat_log2fc <- p0211_expr_log2fc %>%
+  group_by(Sample.Name, Gene.Chromosome) %>%
+  summarize(Log2FC = mean(Log2FC, na.rm = T)) %>%
+  ungroup() %>%
+  pivot_wider(names_from = Sample.Name, values_from = Log2FC, id_cols = Gene.Chromosome) %>%
+  arrange(Gene.Chromosome) %>%
+  column_to_rownames(var = "Gene.Chromosome")
+
+# https://stackoverflow.com/questions/31677923/set-0-point-for-pheatmap-in-r
+paletteLength <- 100
+myColor <- colorRampPalette(biderectional_color_pal, space = "Lab")(paletteLength)
+# length(breaks) == length(paletteLength) + 1
+# use floor and ceiling to deal with even/odd length pallettelengths
+myBreaks <- c(seq(min(mat_log2fc, na.rm = T), 0, length.out=ceiling(paletteLength/2) + 1),
+              seq(max(mat_log2fc, na.rm = T)/paletteLength, max(mat_log2fc, na.rm = T), length.out=floor(paletteLength/2)))
+
+pheatmap(t(mat_log2fc), na_col = "black",
+         cluster_cols = F, cluster_rows = T,
+         breaks = myBreaks, color = myColor)
