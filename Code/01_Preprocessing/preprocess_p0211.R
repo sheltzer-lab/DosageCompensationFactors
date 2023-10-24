@@ -7,6 +7,8 @@ library(readxl)
 library(assertr)
 library(ggplot2)
 library(limma)
+library(tibble)
+library(pheatmap)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -112,3 +114,21 @@ p0211_expr_processed %>%
 p0211_expr_processed %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
   plot_pca()
+
+mat_log2 <- p0211_expr_processed %>%
+  select(Sample.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
+  pivot_wider(names_from = Sample.Name, values_from = Protein.Expression.Log2) %>%
+  column_to_rownames(var = "ProteinGroup.UniprotIDs")
+
+pheatmap(mat_log2, show_rownames = F,
+         scale = "row", na_col = "black", cluster_cols = T, cluster_rows = F,
+         color = colorRampPalette(c("blue", "white", "red"))(15))
+
+mat_norm <- p0211_expr_processed %>%
+  select(Sample.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
+  pivot_wider(names_from = Sample.Name, values_from = Protein.Expression.Normalized) %>%
+  column_to_rownames(var = "ProteinGroup.UniprotIDs")
+
+pheatmap(mat_norm, show_rownames = F,
+         scale = "row", na_col = "black", cluster_cols = T, cluster_rows = F,
+         color = colorRampPalette(c("blue", "white", "red"))(15))
