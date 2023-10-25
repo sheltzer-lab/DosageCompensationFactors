@@ -204,6 +204,8 @@ for (sample in unique(p0211_expr_log2fc$Sample.ID)) {
     filter(Sample.ID == sample) %>%
     bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
                           highlight_buckets = 13,
+                          threshold_low = log2(1) - log(2),
+                          threshold_high = log2(3) - log2(2),
                           x_lab = "Chromosome & Gene Position", title = title) %>%
     save_plot(paste0("p0211_log2fc_chr_sample", sample, ".png"), height = 100)
 }

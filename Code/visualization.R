@@ -276,6 +276,7 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
 
 
 bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
+                                  threshold_low = NULL, threshold_high = NULL,
                                   highlight_buckets = NULL, x_lab = NULL, title = element_blank()) {
   df %>%
     group_by({ { bucket_col } }) %>%
@@ -288,11 +289,13 @@ bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
                            highlight_color, default_color)) %>%
     ggplot() +
     aes(x = Position, y = { { value_col } }, color = Color) +
+    geom_hline(yintercept = threshold_low, color = biderectional_color_pal[1], linetype="dashed", linewidth = 1/3) +
+    geom_hline(yintercept = threshold_high, color = "orange", linetype="dashed", linewidth = 1/3) +
     geom_hline(yintercept = 0, color = default_color) +
-    geom_point(alpha = 1/3) +
+    geom_point(alpha = 1/2, size = 1/3) +
     geom_hline(aes(yintercept = Value.Average), color = "red") +
     facet_grid(~Bucket) +
-    scale_x_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
+    scale_x_continuous(limits = c(0, 1), breaks = c(0, 1)) +
     scale_colour_identity() +
     scale_y_continuous(limits = c(-2, 2), breaks = seq(-2, 2, 1)) +
     theme(axis.text.x = element_blank(),
