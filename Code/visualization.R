@@ -243,3 +243,61 @@ scree_plot <- function(pca) {
     xlab("Principal Component") +
     ylab("Explained Variance")
 }
+
+bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
+                                  cluster_rows = FALSE, cluster_cols = FALSE,
+                                  show_rownames = TRUE, show_colnames = TRUE,
+                                  transpose = FALSE, palette_length = 100, color_pal = biderectional_color_pal) {
+  mat <- df %>%
+    group_by({ { sample_col } }, { { group_col } }) %>%
+    summarize(Value = mean({ { value_col } }, na.rm = TRUE)) %>%
+    ungroup() %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = Value, id_cols = { { group_col } }) %>%
+    arrange({ { group_col } }) %>%
+    column_to_rownames(var = quo_name(enquo(group_col)))
+
+  if (transpose) {
+    mat <- t(mat)
+  }
+
+  # https://stackoverflow.com/questions/31677923/set-0-point-for-pheatmap-in-r
+  color <- colorRampPalette(color_pal, space = "Lab")(palette_length)
+  # use floor and ceiling to deal with even/odd length pallettelengths
+  breaks <- c(seq(min(mat, na.rm = T), 0,
+                  length.out = ceiling(palette_length / 2) + 1),
+              seq(max(mat, na.rm = T) / palette_length, max(mat, na.rm = T),
+                  length.out = floor(palette_length / 2)))
+
+  pheatmap(mat, na_col = "black",
+           show_colnames = show_colnames, show_rownames = show_rownames,
+           cluster_cols = cluster_cols, cluster_rows = cluster_rows,
+           breaks = breaks, color = color)
+}
+
+
+bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
+                                  highlight_buckets = NULL, x_lab = NULL, title = element_blank()) {
+  df %>%
+    group_by({ { bucket_col } }) %>%
+    mutate(Position = ({ { x_value_col } } - min({ { x_value_col } }, na.rm = TRUE)) /
+      max({ { x_value_col } }, na.rm = TRUE),
+           Value.Average = mean({ { value_col } }, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(Bucket = { { bucket_col } },
+           Color = if_else({ { bucket_col } } %in% highlight_buckets,
+                           highlight_color, default_color)) %>%
+    ggplot() +
+    aes(x = Position, y = { { value_col } }, color = Color) +
+    geom_hline(yintercept = 0, color = default_color) +
+    geom_point(alpha = 1/3) +
+    geom_hline(aes(yintercept = Value.Average), color = "red") +
+    facet_grid(~Bucket) +
+    scale_x_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
+    scale_colour_identity() +
+    scale_y_continuous(limits = c(-2, 2), breaks = seq(-2, 2, 1)) +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.spacing = unit(0.25, "mm")) +
+    xlab(x_lab) +
+    ggtitle(title)
+}

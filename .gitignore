@@ -151,7 +151,7 @@ fabric.properties
 
 /.idea/
 /Output/
-/Data/External/
+/Data/*
 ~$*.xls*
 .Rproj.user
 .Rhistory

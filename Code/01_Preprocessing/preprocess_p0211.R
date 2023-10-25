@@ -9,7 +9,6 @@ library(ggplot2)
 library(limma)
 library(tibble)
 library(pheatmap)
-library(circlize)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -20,9 +19,9 @@ source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 source(here("Code", "preprocessing.R"))
 
-expression_data_dir <- here(external_data_dir, "Expression", "P0211")
+expression_data_dir <- here(input_data_dir, "P0211")
 output_data_dir <- output_data_base_dir
-plots_dir <- plots_base_dir
+plots_dir <- here(plots_base_dir, "Preprocessing", "P0211")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
@@ -33,6 +32,8 @@ p0211_raw <- read.table(here(expression_data_dir, "proteinGroups.txt"), sep="\t"
 p0211_meta <- read_excel(here(expression_data_dir, "metadata.xlsx"))
 
 # === Tidy Dataset ===
+state_cols <- c("Identified.In.All", "Identified.In.Some", "Potential.Contaminant", "Reverse",
+                "Only.Identified.By.Site", "Unidentified")
 
 p0211_expr_tidy <- p0211_raw %>%
   select(starts_with("Reporter.intensity.corrected"),
@@ -60,9 +61,7 @@ p0211_expr_tidy <- p0211_raw %>%
            !Potential.Contaminant & !Reverse & !Only.Identified.By.Site & !Identified.In.All) %>%
   ungroup() %>%
   select(Sample.ID, Sample.Name, CellLine.CustomId, CellLine.Name, CellLine.Replicate,
-         ProteinGroup.UniprotIDs, Protein.Expression,
-         Potential.Contaminant, Only.Identified.By.Site, Reverse,
-         Unidentified, Identified.In.All, Identified.In.Some)
+         ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols))
 
 # === Filter & Normalize Dataset ===
 
@@ -74,9 +73,10 @@ p0211_expr_processed <- p0211_expr_tidy %>%
                                            NA)) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   normalize_samples(Sample.Name, Protein.Expression.Log2, ProteinGroup.UniprotIDs,
-                    normalized_colname = "Protein.Expression.Normalized")
-# No Batch Effect removal, as Proteomics have been measured in one run
-# and defining batches as cell lines would remove differences between them
+                    normalized_colname = "Protein.Expression.Normalized") %>%
+  # No Batch Effect removal, as Proteomics have been measured in one run
+  # and defining batches as cell lines would remove differences between them
+  select(-all_of(state_cols))
 
 # === Annotation ===
 annotations <- p0211_expr_processed %>%
@@ -89,35 +89,33 @@ annotations <- p0211_expr_processed %>%
          "Protein.Uniprot.Accession", "Gene.Symbol") %>%
   drop_na() %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(-Protein.Uniprot.Accession) %>%
-  mapIds("SYMBOL", "UNIPROT",
-         "Gene.Symbol", "Protein.Uniprot.Accession") %>%
   get_chromosome_arms() %>%
-  filter(Gene.Chromosome %in% (1:22)) %>%
+  filter(Gene.Chromosome %in% (1:22)) %>% # Only use autosomal genes
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
-  add_count(ProteinGroup.UniprotIDs) %>%
-  filter(n == 1) # ToDo: Only temporary!
+  # Use the first annotated accession listed in protein groups for annotation
+  distinct(ProteinGroup.UniprotIDs, .keep_all = TRUE)
 
-# ToDo: Avoid duplicate rows, establish many-to-one mapping
 p0211_expr_annotated <- p0211_expr_processed %>%
   inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
              na_matches = "never", relationship = "many-to-one")
 
+# === Save Dataset ===
+write_parquet(p0211_expr_annotated, here(output_data_dir, 'expression_p0211.parquet'),
+              version = "2.6")
+
 # === Evaluation & Quality Control ===
-
 plot_protein_states <- function(df) {
-  state_cols <- c("Potential.Contaminant", "Only.Identified.By.Site", "Reverse",
-                 "Unidentified", "Identified.In.All", "Identified.In.Some")
-
   df %>%
     select(Sample.Name, all_of(state_cols)) %>%
     pivot_longer(all_of(state_cols), names_to = "Protein.State", values_to = "Count") %>%
+    mutate(Protein.State = factor(Protein.State, levels = state_cols)) %>%
     group_by(Sample.Name, Protein.State) %>%
     summarise(Count = sum(Count)) %>%
     ungroup() %>%
+    arrange(Protein.State) %>%
     ggplot() +
     aes(x = Sample.Name, y = Count, fill = Protein.State) +
-    geom_bar(stat = "identity") +
+    geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
     scale_y_continuous(expand = c(0, Inf)) +
     theme(axis.text.x.bottom = element_text(angle = -45, hjust = 0))
 }
@@ -129,38 +127,54 @@ plot_sample_expr <- function (df, value_col) {
     geom_boxplot()
 }
 
-protein_states <- plot_protein_states(p0211_expr_tidy)
-plot_expr_dist(p0211_expr_processed)
+plot_protein_states(p0211_expr_tidy) %>%
+  save_plot("p0211_protein_states.png")
+
+plot_expr_dist(p0211_expr_processed) %>%
+  save_plot("p0211_expression_distribution.png")
+
 p0211_expr_processed %>%
-  plot_sample_expr(Protein.Expression.Log2)
+  plot_sample_expr(Protein.Expression.Log2) %>%
+  save_plot("p0211_sample_distribution_non-norm.png")
+
 p0211_expr_processed %>%
-  plot_sample_expr(Protein.Expression.Normalized)
+  plot_sample_expr(Protein.Expression.Normalized) %>%
+  save_plot("p0211_sample_distribution_norm.png")
 
 p0211_expr_processed %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
-  plot_pca()
+  plot_pca() %>%
+  save_plot("p0211_pca_non-norm.png")
 
 p0211_expr_processed %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
-  plot_pca()
+  plot_pca() %>%
+  save_plot("p0211_pca_norm.png")
 
 mat_log2 <- p0211_expr_processed %>%
   select(Sample.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
   pivot_wider(names_from = Sample.Name, values_from = Protein.Expression.Log2) %>%
   column_to_rownames(var = "ProteinGroup.UniprotIDs")
 
-pheatmap(mat_log2, show_rownames = F,
-         scale = "row", na_col = "black", cluster_cols = T, cluster_rows = F,
+png(here(plots_dir, "p0211_heatmap_non-norm.png"),
+      width = 300, height = 300, units = "mm", res = 300)
+pheatmap(mat_log2, show_rownames = FALSE,
+         scale = "row", na_col = "black", cluster_cols = TRUE, cluster_rows = FALSE,
          color = colorRampPalette(c("blue", "white", "red"))(15))
+dev.off()
 
 mat_norm <- p0211_expr_processed %>%
   select(Sample.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
   pivot_wider(names_from = Sample.Name, values_from = Protein.Expression.Normalized) %>%
   column_to_rownames(var = "ProteinGroup.UniprotIDs")
 
-pheatmap(mat_norm, show_rownames = F,
-         scale = "row", na_col = "black", cluster_cols = T, cluster_rows = F,
+png(here(plots_dir, "p0211_heatmap_norm.png"),
+      width = 300, height = 300, units = "mm", res = 300)
+pheatmap(mat_norm, show_rownames = FALSE,
+         scale = "row", na_col = "black", cluster_cols = TRUE, cluster_rows = FALSE,
          color = colorRampPalette(c("blue", "white", "red"))(15))
+dev.off()
+
 
 p0211_expr_baseline <- p0211_expr_annotated %>%
   filter(CellLine.Name == "RPE1") %>%
@@ -174,48 +188,22 @@ p0211_expr_log2fc <- p0211_expr_annotated %>%
   summarize(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline) %>%
   ungroup()
 
-plot_log2fc_chr <- function(df, sample_id) {
-  df %>%
-    filter(Sample.ID == sample_id) %>%
-    group_by(Gene.Chromosome) %>%
-    mutate(Position = (Gene.StartPosition - min(Gene.StartPosition, na.rm = T)) / max(Gene.StartPosition, na.rm = T),
-           Log2FC.Average = mean(Log2FC, na.rm = TRUE)) %>%
-    ungroup() %>%
-    mutate(Color = if_else(Gene.Chromosome == 13, highlight_color, default_color)) %>%
-    ggplot() +
-    aes(x = Position, y = Log2FC, color = Color) +
-    geom_hline(yintercept = 0, color = default_color) +
-    geom_point(alpha = 0.3) +
-    geom_hline(aes(yintercept = Log2FC.Average), color = "red") +
-    facet_grid(~Gene.Chromosome) +
-    scale_x_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
-    scale_colour_identity() +
-    scale_y_continuous(limits = c(-2, 2), breaks = seq(-2, 2, 1)) +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.spacing = unit(0.25, "mm"))
+png(here(plots_dir, "p0211_log2fc_chr.png"),
+      width = 300, height = 100, units = "mm", res = 300)
+p0211_expr_log2fc %>%
+  bidirectional_heatmap(Log2FC, Sample.Name, Gene.Chromosome,
+                        transpose = TRUE, cluster_rows = TRUE)
+dev.off()
+
+for (sample in unique(p0211_expr_log2fc$Sample.ID)) {
+  title <- (p0211_expr_log2fc %>%
+    filter(Sample.ID == sample) %>%
+    distinct(Sample.Name))$Sample.Name
+
+  p0211_expr_log2fc %>%
+    filter(Sample.ID == sample) %>%
+    bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                          highlight_buckets = 13,
+                          x_lab = "Chromosome & Gene Position", title = title) %>%
+    save_plot(paste0("p0211_log2fc_chr_sample", sample, ".png"), height = 100)
 }
-
-p0211_expr_log2fc %>% plot_log2fc_chr(2)
-
-
-mat_log2fc <- p0211_expr_log2fc %>%
-  group_by(Sample.Name, Gene.Chromosome) %>%
-  summarize(Log2FC = mean(Log2FC, na.rm = T)) %>%
-  ungroup() %>%
-  pivot_wider(names_from = Sample.Name, values_from = Log2FC, id_cols = Gene.Chromosome) %>%
-  arrange(Gene.Chromosome) %>%
-  column_to_rownames(var = "Gene.Chromosome")
-
-# https://stackoverflow.com/questions/31677923/set-0-point-for-pheatmap-in-r
-paletteLength <- 100
-myColor <- colorRampPalette(biderectional_color_pal, space = "Lab")(paletteLength)
-# length(breaks) == length(paletteLength) + 1
-# use floor and ceiling to deal with even/odd length pallettelengths
-myBreaks <- c(seq(min(mat_log2fc, na.rm = T), 0, length.out=ceiling(paletteLength/2) + 1),
-              seq(max(mat_log2fc, na.rm = T)/paletteLength, max(mat_log2fc, na.rm = T), length.out=floor(paletteLength/2)))
-
-pheatmap(t(mat_log2fc), na_col = "black",
-         cluster_cols = F, cluster_rows = T,
-         breaks = myBreaks, color = myColor)
