@@ -169,3 +169,12 @@ mean_norm_rank <- function(df, value_col, group_col, id_col) {
                                     levels = { { id_col } }[order(AggregatedRank)])) %>%
     arrange(desc(AggregatedRank))
 }
+
+standardized_mean <- function (df, value_col, group_col, id_col) {
+  df %>%
+    group_by({{group_col}}) %>%
+    mutate(Scaled = scale({ { value_col } })[,1]) %>%
+    ungroup() %>%
+    group_by({{id_col}}) %>%
+    summarize(StandardizedMean = mean(Buffering.CellLine.Ratio, na.rm = TRUE))
+}

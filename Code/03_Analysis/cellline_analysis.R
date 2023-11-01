@@ -196,3 +196,25 @@ cat(capture.output(cellline_kendall_gene), file = here(reports_dir, "cellline_bu
     append = FALSE, sep = "\n")
 cat(capture.output(cellline_pearson_gene), file = here(reports_dir, "cellline_buffering_correlation_gene.txt"),
     append = TRUE, sep = "\n")
+
+# === Create aggregated Cell Line Ranking ===
+
+cellline_buf_rank <- cellline_buf_filtered_procan %>%
+  bind_rows(cellline_buf_filtered_depmap) %>%
+  mean_norm_rank(Rank, Dataset, CellLine.Name)
+
+cellline_buf_mean <- cellline_buf_filtered_procan %>%
+  bind_rows(cellline_buf_filtered_depmap) %>%
+  standardized_mean(Buffering.CellLine.Ratio, Dataset, CellLine.Name)
+
+cellline_buf_agg <- cellline_buf_rank %>%
+  inner_join(y = cellline_buf_mean, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never", unmatched = "error") %>%
+  rename(Buffering.CellLine.MeanNormRank = "AggregatedRank",
+         Buffering.CellLine.StandardizedMean = "StandardizedMean") %>%
+  write_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"), version = "2.6")
+
+write.xlsx(cellline_buf_agg, here(tables_base_dir, "cellline_buffering_agg.xlsx"),
+           colNames = TRUE)
+
+# ToDo: Visualize Top Aggregated results (bar chart)
