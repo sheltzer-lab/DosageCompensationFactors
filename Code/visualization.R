@@ -4,6 +4,7 @@ library(rlang)
 library(EnhancedVolcano)
 library(psych)
 library(corrplot)
+library(ggsignif)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -208,14 +209,21 @@ map_signif <- function (p) {
     )
 }
 
-jittered_boxplot <- function(df, group_col, value_col) {
+jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha = 0.5, jitter_width = 0.15) {
   df %>%
     ggplot() +
     aes(x = { { group_col } }, y = { { value_col } }) +
     geom_boxplot(outlier.shape = NA, color = "black") +
-    geom_jitter(fill = "darkgrey", color = "white",
-                shape = 21, alpha = 0.5, width = 0.15) +
-    coord_flip()
+  {
+    if (quo_is_null(enquo(color_col))) {
+      geom_jitter(fill = "darkgrey", color = "white",
+                  shape = 21, alpha = alpha, width = jitter_width)
+    } else {
+      geom_jitter(aes(color = { { color_col } }), alpha = alpha, width = jitter_width)
+    }
+  } +
+    coord_flip() +
+    scale_colour_gradientn(colours = biderectional_color_pal)
 }
 
 plot_pca <- function(pca) {
@@ -303,4 +311,52 @@ bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
           panel.spacing = unit(0.25, "mm")) +
     xlab(x_lab) +
     ggtitle(title)
+}
+
+sorted_violin_plot <- function(df, x, y) {
+  plot <- df %>%
+    add_count(get(x)) %>%
+    filter(n > 2) %>%
+    group_by(get(x)) %>%
+    mutate(Median = median({ { y } }),
+           Label = paste0(get(x), " (n=", n, ")")) %>%
+    ungroup() %>%
+    arrange(Median) %>%
+    mutate(Label = factor(Label, levels = unique(Label))) %>%
+    violin_plot(Label, { { y } })
+  plot <- plot +
+    xlab(x)
+
+  return(plot)
+}
+
+signif_violin_plot <- function(df, x, y, test = wilcox.test, test.args = NULL,
+                               signif_label = print_signif, title = NULL) {
+  df <- df %>%
+    add_count({ { x } }) %>%
+    filter(n > 2) %>%
+    group_by({ { x } }) %>%
+    mutate(Median = median({ { y } }),
+           Label = paste0({ { x } }, " (n=", n, ")")) %>%
+    ungroup() %>%
+    arrange(Median) %>%
+    mutate(Label = factor(Label, levels = unique(Label)))
+
+  plot <- df %>%
+    ggplot() +
+    aes(x = Label, y = { { y } }) +
+    geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
+                color = "#4080DB") +
+    geom_signif(
+      comparisons = list(levels(df$Label)),
+      map_signif_level = signif_label,
+      tip_length = 0, extend_line = -0.05,
+      test = test, test.args = test.args
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    xlab(as_name(enquo(x))) +
+    # ToDo: Use name of test as subtitle
+    ggtitle(title, subtitle = NULL)
+
+  return(plot)
 }

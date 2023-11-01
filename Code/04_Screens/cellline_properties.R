@@ -3,7 +3,6 @@ library(tidyr)
 library(dplyr)
 library(arrow)
 library(stringr)
-library(ggsignif)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -71,55 +70,6 @@ df_depmap <- df_model_depmap %>%
            CellLine.AneuploidyScore > aneuploidy_quant["25%"] ~ "Low",
            TRUE ~ "Very Low",
          ))
-
-
-sorted_violin_plot <- function(df, x, y) {
-  plot <- df %>%
-    add_count(get(x)) %>%
-    filter(n > 2) %>%
-    group_by(get(x)) %>%
-    mutate(Median = median({ { y } }),
-           Label = paste0(get(x), " (n=", n, ")")) %>%
-    ungroup() %>%
-    arrange(Median) %>%
-    mutate(Label = factor(Label, levels = unique(Label))) %>%
-    violin_plot(Label, { { y } })
-  plot <- plot +
-    xlab(x)
-
-  return(plot)
-}
-
-signif_violin_plot <- function(df, x, y, test = wilcox.test, test.args = NULL,
-                               signif_label = print_signif, title = NULL) {
-  df <- df %>%
-    add_count({ { x } }) %>%
-    filter(n > 2) %>%
-    group_by({ { x } }) %>%
-    mutate(Median = median({ { y } }),
-           Label = paste0({ { x } }, " (n=", n, ")")) %>%
-    ungroup() %>%
-    arrange(Median) %>%
-    mutate(Label = factor(Label, levels = unique(Label)))
-
-  plot <- df %>%
-    ggplot() +
-    aes(x = Label, y = { { y } }) +
-    geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
-                color = "#4080DB") +
-    geom_signif(
-      comparisons = list(levels(df$Label)),
-      map_signif_level = signif_label,
-      tip_length = 0, extend_line = -0.05,
-      test = test, test.args = test.args
-    ) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    xlab(as_name(enquo(x))) +
-    # ToDo: Use name of test as subtitle
-    ggtitle(title, subtitle = NULL)
-
-  return(plot)
-}
 
 plot_categorical_properties <- function (df, cols_categorical) {
   plots <- list()
