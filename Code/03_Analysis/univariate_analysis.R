@@ -47,6 +47,8 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'))
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
+expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet')) %>%
+  filter(Gene.Chromosome == 13)
 
 # === Define Processing Functions ===
 reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
@@ -123,7 +125,8 @@ datasets <- list(
   list(dataset = expr_buf_depmap, name = "DepMap"),
   list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
   list(dataset = buf_wgd, name = "DepMap-WGD"),
-  list(dataset = buf_no_wgd, name = "DepMap-NoWGD")
+  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
+  list(dataset = expr_buf_p0211, name = "P0211")
 )
 
 ## Define training data conditions
@@ -147,20 +150,29 @@ analysis_results <- data.frame(AnalysisID = character(),
 for (dataset in datasets) {
   for (analysis in analysis_conditions) {
     target_dir <- here(plots_dir, append(dataset$name, analysis$sub_dir))
-    dir.create(target_dir, recursive = TRUE)
+    analysis_id <- paste0(append(dataset$name, analysis$sub_dir), collapse = "_")
 
-    analysis_results <- dataset$dataset %>%
-      run_analysis(buffering_class_col = get(analysis$buffering),
-                   filter_func = analysis$filter) %>%
-      plot_roc_auc_summary(target_dir, "buffering-factors_roc-auc.png") %>%
-      mutate(AnalysisID = paste0(append(dataset$name, analysis$sub_dir), collapse = "_")) %>%
-      bind_rows(analysis_results)
+    suppressWarnings({dir.create(target_dir, recursive = TRUE)})
+    message("Univariate ROC AUC Analysis: ", analysis_id)
+
+    tryCatch({
+      suppressMessages({
+        analysis_results <- dataset$dataset %>%
+          run_analysis(buffering_class_col = get(analysis$buffering),
+                       filter_func = analysis$filter) %>%
+          plot_roc_auc_summary(target_dir, "buffering-factors_roc-auc.png") %>%
+          mutate(AnalysisID = analysis_id) %>%
+          bind_rows(analysis_results)
+      })
+    }, error = function(e) {
+      warning("An error occured when analyzing ", analysis_id)
+    })
   }
 }
 
 ## Create aggregated ranking between methods
 rank_gain <- analysis_results %>%
-  filter(grepl("Gain", AnalysisID) & !grepl("WGD", AnalysisID)) %>%
+  filter(grepl("Gain", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
                  AnalysisID, DosageCompensation.Factor) %>%
   vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
@@ -170,7 +182,7 @@ rank_gain <- analysis_results %>%
 
 
 rank_loss <- analysis_results %>%
-  filter(grepl("Loss", AnalysisID) & !grepl("WGD", AnalysisID)) %>%
+  filter(grepl("Loss", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
                  AnalysisID, DosageCompensation.Factor) %>%
   vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,

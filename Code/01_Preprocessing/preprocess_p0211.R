@@ -97,7 +97,9 @@ annotations <- p0211_expr_processed %>%
 
 p0211_expr_annotated <- p0211_expr_processed %>%
   inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
-             na_matches = "never", relationship = "many-to-one")
+             na_matches = "never", relationship = "many-to-one") %>%
+  unite("UniqueId", c("Sample.ID", "Protein.Uniprot.Accession"),
+        sep = '_', remove = FALSE)
 
 ## Add Copy Number Metadata required for DC analysis
 id_cols <- c("Sample.ID", "Gene.Symbol")
