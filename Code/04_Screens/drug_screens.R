@@ -120,7 +120,7 @@ df_sensitivity_agg %>%
   mutate(Label = fct_reorder(Label, desc(Corr.Sensitivity_Buffering))) %>%
   arrange(Buffering.CellLine.MeanNormRank) %>%
   jittered_boxplot(Label, Drug.MFI.Log2FC, Buffering.CellLine.MeanNormRank,
-                   alpha = 3/5, jitter_width = 0.25) %>%
+                   alpha = 3/4, jitter_width = 0.25) %>%
   save_plot("correlation_buffering_sensitivity_top.png", width = 300)
 
 df_sensitivity_agg %>%
@@ -128,11 +128,12 @@ df_sensitivity_agg %>%
   mutate(Label = paste0(Drug.Name, " (ρ = ", format(round(Corr.Sensitivity_Buffering, 3),
                                                    nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, Corr.Sensitivity_Buffering)) %>%
+  arrange(Buffering.CellLine.MeanNormRank) %>%
   jittered_boxplot(Label, Drug.MFI.Log2FC, Buffering.CellLine.MeanNormRank,
                    alpha = 3/4, jitter_width = 0.25) %>%
   save_plot("correlation_buffering_sensitivity_bot.png", width = 300)
 
-# Scatterplot visualization of selected drugs
+# Scatter- & Violin-plot visualization of selected drugs
 interesting_drugs <- c("REGORAFENIB", "IDASANUTLIN", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749")
 
 for (drug in interesting_drugs) {
@@ -143,7 +144,7 @@ for (drug in interesting_drugs) {
     scatter_plot_regression(Buffering.CellLine.MeanNormRank,
                           Drug.MFI.Log2FC,
                           Drug.MFI.Log2FC ~ Buffering.CellLine.MeanNormRank,
-                          point_size = 1, label_coords = c(0.5, -2)) %>%
+                          point_size = 2, label_coords = c(0.5, -2)) %>%
     save_plot(paste0("buffering_sensitivity_", drug, "_scatterplot.png"))
 }
 

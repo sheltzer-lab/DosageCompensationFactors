@@ -5,6 +5,7 @@ library(EnhancedVolcano)
 library(psych)
 library(corrplot)
 library(ggsignif)
+library(viridisLite)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -111,11 +112,26 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
                      force = 2, max.overlaps = 20)
 }
 
+# Get density of points in 2 dimensions.
+# https://slowkow.com/notes/ggplot2-color-by-density/
+# @param x A numeric vector.
+# @param y A numeric vector.
+# @param n Create a square n by n grid to compute density.
+# @return The density within each square.
+get_density <- function(x, y, ...) {
+  dens <- MASS::kde2d(x, y, ...)
+  ix <- findInterval(x, dens$x)
+  iy <- findInterval(y, dens$y)
+  ii <- cbind(ix, iy)
+  return(dens$z[ii])
+}
+
 scatter_plot_regression <- function(df, x_col, y_col, formula,
                                     label_coords = c(0, 0), title = NULL, point_size = 0.3) {
   df <- df %>%
     select({ { x_col } }, { { y_col } }) %>%
-    drop_na()
+    drop_na() %>%
+    mutate(Density = get_density({ { x_col } }, { { y_col } }, n = 100))
 
   regression <- lm(formula, df)
   pred.int <- predict(regression, interval = "prediction")
@@ -126,9 +142,8 @@ scatter_plot_regression <- function(df, x_col, y_col, formula,
 
   regression_plot <- df %>%
     ggplot() +
-    aes(x = { { x_col } }, y = { { y_col } }) +
-    geom_point(alpha = 0.3, size = point_size) +
-    geom_density_2d(color = "white", alpha = 0.6, linewidth = 0.4) +
+    aes(x = { { x_col } }, y = { { y_col } }, color = Density) +
+    geom_point(alpha = 0.8, size = point_size) +
     stat_smooth(method = lm, color = "blue") +
     geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
     geom_line(aes(y = upr), color = "red", linetype = "dashed") +
@@ -137,6 +152,7 @@ scatter_plot_regression <- function(df, x_col, y_col, formula,
                                     "* x +", format(round(intercept, 5), nsmall = 5),
                                     ", R² = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
                       )) +
+    scale_colour_viridis_c(option = "D", direction = 1) +
     xlab(quo_name(enquo(x_col))) +
     ylab(quo_name(enquo(y_col))) +
     ggtitle(title)
@@ -223,7 +239,8 @@ jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha =
       }
     } +
     coord_flip() +
-    scale_colour_gradientn(colours = biderectional_color_pal)
+    scale_colour_viridis_c(option = "D", direction = 1)
+    #scale_color_gradientn(colors = biderectional_color_pal, space = "Lab")
 }
 
 plot_pca <- function(pca) {

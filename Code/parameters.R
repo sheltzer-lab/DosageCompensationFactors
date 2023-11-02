@@ -1,5 +1,6 @@
 library(ggplot2)
 library(RColorBrewer)
+library(viridisLite)
 
  # === Set UTF-8 Encoding ===
 options(encoding = "utf-8")
@@ -26,6 +27,7 @@ default_color <- "darkgrey"
 highlight_color <- "#66CCB4"
 unidirectional_color_pal <- brewer.pal(5, "Greens")
 biderectional_color_pal <- rev(brewer.pal(5, "RdBu"))
+biderectional_color_pal_viridis <- viridis(n = 5, option = "D", direction = 1)
 categorical_color_pal <- brewer.pal(12, "Paired")
 
 # === Dosage Compensation Factors ===
