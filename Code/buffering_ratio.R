@@ -4,12 +4,14 @@ library(ggplot2)
 
 buffering_ratio <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
   br <- log2(cn_var / cn_base) - log2(expr_var / expr_base)
-  ifelse(cn_var > cn_base, br, -br)
+  br <- ifelse(cn_var > cn_base, br, -br)
+  ifelse(is.finite(br), br, NA)
 }
 
 buffering_ratio_old <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
   br <- 1 - (expr_var / expr_base) * (cn_base / cn_var)
-  ifelse(cn_var > cn_base, br, -br)
+  br <- ifelse(cn_var > cn_base, br, -br)
+  ifelse(is.finite(br), br, NA)
 }
 
 scaling_factor <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
