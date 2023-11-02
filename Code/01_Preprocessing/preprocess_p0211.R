@@ -99,9 +99,32 @@ p0211_expr_annotated <- p0211_expr_processed %>%
   inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
              na_matches = "never", relationship = "many-to-one")
 
-# === Save Dataset ===
-write_parquet(p0211_expr_annotated, here(output_data_dir, 'expression_p0211.parquet'),
-              version = "2.6")
+## Add Copy Number Metadata required for DC analysis
+id_cols <- c("Sample.ID", "Gene.Symbol")
+cn_cols <- c("Gene.CopyNumber", "Gene.Chromosome", "Gene.ChromosomeArm", "Gene.ChromosomeBand",
+             "ChromosomeArm.CNA", "Gene.StartPosition", "Gene.EndPosition",
+             "CellLine.Ploidy", "CellLine.WGD", "CellLine.AneuploidyScore")
+
+p0211_copy_number <- p0211_expr_annotated %>%
+  mutate(Gene.CopyNumber = NA,    # ToDo: Ask for CN data
+         CellLine.Ploidy = 2L,
+         CellLine.WGD = 0L,
+         ChromosomeArm.CNA = case_when(
+           CellLine.Name == "RM13" & Gene.Chromosome == 13 ~ -1L,
+           CellLine.Name == "Rtr13" & Gene.Chromosome == 13 ~ +1L,
+           TRUE ~ 0L
+         ),
+         CellLine.AneuploidyScore = abs(ChromosomeArm.CNA)*2L) %>%
+  select(all_of(id_cols), all_of(cn_cols))
+
+
+# === Save Datasets ===
+p0211_expr_annotated %>%
+  select(-any_of(cn_cols)) %>%
+  write_parquet(here(output_data_dir, 'expression_p0211.parquet'), version = "2.6")
+
+p0211_copy_number %>%
+  write_parquet(here(output_data_dir, 'copy_number_p0211.parquet'), version = "2.6")
 
 # === Evaluation & Quality Control ===
 plot_protein_states <- function(df) {

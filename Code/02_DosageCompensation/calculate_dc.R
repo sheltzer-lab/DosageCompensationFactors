@@ -30,10 +30,12 @@ copy_number_wgd <- read_parquet(here(output_data_dir, "copy_number_wgd.parquet")
   select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
 copy_number_no_wgd <- read_parquet(here(output_data_dir, "copy_number_no-wgd.parquet")) %>%
   select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
+copy_number_p0211 <- read_parquet(here(output_data_dir, 'copy_number_p0211.parquet'))
 
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_renorm.parquet"))
+expr_p0211 <- read_parquet(here(output_data_dir, 'expression_p0211.parquet'))
 
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 
@@ -78,24 +80,24 @@ calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col
                unmatched = "error", na_matches = "never", relationship = "many-to-one")
 }
 
-filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col) {
+filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col, min_samples = 10) {
   filtered <- df %>%
     group_by({ { gene_col } }, { { chr_arm_cna_col } }) %>%
     mutate(Samples = sum(!is.na({ { expr_col } }))) %>%
     group_by({ { gene_col } }) %>%
-    filter(all(Samples > 10)) %>%
+    filter(all(Samples >= min_samples)) %>%
     select(-Samples) %>%
     ungroup()
 
   return(filtered)
 }
 
-build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId") {
+build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId", min_samples = 10) {
   test <- df %>%
     inner_join(y = df_copy_number, by = c(cellline_col, "Gene.Symbol"),
                na_matches = "never", relationship = "many-to-one") %>%
     # ToDo: Evaluate if filtering might be unneccessary for gene-level dosage compensation analysis
-    filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
+    filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = min_samples) %>%
     # Note: Chromosome arm CNA based on basal (rounded) ploidy of cell line
     mutate(ChromosomeArm.CopyNumber.Baseline = round(CellLine.Ploidy),
            ChromosomeArm.CopyNumber = round(CellLine.Ploidy) + ChromosomeArm.CNA) %>%
@@ -154,6 +156,11 @@ buf_wgd <- expr_depmap %>%
 buf_no_wgd <- expr_depmap %>%
   build_dataset(copy_number_no_wgd) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap_no-wgd.parquet'), version = "2.6")
+
+## P0211
+expr_buf_p0211 <- expr_p0211 %>%
+  build_dataset(copy_number_p0211, cellline_col = "Sample.ID", min_samples = 2) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'), version = "2.6")
 
 # === Evaluation ===
 ## Copy Number
