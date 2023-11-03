@@ -63,18 +63,46 @@ reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_col
                  values_to = "DosageCompensation.Factor.Value")
 }
 
+roc_silent <- function(response, predictor, factor = "") {
+  if (length(response) == 0) return(NA)
+  if (length(predictor) == 0) return(NA)
+  if (all(is.na(response))) return(NA)
+  if (all(is.na(predictor))) return(NA)
+
+  tryCatch({
+    return(roc(response, predictor, na.rm = TRUE, quiet = TRUE))
+  }, error = function(e) {
+    warning("An error occured when analyzing factor ", factor, "\nError message: ", e)
+    return(NA)
+  })
+}
+
+auc_na <- function (roc) {
+  if (!is.list(roc)) return(NA)
+  return(auc(roc, partial.auc.correct = TRUE))
+}
+
 determine_rocs <- function(df) {
   df %>%
     group_by(DosageCompensation.Factor) %>%
     group_map(~list(factor = .y$DosageCompensation.Factor,
-                    roc = roc(.x$Buffered, .x$DosageCompensation.Factor.Value, na.rm = TRUE)), .keep = TRUE)
+                    roc = roc_silent(.x$Buffered, .x$DosageCompensation.Factor.Value,
+                                     factor = .y$DosageCompensation.Factor),
+                    observations = sum(!is.na(.x$DosageCompensation.Factor.Value))),
+              .keep = TRUE)
 }
 
 summarize_roc_auc <- function(factor_rocs) {
+  if (length(factor_rocs) == 0) return(data.frame(DosageCompensation.Factor = factor(),
+                                                  DosageCompensation.Factor.Observations = integer(),
+                                                  DosageCompensation.Factor.ROC.AUC = double()))
+
   data.frame(t(sapply(factor_rocs,
-                                         \(x) list(DosageCompensation.Factor = x$factor,
-                                                   DosageCompensation.Factor.ROC.AUC = auc(x$roc)) %>% unlist()))) %>%
+                      \(x) list(DosageCompensation.Factor = x$factor,
+                                DosageCompensation.Factor.Observations = x$observations,
+                                DosageCompensation.Factor.ROC.AUC = auc_na(x$roc)) %>% unlist()))) %>%
     mutate(DosageCompensation.Factor.ROC.AUC = as.numeric(DosageCompensation.Factor.ROC.AUC),
+           DosageCompensation.Factor.Observations = as.integer(DosageCompensation.Factor.Observations),
            DosageCompensation.Factor = factor(DosageCompensation.Factor,
                                               levels = DosageCompensation.Factor[order(DosageCompensation.Factor.ROC.AUC)])) %>%
     arrange(DosageCompensation.Factor.ROC.AUC)
@@ -90,7 +118,7 @@ plot_roc_auc_summary <- function(roc_auc_summary, plots_dir, filename) {
 }
 
 roc_auc_summary_score <- function(df) {
-  mean(abs(df$DosageCompensation.Factor.ROC.AUC - 0.5))
+  mean(abs(df$DosageCompensation.Factor.ROC.AUC - 0.5), na.rm = TRUE)
 }
 
 plot_roc_curves <- function(factor_rocs, dir) {
@@ -98,6 +126,8 @@ plot_roc_curves <- function(factor_rocs, dir) {
   dir.create(dir, recursive = TRUE)
 
   for (factor_roc in factor_rocs) {
+    if (is.na(factor_roc$roc)) next
+
     png(here(dir, paste0(factor_roc$factor, ".png")),
         width = 200, height = 200, units = "mm", res = 200)
     plot(factor_roc$roc, main = factor_roc$factor,
@@ -111,11 +141,11 @@ plot_roc_curves <- function(factor_rocs, dir) {
 
 run_analysis <- function(dataset, buffering_class_col, filter_func, df_factors = dc_factors) {
   dataset %>%
-      filter_func() %>%
-      add_factors(df_factors) %>%
-      reshape_factors({ { buffering_class_col } }) %>%
-      determine_rocs() %>%
-      summarize_roc_auc()
+    filter_func() %>%
+    add_factors(df_factors) %>%
+    reshape_factors({ { buffering_class_col } }) %>%
+    determine_rocs() %>%
+    summarize_roc_auc()
 }
 
 # === Calculate ROC for all factors in all datasets ===
@@ -152,21 +182,15 @@ for (dataset in datasets) {
     target_dir <- here(plots_dir, append(dataset$name, analysis$sub_dir))
     analysis_id <- paste0(append(dataset$name, analysis$sub_dir), collapse = "_")
 
-    suppressWarnings({dir.create(target_dir, recursive = TRUE)})
+    suppressWarnings({ dir.create(target_dir, recursive = TRUE) })
     message("Univariate ROC AUC Analysis: ", analysis_id)
 
-    tryCatch({
-      suppressMessages({
-        analysis_results <- dataset$dataset %>%
-          run_analysis(buffering_class_col = get(analysis$buffering),
-                       filter_func = analysis$filter) %>%
-          plot_roc_auc_summary(target_dir, "buffering-factors_roc-auc.png") %>%
-          mutate(AnalysisID = analysis_id) %>%
-          bind_rows(analysis_results)
-      })
-    }, error = function(e) {
-      warning("An error occured when analyzing ", analysis_id)
-    })
+    analysis_results <- dataset$dataset %>%
+      run_analysis(buffering_class_col = get(analysis$buffering),
+                   filter_func = analysis$filter) %>%
+      plot_roc_auc_summary(target_dir, "buffering-factors_roc-auc.png") %>%
+      mutate(AnalysisID = analysis_id) %>%
+      bind_rows(analysis_results)
   }
 }
 
@@ -345,7 +369,7 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
-n <- 1000
+n <- 100
 sample_prop <- 0.9
 
 bootstrap_chr_gain <- expr_buf_procan %>%
@@ -418,6 +442,7 @@ ggsave(here(procan_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"
 ## Investigate correlation of ROC AUC of factors
 png(here(procan_comparison_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_gain <- bootstrap_chr_gain %>%
+  select(-DosageCompensation.Factor.Observations) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -425,6 +450,7 @@ dev.off()
 
 png(here(procan_comparison_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_loss <- bootstrap_chr_loss %>%
+  select(-DosageCompensation.Factor.Observations) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -432,6 +458,7 @@ dev.off()
 
 png(here(procan_comparison_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_gain <- bootstrap_cn_gain %>%
+  select(-DosageCompensation.Factor.Observations) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -439,6 +466,7 @@ dev.off()
 
 png(here(procan_comparison_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_loss <- bootstrap_cn_loss %>%
+  select(-DosageCompensation.Factor.Observations) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
