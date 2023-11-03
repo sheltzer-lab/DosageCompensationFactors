@@ -369,31 +369,28 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
-n <- 100
-sample_prop <- 0.9
-
 bootstrap_chr_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
                             filter_func = filter_arm_gain,
-                            n = n, sample_prop = sample_prop) %>%
+                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Chromosome Arm Gain")
 
 bootstrap_chr_loss <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
                             filter_func = filter_arm_loss,
-                            n = n, sample_prop = sample_prop) %>%
+                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Chromosome Arm Loss")
 
 bootstrap_cn_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_gain,
-                            n = n, sample_prop = sample_prop) %>%
+                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Gene Copy Number Gain")
 
 bootstrap_cn_loss <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
                             filter_func = filter_cn_loss,
-                            n = n, sample_prop = sample_prop) %>%
+                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Gene Copy Number Loss")
 
 ## Checkpoint: Save and load bootstrapped results before continuing

@@ -12,6 +12,9 @@ p_threshold <- 0.05       # p-value threshold, Default: 0.05
 
 noisefloor_percentile_threshold <- 0.0001   # Percentile threshold to determine value of noise floor, Default: 0.0001 (0.01%)
 
+# === Bootstrap Settings ===
+bootstrap_n <- 1000
+bootstrap_sample_prop <- 0.9
 
 # === Define Directories ===
 input_data_dir <- here("Data")
