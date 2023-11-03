@@ -12,6 +12,7 @@ library(skimr)
 library(cowplot)
 library(broom)
 library(corrplot)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -21,6 +22,7 @@ source(here("Code", "buffering_ratio.R"))
 source(here("Code", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
+tables_dir <- tables_base_dir
 plots_dir <- here(plots_base_dir, "Univariate")
 procan_plots_dir <- here(plots_base_dir, "Univariate", "ProCan")
 procan_chr_plots_dir <- here(procan_plots_dir, "ChromosomeArm-Level")
@@ -110,8 +112,10 @@ summarize_roc_auc <- function(factor_rocs) {
 
 plot_roc_auc_summary <- function(roc_auc_summary, plots_dir, filename) {
   roc_auc_summary %>%
+    drop_na() %>%
     vertical_bar_chart(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC,
-                       value_lab = "ROC AUC") %>%
+                       color_col = DosageCompensation.Factor.Observations,
+                       value_lab = "ROC AUC", color_lab = "Observations") %>%
     save_plot(filename = filename, dir = plots_dir, height = 200, width = 180)
 
   return(roc_auc_summary)
@@ -176,7 +180,9 @@ analysis_conditions <- list(
 ## Run analysis
 analysis_results <- data.frame(AnalysisID = character(),
                                DosageCompensation.Factor = character(),
-                               DosageCompensation.Factor.ROC.AUC = numeric())
+                               DosageCompensation.Factor.ROC.AUC = numeric(),
+                               DosageCompensation.Factor.Observations = integer())
+
 for (dataset in datasets) {
   for (analysis in analysis_conditions) {
     target_dir <- here(plots_dir, append(dataset$name, analysis$sub_dir))
@@ -198,7 +204,8 @@ for (dataset in datasets) {
 rank_gain <- analysis_results %>%
   filter(grepl("Gain", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
-                 AnalysisID, DosageCompensation.Factor) %>%
+                 AnalysisID, DosageCompensation.Factor)
+rank_gain %>%
   vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
@@ -208,7 +215,8 @@ rank_gain <- analysis_results %>%
 rank_loss <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
-                 AnalysisID, DosageCompensation.Factor) %>%
+                 AnalysisID, DosageCompensation.Factor)
+rank_loss %>%
   vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
@@ -217,7 +225,8 @@ rank_loss <- analysis_results %>%
 rank_loss_wgd <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & grepl("DepMap-WGD", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
-                 AnalysisID, DosageCompensation.Factor) %>%
+                 AnalysisID, DosageCompensation.Factor)
+rank_loss_wgd %>%
   vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
@@ -226,11 +235,24 @@ rank_loss_wgd <- analysis_results %>%
 rank_loss_no_wgd <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & grepl("DepMap-NoWGD", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
-                 AnalysisID, DosageCompensation.Factor) %>%
+                 AnalysisID, DosageCompensation.Factor)
+rank_loss_no_wgd %>%
   vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss_no-wgd.png", height = 200, width = 180)
+
+## Save results
+write.xlsx(analysis_results, here(tables_base_dir, "dosage_compensation_univariate.xlsx"),
+           colNames = TRUE)
+write.xlsx(rank_gain, here(tables_base_dir, "dosage_compensation_aggregated-rank_gain.xlsx"),
+           colNames = TRUE)
+write.xlsx(rank_loss, here(tables_base_dir, "dosage_compensation_aggregated-rank_loss.xlsx"),
+           colNames = TRUE)
+write.xlsx(rank_loss_wgd, here(tables_base_dir, "dosage_compensation_aggregated-rank_loss_WGD.xlsx"),
+           colNames = TRUE)
+write.xlsx(rank_loss_no_wgd, here(tables_base_dir, "dosage_compensation_aggregated-rank_loss_NoWGD.xlsx"),
+           colNames = TRUE)
 
 # === Statistically compare results ===
 
@@ -244,6 +266,7 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
 
   results <- data.frame(DosageCompensation.Factor = character(),
                         DosageCompensation.Factor.ROC.AUC = numeric(),
+                        DosageCompensation.Factor.Observations = integer(),
                         Bootstrap.Sample = integer())
   pb <- txtProgressBar(min = 0, max = n, style = 3)
   for (i in 1:n) {
@@ -395,13 +418,22 @@ bootstrap_cn_loss <- expr_buf_procan %>%
 
 ## Checkpoint: Save and load bootstrapped results before continuing
 write_parquet(bootstrap_chr_gain, here(output_data_dir, 'bootstrap_univariate_procan_chrgain.parquet'),
-              version = "2.6")
+              version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_chr_gain.xlsx"),
+             colNames = TRUE)
 write_parquet(bootstrap_chr_loss, here(output_data_dir, 'bootstrap_univariate_procan_chrloss.parquet'),
-              version = "2.6")
+              version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_chr_loss.xlsx"),
+             colNames = TRUE)
 write_parquet(bootstrap_cn_gain, here(output_data_dir, 'bootstrap_univariate_procan_cngain.parquet'),
-              version = "2.6")
+              version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_gene-cn_gain.xlsx"),
+             colNames = TRUE)
 write_parquet(bootstrap_cn_loss, here(output_data_dir, 'bootstrap_univariate_procan_cnloss.parquet'),
-              version = "2.6")
+              version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_gene-cn_loss.xlsx"),
+             colNames = TRUE)
+
 bootstrap_chr_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_chrgain.parquet"))
 bootstrap_chr_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_chrloss.parquet"))
 bootstrap_cn_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_cngain.parquet"))
