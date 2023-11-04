@@ -49,8 +49,7 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'))
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
-expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet')) %>%
-  filter(Gene.Chromosome == 13)
+expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
 
 # === Define Processing Functions ===
 reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
@@ -210,7 +209,6 @@ rank_gain %>%
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_gain.png", height = 200, width = 180)
-
 
 rank_loss <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%

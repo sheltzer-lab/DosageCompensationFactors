@@ -35,6 +35,7 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffering_matched_renorm.parquet'))
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
+expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
 
 # === Define Functions ===
 
@@ -127,14 +128,18 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
     # ToDo: Only use imputation on training set
     impute_na() %>%
+    select(where(~!all(is.na(.x)))) %>% # Remove empty factors
     # rebalance_binary(buffered, target_balance = target_balance) %>%
     shuffle_rows()
 
   # Split training & test data
+  # ToDo: Ensure that observations from every class are included (Buffered & Scaling)
   train_size <- ceiling(nrow(df_prep) * training_set_ratio)
   test_size <- nrow(df_prep) - train_size
   datasets <- list(training = df_prep[1:train_size,],
                    test = df_prep[(train_size + 1):(train_size + test_size),])
+
+  if (train_size == 0) return(NA)
 
   return(datasets)
 }
@@ -146,10 +151,18 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
   dir.create(plots_dir, recursive = TRUE)
   dir.create(models_dir, recursive = TRUE)
 
+  model_filename <- paste0("model_", model_name, "_", paste0(sub_dir, collapse = "_"), ".rds")
+
   # Prepare dataset for training and split into training and test set
   datasets <- prepare_datasets(dataset, { { buffering_class_col } }, filter_func,
                                factor_cols = factor_cols, training_set_ratio = 0.8, target_balance = 0.7)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
+
+  # Check if datasets are empty
+  if (!is.list(datasets)) {
+    setTxtProgressBar(prog_bar, prog_bar$getVal() + 2)
+    return(NA)
+  }
 
   # Train model
   model <- caret::train(buffered ~ .,
@@ -158,11 +171,8 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
                         trControl = train_control,
                         metric = "ROC")
 
-  # Add datasets to model
-  model$datasets <- datasets
-
   # Save Model
-  model_filename <- paste0("model_", model_name, "_", paste0(sub_dir, collapse = "_"), ".rds")
+  model$datasets <- datasets  # Add datasets to model
   saveRDS(model, here(models_dir, model_filename))
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
@@ -197,11 +207,12 @@ models <- list(
 
 ## Define datasets to train models on
 datasets <- list(
-  list(dataset = expr_buf_procan, name = "ProCan"),
-  list(dataset = expr_buf_depmap, name = "DepMap"),
-  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
-  list(dataset = buf_wgd, name = "DepMap-WGD"),
-  list(dataset = buf_no_wgd, name = "DepMap-NoWGD")
+  # list(dataset = expr_buf_procan, name = "ProCan"),
+  # list(dataset = expr_buf_depmap, name = "DepMap"),
+  # list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
+  # list(dataset = buf_wgd, name = "DepMap-WGD"),
+  # list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
+  list(dataset = expr_buf_p0211, name = "P0211")
 )
 
 ## Define training data conditions
@@ -245,7 +256,11 @@ for (model in models) {
                                   prog_bar = pb)
         }) })
       result_id <- paste0(analysis$sub_dir, collapse = "_")
-      analysis_results[[result_id]] <- results
+      if (is.list(results))
+        analysis_results[[result_id]] <- results
+      else
+        warning("No results for analysis! Model: ", model$modelName,
+                ", Dataset: ", dataset$name, ", Analysis: ", result_id)
     }
     rocs <- lapply(analysis_results, \(x) x$roc)
     rocs_to_df(rocs) %>%
