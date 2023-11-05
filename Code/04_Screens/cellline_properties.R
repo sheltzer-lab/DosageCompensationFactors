@@ -151,6 +151,7 @@ df_depmap %>%
   save_plot("cellline_wgd_depmap.png")
 df_depmap %>%
   filter(CellLine.WGD == 1 | CellLine.WGD == 2) %>%
+  mutate(CellLine.WGD = factor(CellLine.WGD, levels = c(1,2))) %>%
   signif_violin_plot(CellLine.WGD, Buffering.CellLine.Ratio,
                      test = t.test) %>%
   save_plot("cellline_wgd_levels_depmap.png")
@@ -181,47 +182,47 @@ df_depmap %>%
 ## Age
 df_procan %>%
   scatter_plot_regression(age_at_sampling, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ age_at_sampling,
-                          label_coords = c(50, -0.4)) %>%
+                          label_coords = c(50, -0.4), point_size = 1) %>%
   save_plot("cellline_age_procan.png")
 df_depmap %>%
   scatter_plot_regression(Age, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ Age,
-                          label_coords = c(50, -0.2)) %>%
+                          label_coords = c(50, -0.2), point_size = 1) %>%
   save_plot("cellline_age_depmap.png")
 
 ## Ploidy
 df_procan %>%
   scatter_plot_regression(ploidy_wes, Buffering.CellLine.Ratio,  Buffering.CellLine.Ratio ~ ploidy_wes,
-                          label_coords = c(3.5, 0.7)) %>%
+                          label_coords = c(3.5, 0.7), point_size = 1) %>%
   save_plot("cellline_ploidy_procan.png")
 df_depmap %>%
   scatter_plot_regression(CellLine.Ploidy, Buffering.CellLine.Ratio,  Buffering.CellLine.Ratio ~ CellLine.Ploidy,
-                          label_coords = c(5, 0.2)) %>%
+                          label_coords = c(5, 0.2), point_size = 1) %>%
   save_plot("cellline_ploidy_depmap.png")
 
 ## Mutational burden
 df_procan %>%
   scatter_plot_regression(mutational_burden, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ mutational_burden,
-                          label_coords = c(400, -0.4)) %>%
+                          label_coords = c(400, -0.4), point_size = 1) %>%
   save_plot("cellline_mutations_procan.png")
 
 ## Aneuploidy score
 df_procan %>%
   scatter_plot_regression(CellLine.AneuploidyScore, Buffering.CellLine.Ratio,
                           Buffering.CellLine.Ratio ~ CellLine.AneuploidyScore,
-                          label_coords = c(25, 0.8)) %>%
+                          label_coords = c(25, 0.8), point_size = 1) %>%
   save_plot("cellline_aneuploidy_procan.png")
 df_depmap %>%
   scatter_plot_regression(CellLine.AneuploidyScore, Buffering.CellLine.Ratio,
                           Buffering.CellLine.Ratio ~ CellLine.AneuploidyScore,
-                          label_coords = c(25, 0.3)) %>%
+                          label_coords = c(25, 0.3), point_size = 1) %>%
   save_plot("cellline_aneuploidy_depmap.png")
 
 ## Misc
 df_procan %>%
   scatter_plot_regression(age_at_sampling, ploidy_wes, ploidy_wes ~ age_at_sampling,
-                          label_coords = c(40, 1))
+                          label_coords = c(40, 1), point_size = 1)
 
 ### Ploidy measurements differ across datasets
 df_procan %>%
   scatter_plot_regression(ploidy_wes, CellLine.Ploidy, CellLine.Ploidy ~ ploidy_wes,
-                          label_coords = c(3, 6))
+                          label_coords = c(3, 6), point_size = 1)
