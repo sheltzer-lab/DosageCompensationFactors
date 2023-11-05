@@ -116,7 +116,7 @@ p0211_copy_number <- p0211_expr_annotated %>%
            CellLine.Name == "Rtr13" & Gene.Chromosome == 13 ~ +1L,
            TRUE ~ 0L
          ),
-         CellLine.AneuploidyScore = abs(ChromosomeArm.CNA)*2L) %>%
+         CellLine.AneuploidyScore = abs(ChromosomeArm.CNA)*2L + 1) %>% # RPE-1 is pseudo-disomic, trisomy on 10q
   select(all_of(id_cols), all_of(cn_cols))
 
 
