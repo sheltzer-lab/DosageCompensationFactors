@@ -94,9 +94,20 @@ explain_model <- function(model, dir, filename = "importance.png") {
   }
 }
 
-evaluate_model <- function(model, test_set, dir, filename = "ROC-Curve.png") {
-  test_predicted_prob <- predict(model, test_set, type = "prob")
-  model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]), na.rm = TRUE)
+evaluate_model <- function(model, test_set, dir, filename = "ROC-Curve.png", cv_eval = FALSE) {
+  if (cv_eval == TRUE) {
+    # Use results from cross validation generated during training for evaluation
+    # Get ROC curve across all folds of k-fold CV for model with best parameters
+    cv_best_preds <- model$pred %>%
+      semi_join(y = model$bestTune)
+
+    model_roc <- roc(response = cv_best_preds$obs, predictor = cv_best_preds$Buffered, na.rm = TRUE)
+  } else {
+    # Use separate test set for evaluation
+    test_predicted_prob <- predict(model, test_set, type = "prob")
+    model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]), na.rm = TRUE)
+  }
+
   png(here(dir, filename),
       width = 200, height = 200, units = "mm", res = 200)
   plot(model_roc, print.thres = "best", print.thres.best.method = "closest.topleft",
@@ -118,7 +129,7 @@ clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_co
 
 prepare_datasets <- function(dataset, buffering_class_col, filter_func,
                              df_factors = dc_factors, factor_cols = dc_factor_cols,
-                             training_set_ratio = 0.8, target_balance = 0.7) {
+                             training_set_ratio = 0.8, target_balance = 0.7, cv_eval = FALSE) {
   set.seed(42)
 
   # Filter and clean dataset before training
@@ -143,15 +154,21 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
     anti_join(training_set, by = 'id') %>%
     shuffle_rows()
 
-  datasets <- list(training = training_set %>% select(-id),
-                   test = test_set %>% select(-id))
+  if (cv_eval == TRUE) {
+    # Don't create a test set if evaluation is done entirely using cross validation
+    datasets <- list(training = df_prep %>% shuffle_rows() %>% select(-id),
+                     test = NULL)
+  } else {
+    datasets <- list(training = training_set %>% select(-id),
+                     test = test_set %>% select(-id))
+  }
 
   return(datasets)
 }
 
 run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, train_control,
-                         plots_dir, models_dir, sub_dir, prog_bar,
-                         factor_cols = dc_factor_cols, training_set_ratio = 0.8, target_balance = 0.7) {
+                         plots_dir, models_dir, sub_dir, prog_bar, factor_cols = dc_factor_cols,
+                         training_set_ratio = 0.8, target_balance = 0.7, cv_eval = FALSE) {
   plots_dir <- here(plots_dir, sub_dir)
   dir.create(plots_dir, recursive = TRUE)
   dir.create(models_dir, recursive = TRUE)
@@ -160,7 +177,8 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
 
   # Prepare dataset for training and split into training and test set
   datasets <- prepare_datasets(dataset, { { buffering_class_col } }, filter_func,
-                               factor_cols = factor_cols, training_set_ratio = 0.8, target_balance = 0.7)
+                               factor_cols = factor_cols, training_set_ratio = training_set_ratio,
+                               target_balance = target_balance, cv_eval = cv_eval)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
   # Check if datasets are empty
@@ -170,6 +188,7 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
   }
 
   # Train model
+  # TODO: Consider stratified cross validation
   model <- caret::train(buffered ~ .,
                         data = datasets$training,
                         method = model_name,
@@ -183,7 +202,8 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
 
   # Evaluate Model
   explain_model(model, plots_dir, filename = paste0("importance_", model_name, ".png"))
-  model_roc <- evaluate_model(model, datasets$test, plots_dir, filename = paste0("ROC-Curve_", model_name, ".png"))
+  model_roc <- evaluate_model(model, datasets$test, plots_dir,
+                              filename = paste0("ROC-Curve_", model_name, ".png"), cv_eval = cv_eval)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
   return(list(modelFileName = model_filename, roc = model_roc))
@@ -203,6 +223,9 @@ tc_base <- trainControl(method = "cv",
 tc_nn <- tc_base # ToDo: Increase training iterations
 tc_nn["number"] <- 3
 
+tc_p0211 <- tc_base
+tc_p0211["number"] <- 10
+
 ## Define models to be trained
 models <- list(
   list(modelName = "xgbLinear", tc = tc_base),
@@ -212,12 +235,12 @@ models <- list(
 
 ## Define datasets to train models on
 datasets <- list(
-  # list(dataset = expr_buf_procan, name = "ProCan"),
-  # list(dataset = expr_buf_depmap, name = "DepMap"),
-  # list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
-  # list(dataset = buf_wgd, name = "DepMap-WGD"),
-  # list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
-  list(dataset = expr_buf_p0211, name = "P0211")
+  list(dataset = expr_buf_procan, name = "ProCan"),
+  list(dataset = expr_buf_depmap, name = "DepMap"),
+  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
+  list(dataset = buf_wgd, name = "DepMap-WGD"),
+  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
+  list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211)
 )
 
 ## Define training data conditions
@@ -247,6 +270,9 @@ for (model in models) {
   for (dataset in datasets) {
     analysis_results <- list()
     for (analysis in analysis_conditions) {
+      tc <- model$tc
+      if (is.list(dataset$tc)) tc <- dataset$tc
+
       suppressMessages({
         suppressWarnings({
           # ToDo: Allow adjustment of training test ratio for dataset
@@ -255,11 +281,12 @@ for (model in models) {
                                   factor_cols = dc_factor_cols[!dc_factor_cols %in% excluded_factors],
                                   filter_func = analysis$filter,
                                   model_name = model$modelName,
-                                  train_control = model$tc,
+                                  train_control = tc,
                                   plots_dir = plots_dir,
                                   sub_dir = append(dataset$name, analysis$sub_dir),
                                   models_dir = models_base_dir,
-                                  prog_bar = pb)
+                                  prog_bar = pb,
+                                  cv_eval = isTRUE(dataset$cv_eval))
         }) })
       result_id <- paste0(analysis$sub_dir, collapse = "_")
       if (is.list(results))
@@ -276,7 +303,6 @@ for (model in models) {
   }
 }
 close(pb)
-
 
 ## ToDo: Train and compare a set of models on one dataset (or multiple)
 ## ToDo: Train a "universal" model (multiple conditions, or multiple datasets, or both)
