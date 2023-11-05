@@ -130,16 +130,21 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
     impute_na() %>%
     select(where(~!all(is.na(.x)))) %>% # Remove empty factors
     # rebalance_binary(buffered, target_balance = target_balance) %>%
-    shuffle_rows()
+    mutate(id = row_number())
+
+  if (floor(nrow(df_prep) * training_set_ratio) == 0) return(NA)
 
   # Split training & test data
-  # ToDo: Ensure that observations from every class are included (Buffered & Scaling)
-  train_size <- ceiling(nrow(df_prep) * training_set_ratio)
-  test_size <- nrow(df_prep) - train_size
-  datasets <- list(training = df_prep[1:train_size,],
-                   test = df_prep[(train_size + 1):(train_size + test_size),])
+  training_set <- df_prep %>%
+    slice_sample(by = buffered, prop = training_set_ratio) %>%
+    shuffle_rows()
 
-  if (train_size == 0) return(NA)
+  test_set <- df_prep %>%
+    anti_join(training_set, by = 'id') %>%
+    shuffle_rows()
+
+  datasets <- list(training = training_set %>% select(-id),
+                   test = test_set %>% select(-id))
 
   return(datasets)
 }
@@ -244,6 +249,7 @@ for (model in models) {
     for (analysis in analysis_conditions) {
       suppressMessages({
         suppressWarnings({
+          # ToDo: Allow adjustment of training test ratio for dataset
           results <- run_analysis(dataset = dataset$dataset,
                                   buffering_class_col = get(analysis$buffering),
                                   factor_cols = dc_factor_cols[!dc_factor_cols %in% excluded_factors],
