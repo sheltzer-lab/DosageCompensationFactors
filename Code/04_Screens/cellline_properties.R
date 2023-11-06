@@ -93,6 +93,7 @@ data_density_procan <- df_procan %>%
 data_density_depmap <- df_procan %>%
   data_density()
 
+# Plot distributions for categorical variables
 cols_procan <- c("tissue_status", "cancer_type", "msi_status",
                  "smoking_status", "gender", "ethnicity",
                  "WGD", "Near-Tetraploid", "Aneuploidy")
@@ -105,6 +106,13 @@ violoin_plots_procan <- df_procan %>%
 
 violoin_plots_depmap <- df_depmap %>%
   plot_categorical_properties(cols_depmap)
+
+df_procan %>%
+  sorted_violin_plot("cancer_type", Buffering.CellLine.Ratio) %>%
+  save_plot("cellline_cancer-type_procan.png", width = 300)
+df_depmap %>%
+  sorted_violin_plot("OncotreeSubtype", Buffering.CellLine.Ratio) %>%
+  save_plot("cellline_cancer-type_depmap.png", width = 300)
 
 # Statistical comparisons
 ## Tumor status
