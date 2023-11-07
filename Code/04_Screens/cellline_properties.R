@@ -8,11 +8,12 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
+source(here("Code", "analysis.R"))
 
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")
-plots_dir <- here(plots_base_dir, "Screens")
+plots_dir <- here(plots_base_dir, "Screens", "CellLineProperties")
 output_data_dir <- output_data_base_dir
 reports_dir <- reports_base_dir
 
@@ -135,6 +136,38 @@ df_procan %>%
   signif_violin_plot(msi_status, CellLine.AneuploidyScore,
                      test = wilcox.test) %>%
   save_plot("cellline_msi-aneuploidy_procan.png")
+
+### Control MSI/MSS distribution for low low aneuploidy score
+msi_procan <- df_procan %>% filter(msi_status == "MSI")
+fivenum_msi_aneuploidy <- fivenum(msi_procan$CellLine.AneuploidyScore)
+max_msi_aneuploidy <- max(msi_procan$CellLine.AneuploidyScore)
+
+df_procan %>%
+  filter(CellLine.AneuploidyScore <= max_msi_aneuploidy) %>%
+  signif_violin_plot(msi_status, Buffering.CellLine.Ratio,
+                     test = wilcox.test) %>%
+  save_plot("cellline_msi_low-aneuploidy_procan.png")
+df_procan %>%
+  filter(CellLine.AneuploidyScore <= max_msi_aneuploidy) %>%
+  signif_violin_plot(msi_status, CellLine.AneuploidyScore,
+                     test = wilcox.test) %>%
+  save_plot("cellline_msi-aneuploidy_low-aneuploidy_procan.png")
+
+
+### Resample, so that Aneuploidy Score distributions between MSI and MSS are equal
+df_split <- split(df_procan, df_procan$msi_status)
+df_msi_equal <- df_split$MSI %>%
+  equalize_distributions(df_split$MSS, CellLine.AneuploidyScore,
+                         with_replacement = FALSE, num_buckets = 8)
+
+df_msi_equal %>%
+  signif_violin_plot(msi_status, Buffering.CellLine.Ratio,
+                     test = wilcox.test) %>%
+  save_plot("cellline_msi_equal-aneuploidy_procan.png")
+df_msi_equal %>%
+  signif_violin_plot(msi_status, CellLine.AneuploidyScore,
+                     test = wilcox.test) %>%
+  save_plot("cellline_msi-aneuploidy_equal-aneuploidy_procan.png")
 
 ## Sex/Gender
 df_procan %>%

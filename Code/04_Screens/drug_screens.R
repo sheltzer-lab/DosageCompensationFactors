@@ -14,7 +14,7 @@ source(here("Code", "buffering_ratio.R"))
 
 output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
-plots_dir <- here(plots_base_dir, "DrugScreen")
+plots_dir <- here(plots_base_dir, "Screens", "DrugSensitivity")
 reports_dir <- reports_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)

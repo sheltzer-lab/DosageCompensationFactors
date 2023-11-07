@@ -136,6 +136,44 @@ calculate_pca <- function(df, sample_col, sample_group_col, value_group_col, val
   return(list(pca = pca_fit, df_pca = df_pca, eigenvalues = eigenvalues))
 }
 
+# Resample the target distribution in a stratified way using a reference distribution,
+# so that both distributions approximately the same
+equalize_distributions <- function(df_reference, df_target, value_col,
+                                   with_replacement = TRUE, num_buckets = 10) {
+  set.seed(42)
+
+  df_resample <- function(df, group_key) {
+    df %>%
+      slice_sample(prop = first(df$Value.Prop.Adj), replace = with_replacement)
+  }
+
+  buckets <- unique(quantile(df_reference[[quo_name(enquo(value_col))]],
+                             probs = seq(0, 1, 1 / num_buckets)))
+
+  df_ref_buckets <- df_reference %>%
+    mutate(Value.Bucket = cut({ { value_col } }, breaks = buckets, include.lowest = TRUE)) %>%
+    count(Value.Bucket, name = "Value.Count") %>%
+    mutate(Value.Prop = Value.Count / nrow(df_reference))
+
+  df_joined <- df_target %>%
+    mutate(Value.Bucket = cut({ { value_col } }, breaks = buckets, include.lowest = TRUE)) %>%
+    inner_join(y = df_ref_buckets, by = "Value.Bucket")
+
+  df_adjusted <- df_joined %>%
+    add_count(Value.Bucket, name = "Value.Count.New") %>%
+    mutate(Value.Prop.New = Value.Count.New / nrow(df_joined)) %>%
+    mutate(Value.Prop.Adj = Value.Prop / Value.Prop.New) %>%
+    group_by(Value.Bucket) %>%
+    group_modify(df_resample) %>%
+    ungroup()
+
+  df_equal <- bind_rows(df_reference, df_adjusted) %>%
+    select(-Value.Bucket, -Value.Prop, -Value.Prop.New, -Value.Prop.Adj,
+           -Value.Count, -Value.Count.New)
+
+  return(df_equal)
+}
+
 # === Aggregation & Consensus Methods ===
 
 mean_norm_rank <- function(df, value_col, group_col, id_col) {

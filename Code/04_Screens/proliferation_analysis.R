@@ -12,7 +12,7 @@ source(here("Code", "visualization.R"))
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")
-plots_dir <- here(plots_base_dir, "Screens")
+plots_dir <- here(plots_base_dir, "Screens", "Proliferation")
 output_data_dir <- output_data_base_dir
 reports_dir <- reports_base_dir
 
