@@ -106,12 +106,31 @@ violoin_plots_procan <- df_procan %>%
 violoin_plots_depmap <- df_depmap %>%
   plot_categorical_properties(cols_depmap)
 
+## Plot cell line buffering per cancer type
 df_procan %>%
   sorted_violin_plot("cancer_type", Buffering.CellLine.Ratio) %>%
   save_plot("cellline_cancer-type_procan.png", width = 300)
 df_depmap %>%
   sorted_violin_plot("OncotreeSubtype", Buffering.CellLine.Ratio) %>%
   save_plot("cellline_cancer-type_depmap.png", width = 300)
+
+### Plot aneuploidy score per cancer type
+df_procan %>%
+  sorted_violin_plot("cancer_type", CellLine.AneuploidyScore) %>%
+  save_plot("cellline_cancer-type_aneuploidy_procan.png", width = 300)
+df_depmap %>%
+  sorted_violin_plot("OncotreeSubtype", CellLine.AneuploidyScore) %>%
+  save_plot("cellline_cancer-type_aneuploidy_depmap.png", width = 300)
+
+### Control for low aneuploidy score when plotting buffering per cancer type
+df_procan %>%
+  filter(Aneuploidy %in% c("Low", "Very Low")) %>%
+  sorted_violin_plot("cancer_type", Buffering.CellLine.Ratio) %>%
+  save_plot("cellline_cancer-type_low-aneuploidy_procan.png", width = 300)
+df_depmap %>%
+  filter(Aneuploidy %in% c("Low", "Very Low")) %>%
+  sorted_violin_plot("OncotreeSubtype", Buffering.CellLine.Ratio) %>%
+  save_plot("cellline_cancer-type_low-aneuploidy_depmap.png", width = 300)
 
 # Statistical comparisons
 ## Tumor status
