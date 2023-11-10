@@ -68,11 +68,13 @@ remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
 
 ## Combine datasets
 expr_buf_procan_filtered <- expr_buf_procan %>%
+  filter(CellLine.AneuploidyScore > 0) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0, 0.0246)) %>% # Remove noise from discontinuity points of buffering ratio
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(ProCan = "Buffering.GeneLevel.Ratio")
 expr_buf_depmap_filtered <- expr_buf_depmap %>%
+  filter(CellLine.AneuploidyScore > 0) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0, 0.0246)) %>% # Remove noise from discontinuity points of buffering ratio
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
@@ -178,9 +180,15 @@ cellline_pearson <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "Pro
                              y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
                              method = "pearson")
 
+cellline_spearman <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
+                             y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+                             method = "spearman")
+
 cat(capture.output(cellline_kendall), file = here(reports_dir, "cellline_buffering_correlation.txt"),
     append = FALSE, sep = "\n")
 cat(capture.output(cellline_pearson), file = here(reports_dir, "cellline_buffering_correlation.txt"),
+    append = TRUE, sep = "\n")
+cat(capture.output(cellline_spearman), file = here(reports_dir, "cellline_buffering_correlation.txt"),
     append = TRUE, sep = "\n")
 
 ## Datasets filtered by common genes only
@@ -192,9 +200,15 @@ cellline_pearson_gene <- cor.test(x = cellline_buf_merged_gene$Buffering.CellLin
                                   y = cellline_buf_merged_gene$Buffering.CellLine.Ratio_DepMap,
                                   method = "pearson")
 
+cellline_spearman_gene <- cor.test(x = cellline_buf_merged_gene$Buffering.CellLine.Ratio_ProCan,
+                                   y = cellline_buf_merged_gene$Buffering.CellLine.Ratio_DepMap,
+                                   method = "spearman")
+
 cat(capture.output(cellline_kendall_gene), file = here(reports_dir, "cellline_buffering_correlation_gene.txt"),
     append = FALSE, sep = "\n")
 cat(capture.output(cellline_pearson_gene), file = here(reports_dir, "cellline_buffering_correlation_gene.txt"),
+    append = TRUE, sep = "\n")
+cat(capture.output(cellline_spearman_gene), file = here(reports_dir, "cellline_buffering_correlation_gene.txt"),
     append = TRUE, sep = "\n")
 
 # === Create aggregated Cell Line Ranking ===

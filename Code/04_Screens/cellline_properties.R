@@ -21,9 +21,7 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 
 cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_procan.parquet"))
 cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
-cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_depmap.parquet"))
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
@@ -158,7 +156,7 @@ df_procan %>%
 df_split <- split(df_procan, df_procan$msi_status)
 df_msi_equal <- df_split$MSI %>%
   equalize_distributions(df_split$MSS, CellLine.AneuploidyScore,
-                         with_replacement = FALSE, num_buckets = 8)
+                         with_replacement = FALSE, num_buckets = 5)
 
 df_msi_equal %>%
   signif_violin_plot(msi_status, Buffering.CellLine.Ratio,

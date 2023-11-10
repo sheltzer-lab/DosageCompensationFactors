@@ -162,7 +162,7 @@ df_mobidb <- mobidb %>%
          "Protein.Uniprot.Accession", "Gene.Symbol")
 
 ## Prepare NED data
-delta_score_col <- paste0(enc2utf8("\u0394"), "-score")
+delta_score_col <- paste0(utf8_delta, "-score")
 df_ned <- ned_human %>%
   select("Protein IDs (Uniprot)", "Gene names", delta_score_col) %>%
   rename(Protein.Uniprot.Accession = "Protein IDs (Uniprot)",

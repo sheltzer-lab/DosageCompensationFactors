@@ -80,7 +80,7 @@ cor_agg_methods <- cor.test(drug_dc_corr_agg_rank$Corr.Sensitivity_Buffering,
 cat(capture.output(cor_datasets), file = here(reports_dir, "drug_correlation_datasets.txt"),
     append = FALSE, sep = "\n")
 cat(capture.output(cor_agg_methods), file = here(reports_dir, "drug_correlation_aggregation-methods.txt"),
-    append = TRUE, sep = "\n")
+    append = FALSE, sep = "\n")
 
 
 drug_dc_corr_agg_rank %>% mutate(Method = "StandardizedMean") %>%
