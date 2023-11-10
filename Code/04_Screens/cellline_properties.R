@@ -108,28 +108,32 @@ violoin_plots_depmap <- df_depmap %>%
 
 ## Plot cell line buffering per cancer type
 df_procan %>%
-  sorted_violin_plot("cancer_type", Buffering.CellLine.Ratio) %>%
+  sorted_beeswarm_plot("cancer_type", Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_procan.png", width = 300)
 df_depmap %>%
-  sorted_violin_plot("OncotreeSubtype", Buffering.CellLine.Ratio) %>%
+  sorted_beeswarm_plot("OncotreeSubtype", Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_depmap.png", width = 300)
 
 ### Plot aneuploidy score per cancer type
 df_procan %>%
-  sorted_violin_plot("cancer_type", CellLine.AneuploidyScore) %>%
+  sorted_beeswarm_plot("cancer_type", CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_aneuploidy_procan.png", width = 300)
 df_depmap %>%
-  sorted_violin_plot("OncotreeSubtype", CellLine.AneuploidyScore) %>%
+  sorted_beeswarm_plot("OncotreeSubtype", CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_aneuploidy_depmap.png", width = 300)
 
 ### Control for low aneuploidy score when plotting buffering per cancer type
 df_procan %>%
   filter(Aneuploidy %in% c("Low", "Very Low")) %>%
-  sorted_violin_plot("cancer_type", Buffering.CellLine.Ratio) %>%
+  sorted_beeswarm_plot("cancer_type", Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_low-aneuploidy_procan.png", width = 300)
 df_depmap %>%
   filter(Aneuploidy %in% c("Low", "Very Low")) %>%
-  sorted_violin_plot("OncotreeSubtype", Buffering.CellLine.Ratio) %>%
+  sorted_beeswarm_plot("OncotreeSubtype", Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_low-aneuploidy_depmap.png", width = 300)
 
 # Statistical comparisons
@@ -146,12 +150,13 @@ df_depmap %>%
 
 ## Micro-satellite instability
 df_procan %>%
-  signif_violin_plot(msi_status, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(msi_status, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_msi_procan.png")
 df_procan %>%
-  signif_violin_plot(msi_status, CellLine.AneuploidyScore,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(msi_status, CellLine.AneuploidyScore,
+                       test = wilcox.test, cex = 1) %>%
   save_plot("cellline_msi-aneuploidy_procan.png")
 
 ### Control MSI/MSS distribution for low low aneuploidy score
@@ -161,13 +166,14 @@ max_msi_aneuploidy <- max(msi_procan$CellLine.AneuploidyScore)
 
 df_procan %>%
   filter(CellLine.AneuploidyScore <= max_msi_aneuploidy) %>%
-  signif_violin_plot(msi_status, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(msi_status, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_msi_low-aneuploidy_procan.png")
 df_procan %>%
   filter(CellLine.AneuploidyScore <= max_msi_aneuploidy) %>%
-  signif_violin_plot(msi_status, CellLine.AneuploidyScore,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(msi_status, CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_msi-aneuploidy_low-aneuploidy_procan.png")
 
 
@@ -178,12 +184,13 @@ df_msi_equal <- df_split$MSI %>%
                          with_replacement = FALSE, num_buckets = 5)
 
 df_msi_equal %>%
-  signif_violin_plot(msi_status, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(msi_status, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_msi_equal-aneuploidy_procan.png")
 df_msi_equal %>%
-  signif_violin_plot(msi_status, CellLine.AneuploidyScore,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(msi_status, CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_msi-aneuploidy_equal-aneuploidy_procan.png")
 
 ## Sex/Gender

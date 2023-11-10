@@ -6,6 +6,7 @@ library(psych)
 library(corrplot)
 library(ggsignif)
 library(viridisLite)
+library(ggbeeswarm)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -59,6 +60,23 @@ violin_plot <- function(df, x, y) {
     aes(x = { { x } }, y = { { y } }) +
     geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
                 color = "#4080DB") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+beeswarm_plot <- function(df, x, y, color_col = NULL, cex = 2) {
+  df %>%
+    ggplot() +
+    aes(x = { { x } }, y = { { y } }) +
+    geom_violin(trim = FALSE, draw_quantiles = 0.5,
+                fill = "darkgrey", color = "darkgrey", alpha = 1/3) +
+    {
+      if (quo_is_null(enquo(color_col))) {
+        geom_beeswarm(priority = "density", color = "#4080DB", cex = cex)
+      } else {
+        geom_beeswarm(aes(color = { { color_col } }), priority = "density", cex = cex)
+      }
+    } +
+    scale_colour_viridis_c(option = "D", direction = 1) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
@@ -232,10 +250,10 @@ jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha =
     geom_boxplot(outlier.shape = NA, color = "black") +
     {
       if (quo_is_null(enquo(color_col))) {
-        geom_jitter(fill = "darkgrey", color = "white",
-                    shape = 21, alpha = alpha, width = jitter_width)
+        geom_quasirandom(fill = "darkgrey", color = "white",
+                         shape = 21, alpha = alpha, width = jitter_width)
       } else {
-        geom_jitter(aes(color = { { color_col } }), alpha = alpha, width = jitter_width)
+        geom_quasirandom(aes(color = { { color_col } }), alpha = alpha, width = jitter_width)
       }
     } +
     coord_flip() +
@@ -347,13 +365,28 @@ sorted_violin_plot <- function(df, x, y) {
   return(plot)
 }
 
-signif_violin_plot <- function(df, x, y, facet_col = NULL,
-                               test = wilcox.test, test.args = NULL,
-                               signif_label = print_signif, title = NULL) {
+sorted_beeswarm_plot <- function(df, x, y, color_col = NULL, cex = 2) {
+  plot <- df %>%
+    add_count(get(x)) %>%
+    filter(n > 2) %>%
+    group_by(get(x)) %>%
+    mutate(Median = median({ { y } }),
+           Label = paste0(get(x), " (n=", n, ")")) %>%
+    ungroup() %>%
+    arrange(Median) %>%
+    mutate(Label = factor(Label, levels = unique(Label))) %>%
+    beeswarm_plot(Label, { { y } }, color_col = { { color_col } }, cex = cex)
+  plot <- plot +
+    xlab(x)
+
+  return(plot)
+}
+
+prep_signif <- function(df, x, facet_col = NULL) {
   df_prep <- df %>%
     {
       if (!quo_is_null(enquo(facet_col))) {
-        mutate(., Bucket = {{facet_col}}) %>%
+        mutate(., Bucket = { { facet_col } }) %>%
           group_by(Bucket)
       } else {
         .
@@ -363,7 +396,7 @@ signif_violin_plot <- function(df, x, y, facet_col = NULL,
     filter(n > 2) %>%
     ungroup() %>%
     { if (!quo_is_null(enquo(facet_col))) group_by(., Bucket, { { x } })
-          else group_by(., { { x } }) } %>%
+    else group_by(., { { x } }) } %>%
     mutate(Label = factor(paste0({ { x } }, " (n=", n, ")")),
            x = factor({ { x } })) %>%
     ungroup()
@@ -371,23 +404,69 @@ signif_violin_plot <- function(df, x, y, facet_col = NULL,
   labels <- df_prep %>%
     mutate(Levels = { { x } }) %>%
     { if (!quo_is_null(enquo(facet_col))) group_by(., Bucket)
-          else . } %>%
+    else . } %>%
     distinct(Levels, Label)
 
-  plot <- df_prep %>%
+  return(list(df = df_prep, labels = labels))
+}
+
+signif_violin_plot <- function(df, x, y, facet_col = NULL,
+                               test = wilcox.test, test.args = NULL,
+                               signif_label = print_signif, title = NULL) {
+
+  prep <- df %>%
+    prep_signif({ { x } }, { { facet_col } })
+
+  plot <- prep$df %>%
     ggplot() +
     aes(x = { { x } }, y = { { y } }) +
     geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
                 color = "#4080DB") +
     geom_signif(
-      comparisons = list(levels(df_prep$x)),
+      comparisons = list(levels(prep$df$x)),
       map_signif_level = signif_label,
       tip_length = 0, extend_line = -0.05,
       test = test, test.args = test.args
     ) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    scale_x_discrete(labels = labels$Label, breaks = labels$Levels) +
+    scale_x_discrete(labels = prep$labels$Label, breaks = prep$labels$Levels) +
     {if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket)} +
+    xlab(as_name(enquo(x))) +
+    # ToDo: Use name of test as subtitle
+    ggtitle(title, subtitle = NULL)
+
+  return(plot)
+}
+
+signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
+                                 test = wilcox.test, test.args = NULL, cex = 2,
+                                 signif_label = print_signif, title = NULL) {
+
+  prep <- df %>%
+    prep_signif({ { x } }, { { facet_col } })
+
+  plot <- prep$df %>%
+    ggplot() +
+    aes(x = { { x } }, y = { { y } }) +
+    geom_violin(trim = FALSE, draw_quantiles = 0.5,
+                fill = "darkgrey", color = "darkgrey", alpha = 1/3) +
+    {
+      if (quo_is_null(enquo(color_col))) {
+        geom_beeswarm(priority = "density", color = "#4080DB", cex = cex)
+      } else {
+        geom_beeswarm(aes(color = { { color_col } }), priority = "density", cex = cex)
+      }
+    } +
+    geom_signif(
+      comparisons = list(levels(prep$df$x)),
+      map_signif_level = signif_label,
+      tip_length = 0, extend_line = -0.05,
+      test = test, test.args = test.args
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_x_discrete(labels = prep$labels$Label, breaks = prep$labels$Levels) +
+    scale_colour_viridis_c(option = "D", direction = 1) +
+    { if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket) } +
     xlab(as_name(enquo(x))) +
     # ToDo: Use name of test as subtitle
     ggtitle(title, subtitle = NULL)
