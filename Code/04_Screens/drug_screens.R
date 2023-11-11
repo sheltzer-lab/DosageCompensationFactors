@@ -134,7 +134,8 @@ df_sensitivity_agg %>%
   save_plot("correlation_buffering_sensitivity_bot.png", width = 300)
 
 # Scatter- & Violin-plot visualization of selected drugs
-interesting_drugs <- c("REGORAFENIB", "IDASANUTLIN", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749")
+interesting_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749",
+                       "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE")
 
 for (drug in interesting_drugs) {
   df <- df_sensitivity_agg %>%
@@ -151,4 +152,4 @@ for (drug in interesting_drugs) {
 df_sensitivity_agg %>%
   filter(Drug.Name %in% interesting_drugs) %>%
   signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
-  save_plot(paste0("selected_buffering_sensitivity_distributions.png"))
+  save_plot(paste0("selected_buffering_sensitivity_distributions.png"), width = 350)
