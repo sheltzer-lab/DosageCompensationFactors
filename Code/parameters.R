@@ -43,7 +43,7 @@ dc_factor_cols <- c(
   "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
   "Mean 3'-UTR Length", "Mean 5'-UTR Length",
   "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
-  "Methylation Sites", "Acetylation Sites", "Regulatory Sites",
+  "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Sites",
   "mRNA Abundance", "Protein Abundance", "Transcription Rate",
   "Translation Rate", "Protein Length", "mRNA Length",
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",

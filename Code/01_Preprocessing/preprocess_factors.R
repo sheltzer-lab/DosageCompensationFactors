@@ -27,6 +27,9 @@ sumo_sites <- read_excel(here(phosphositeplus_data_dir, "Sumoylation_site_datase
 methyl_sites <- read_excel(here(phosphositeplus_data_dir, "Methylation_site_dataset.xlsx"), skip = 3)
 ace_sites <- read_excel(here(phosphositeplus_data_dir, "Acetylation_site_dataset.xlsx"), skip = 3)
 reg_sites <- read_excel(here(phosphositeplus_data_dir, "Regulatory_sites.xlsx"), skip = 3)
+kinase_substrates <- read_excel(here(phosphositeplus_data_dir, "Kinase_Substrate_Dataset.xlsx"), skip = 3) %>%
+  rename(ORGANISM = "SUB_ORGANISM",
+         ACC_ID = "SUB_ACC_ID")
 
 ## Load other factor datasets
 # Hausser, Jean (2019), “Central dogma rates and the trade-off between precision and economy”, Mendeley Data, V1, doi: 10.17632/2vbrg3w4p3.1
@@ -54,10 +57,11 @@ agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 1
 count_sites <- function(df, colname = "n") {
   df %>%
     filter(ORGANISM == "human") %>%
-    count(ACC_ID, GENE, name = colname) %>%
     rename(Protein.Uniprot.Accession = ACC_ID,
            Gene.Symbol = GENE) %>%
-    mutate(across(where(is.character), toupper))
+    select(Protein.Uniprot.Accession, Gene.Symbol) %>%
+    mutate(across(where(is.character), toupper)) %>%
+    count(Protein.Uniprot.Accession, Gene.Symbol, name = colname)
 }
 
 ## Prepare human_rates data
@@ -214,7 +218,8 @@ ptm_factor_datasets <- list(
   count_sites(sumo_sites, colname = "Sumoylation Sites"),
   count_sites(methyl_sites, colname = "Methylation Sites"),
   count_sites(ace_sites, colname = "Acetylation Sites"),
-  count_sites(reg_sites, colname = "Regulatory Sites")
+  count_sites(reg_sites, colname = "Regulatory Sites"),
+  count_sites(kinase_substrates, colname = "Kinase Sites")
 )
 
 other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
