@@ -11,6 +11,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "annotation.R"))
 source(here("Code", "visualization.R"))
+source(here("Code", "analysis.R"))
 
 factor_data_dir <- here(external_data_dir, "Factors")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")
@@ -20,6 +21,9 @@ plots_dir <- plots_base_dir
 dir.create(output_data_dir, recursive = TRUE)
 
 # === Load Datasets ===
+## Uniprot Mapping
+uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
+
 ## Load PhosphoSitePlus datasets
 phospho_sites <- read_excel(here(phosphositeplus_data_dir, "Phosphorylation_site_dataset.xlsx"), skip = 3)
 ubi_sites <- read_excel(here(phosphositeplus_data_dir, "Ubiquitination_site_dataset.xlsx"), skip = 3)
@@ -76,7 +80,8 @@ df_rates <- human_rates %>%
   mapIds("ENSEMBL", "UNIPROT",
          "Gene.ENSEMBL.Id", "Protein.Uniprot.Accession") %>%
   mapIds("ENSEMBL", "SYMBOL",
-         "Gene.ENSEMBL.Id", "Gene.Symbol")
+         "Gene.ENSEMBL.Id", "Gene.Symbol") %>%
+  select(-Gene.ENSEMBL.Id)
 
 ## Prepare Proten-Protein-Interaction data
 hippie_filtered <- hippie %>%
@@ -85,8 +90,6 @@ hippie_filtered <- hippie %>%
   filter(`Confidence Value` > 0.6) %>%
   count(Gene.Symbol, name = "Protein-Protein Interactions") %>%
   drop_na() %>%
-  mapIds("SYMBOL", "ENSEMBL",
-         "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
   mapIds("SYMBOL", "UNIPROT",
          "Gene.Symbol", "Protein.Uniprot.Accession")
 
@@ -103,8 +106,6 @@ half_life_avg <- half_life %>%
   group_by(Gene.Symbol) %>%
   summarize(`Protein Half-Life` = mean(half_life_values, na.rm = TRUE)) %>%
   ungroup() %>%
-  mapIds("SYMBOL", "ENSEMBL",
-         "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
   mapIds("SYMBOL", "UNIPROT",
          "Gene.Symbol", "Protein.Uniprot.Accession")
 
@@ -127,8 +128,6 @@ df_utr <- ref_seq %>%
          `5'-UTR Length` = list(`5'-UTR Length`)) %>%
   ungroup() %>%
   distinct() %>%
-  mapIds("SYMBOL", "ENSEMBL",
-         "Gene.Symbol", "Gene.ENSEMBL.Id") %>%
   mapIds("SYMBOL", "UNIPROT",
          "Gene.Symbol", "Protein.Uniprot.Accession")
 
@@ -139,8 +138,6 @@ df_complexes <- corum %>%
   separate_longer_delim("subunits(UniProt IDs)", delim = ";") %>%
   count(`subunits(UniProt IDs)`, name = "Protein Complexes (CORUM)") %>%
   rename(Protein.Uniprot.Accession = "subunits(UniProt IDs)") %>%
-  mapIds("UNIPROT", "ENSEMBL",
-         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id") %>%
   mapIds("UNIPROT", "SYMBOL",
          "Protein.Uniprot.Accession", "Gene.Symbol")
 
@@ -160,22 +157,18 @@ df_mobidb <- mobidb %>%
          `Loops In Protein Score` = "prediction-lip-anchor",
          `Protein Polyampholyte Score` = "prediction-polyampholyte-mobidb_lite_sub",
          `Protein Polarity` = "prediction-polar-mobidb_lite_sub") %>%
-  mapIds("UNIPROT", "ENSEMBL",
-         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id") %>%
   mapIds("UNIPROT", "SYMBOL",
          "Protein.Uniprot.Accession", "Gene.Symbol")
 
 ## Prepare NED data
 delta_score_col <- paste0(utf8_delta, "-score")
 df_ned <- ned_human %>%
-  select("Protein IDs (Uniprot)", "Gene names", delta_score_col) %>%
   rename(Protein.Uniprot.Accession = "Protein IDs (Uniprot)",
          Gene.Symbol = "Gene names",
          `Non-Exponential Decay Delta` = delta_score_col) %>%
+  select(Protein.Uniprot.Accession, Gene.Symbol , `Non-Exponential Decay Delta`) %>%
   separate_longer_delim(Gene.Symbol, delim = ";") %>%
-  drop_na() %>%
-  mapIds("SYMBOL", "ENSEMBL",
-         "Gene.Symbol", "Gene.ENSEMBL.Id")
+  drop_na()
 
 ## Prepare mRNA Decay data
 df_decay <- mrna_decay %>%
@@ -184,14 +177,12 @@ df_decay <- mrna_decay %>%
   drop_na(`mRNA Decay Rate`) %>%
   select("Accession", "mRNA Decay Rate") %>%
   rename(Gene.GenBank.Accession = "Accession") %>%
-  mapIds("ACCNUM", "ENSEMBL",
-         "Gene.GenBank.Accession", "Gene.ENSEMBL.Id") %>%
   mapIds("ACCNUM", "SYMBOL",
          "Gene.GenBank.Accession", "Gene.Symbol") %>%
   mapIds("ACCNUM", "UNIPROT",
          "Gene.GenBank.Accession", "Protein.Uniprot.Accession") %>%
   drop_na() %>%
-  group_by(Gene.Symbol, Gene.ENSEMBL.Id, Protein.Uniprot.Accession) %>%
+  group_by(Gene.Symbol, Protein.Uniprot.Accession) %>%
   summarize(`Mean mRNA Decay Rate` = mean(`mRNA Decay Rate`, na.rm = TRUE))
 
 ## Prepare Aggregation Score data
@@ -199,16 +190,15 @@ df_agg <- agg_score %>%
   select("Uniprot ID", "ZaggSC") %>%
   mutate(`Aggregation Score` = as.numeric(if_else(ZaggSC == "-", NA, ZaggSC))) %>%
   drop_na() %>%
-  separate_wider_delim(`Uniprot ID`,
-           delim = "_",
-           names = c("Gene.Symbol", "Species")) %>%
-  filter(Species == "human") %>%
-  select(-ZaggSC, -Species) %>%
-  mutate(Gene.Symbol = toupper(Gene.Symbol)) %>%
-  mapIds("SYMBOL", "UNIPROT",
-         "Gene.Symbol", "Protein.Uniprot.Accession") %>%
-  mapIds("SYMBOL", "ENSEMBL",
-         "Gene.Symbol", "Gene.ENSEMBL.Id")
+  filter(grepl("human", `Uniprot ID`)) %>%
+  mutate(Protein.Uniprot.Symbol = toupper(`Uniprot ID`)) %>%
+  left_join(y = uniprot_mapping, by = "Protein.Uniprot.Symbol",
+            na_matches = "never", relationship = "many-to-one") %>%
+  drop_na() %>%
+  mapIds("UNIPROT", "SYMBOL",
+         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
+  select(-ZaggSC, -Protein.Uniprot.Symbol, -`Uniprot ID`) %>%
+  drop_na()
 
 # === Combine Factor Datasets ===
 
@@ -229,15 +219,12 @@ df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
          relationship = "many-to-one") %>%
   filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol))) %>%
-  mutate_if(is.numeric, ~replace_na(., 0)) %>%
-  mapIds("UNIPROT", "ENSEMBL",
-         "Protein.Uniprot.Accession", "Gene.ENSEMBL.Id")
+  mutate_if(is.numeric, ~replace_na(., 0))
 
 df_dc_factors_other <- other_factor_datasets %>%
-  reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.ENSEMBL.Id", "Gene.Symbol"),
+  reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
          relationship = "many-to-one") %>%
   filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol))) %>%
-  select(-Gene.ENSEMBL.Id) %>%
   group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
   summarize_if(is.numeric, ~first(na.omit(.))) %>%
   ungroup() %>%
@@ -258,6 +245,18 @@ df_dc_factors_values <- df_dc_factors %>% select(where(is.numeric))
 na_counts <- colSums(is.na(df_dc_factors_values))
 total_na_count <- sum(na_counts)
 na_share <- total_na_count / (nrow(df_dc_factors_values) * ncol(df_dc_factors_values))
+
+data_density_ptm <- df_dc_factors_ptm %>%
+  data_density()
+mean_density_ptm <- mean(data_density_ptm$Density)
+
+data_density_other <- df_dc_factors_other %>%
+  data_density()
+mean_density_other <- mean(data_density_other$Density)
+
+data_density_all <- df_dc_factors_values %>%
+  data_density()
+mean_density_all <- mean(data_density_all$Density)
 
 ## Check correlation between factors
 png(here(plots_dir, "factors_correlation.png"), width = 300, height = 300, units = "mm", res = 200)

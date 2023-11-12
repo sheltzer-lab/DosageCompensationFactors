@@ -174,6 +174,13 @@ equalize_distributions <- function(df_reference, df_target, value_col,
   return(df_equal)
 }
 
+data_density <- function(df) {
+  df %>%
+    summarize_all(~sum(!is.na(.x)) / nrow(df)) %>%
+    pivot_longer(everything(), names_to = "Column", values_to = "Density") %>%
+    arrange(desc(Density))
+}
+
 # === Aggregation & Consensus Methods ===
 
 mean_norm_rank <- function(df, value_col, group_col, id_col) {

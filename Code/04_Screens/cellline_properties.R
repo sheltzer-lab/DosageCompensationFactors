@@ -79,13 +79,6 @@ plot_categorical_properties <- function (df, cols_categorical) {
   return(plots)
 }
 
-data_density <- function(df) {
-  df %>%
-    summarize_all(~sum(!is.na(.x)) / nrow(df)) %>%
-    pivot_longer(everything(), names_to = "Column", values_to = "Density") %>%
-    arrange(desc(Density))
-}
-
 data_density_procan <- df_procan %>%
   data_density()
 
