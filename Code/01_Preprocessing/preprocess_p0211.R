@@ -30,6 +30,7 @@ dir.create(plots_dir, recursive = TRUE)
 p0211_raw <- read.table(here(expression_data_dir, "proteinGroups.txt"), sep="\t", dec=".",
                         header=TRUE, stringsAsFactors=FALSE)
 p0211_meta <- read_excel(here(expression_data_dir, "metadata.xlsx"))
+uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
 
 # === Tidy Dataset ===
 state_cols <- c("Identified.In.All", "Identified.In.Some", "Potential.Contaminant", "Reverse",
@@ -85,8 +86,9 @@ annotations <- p0211_expr_processed %>%
   separate_rows(Protein.Uniprot.Accession, sep = ";") %>%
   mutate(Protein.Uniprot.Accession = str_trim(Protein.Uniprot.Accession)) %>%
   distinct(Protein.Uniprot.Accession, .keep_all = TRUE) %>%
-  mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Protein.Uniprot.Accession",
+            na_matches = "never", relationship = "many-to-one") %>%
   drop_na() %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   get_chromosome_arms() %>%

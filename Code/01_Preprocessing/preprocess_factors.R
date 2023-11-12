@@ -61,11 +61,10 @@ agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 1
 count_sites <- function(df, colname = "n") {
   df %>%
     filter(ORGANISM == "human") %>%
-    rename(Protein.Uniprot.Accession = ACC_ID,
-           Gene.Symbol = GENE) %>%
-    select(Protein.Uniprot.Accession, Gene.Symbol) %>%
+    rename(Protein.Uniprot.Accession = ACC_ID) %>%
+    select(Protein.Uniprot.Accession) %>%
     mutate(across(where(is.character), toupper)) %>%
-    count(Protein.Uniprot.Accession, Gene.Symbol, name = colname)
+    count(Protein.Uniprot.Accession, name = colname)
 }
 
 ## Prepare human_rates data
@@ -77,10 +76,9 @@ df_rates <- human_rates %>%
          `Translation Rate` = "bp",
          `Protein Length` = "lp",
          `mRNA Length` = "lm") %>%
-  mapIds("ENSEMBL", "UNIPROT",
-         "Gene.ENSEMBL.Id", "Protein.Uniprot.Accession") %>%
   mapIds("ENSEMBL", "SYMBOL",
          "Gene.ENSEMBL.Id", "Gene.Symbol") %>%
+  id2uniprot_acc("Gene.ENSEMBL.Id", "ensembl_gene_id") %>%
   select(-Gene.ENSEMBL.Id)
 
 ## Prepare Proten-Protein-Interaction data
@@ -90,8 +88,7 @@ hippie_filtered <- hippie %>%
   filter(`Confidence Value` > 0.6) %>%
   count(Gene.Symbol, name = "Protein-Protein Interactions") %>%
   drop_na() %>%
-  mapIds("SYMBOL", "UNIPROT",
-         "Gene.Symbol", "Protein.Uniprot.Accession")
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 ## Prepare Protein half-life data
 half_life_sample_cols <- c("Bcells replicate 1 half_life", "Bcells replicate 2 half_life",
@@ -106,8 +103,7 @@ half_life_avg <- half_life %>%
   group_by(Gene.Symbol) %>%
   summarize(`Protein Half-Life` = mean(half_life_values, na.rm = TRUE)) %>%
   ungroup() %>%
-  mapIds("SYMBOL", "UNIPROT",
-         "Gene.Symbol", "Protein.Uniprot.Accession")
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 ## Prepare 3'-/5'-UTR data
 df_utr <- ref_seq %>%
@@ -128,8 +124,7 @@ df_utr <- ref_seq %>%
          `5'-UTR Length` = list(`5'-UTR Length`)) %>%
   ungroup() %>%
   distinct() %>%
-  mapIds("SYMBOL", "UNIPROT",
-         "Gene.Symbol", "Protein.Uniprot.Accession")
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 ## Prepare CORUM data
 df_complexes <- corum %>%
@@ -138,8 +133,9 @@ df_complexes <- corum %>%
   separate_longer_delim("subunits(UniProt IDs)", delim = ";") %>%
   count(`subunits(UniProt IDs)`, name = "Protein Complexes (CORUM)") %>%
   rename(Protein.Uniprot.Accession = "subunits(UniProt IDs)") %>%
-  mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol")
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Protein.Uniprot.Accession",
+            na_matches = "never", relationship = "many-to-one")
 
 ## Prepare MobiDB data
 mobidb_features <- c("prediction-disorder-mobidb_lite", "prediction-low_complexity-merge",
@@ -157,8 +153,9 @@ df_mobidb <- mobidb %>%
          `Loops In Protein Score` = "prediction-lip-anchor",
          `Protein Polyampholyte Score` = "prediction-polyampholyte-mobidb_lite_sub",
          `Protein Polarity` = "prediction-polar-mobidb_lite_sub") %>%
-  mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol")
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Protein.Uniprot.Accession",
+            na_matches = "never", relationship = "many-to-one")
 
 ## Prepare NED data
 delta_score_col <- paste0(utf8_delta, "-score")
@@ -174,13 +171,12 @@ df_ned <- ned_human %>%
 df_decay <- mrna_decay %>%
   mutate_at(c("Rate_1", "Rate_2", "StdDev"), as.numeric) %>%
   mutate(`mRNA Decay Rate` = ifelse(is.na(Rate_1), Rate_2, Rate_1)) %>%
-  drop_na(`mRNA Decay Rate`) %>%
   select("Accession", "mRNA Decay Rate") %>%
+  drop_na() %>%
   rename(Gene.GenBank.Accession = "Accession") %>%
   mapIds("ACCNUM", "SYMBOL",
          "Gene.GenBank.Accession", "Gene.Symbol") %>%
-  mapIds("ACCNUM", "UNIPROT",
-         "Gene.GenBank.Accession", "Protein.Uniprot.Accession") %>%
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   drop_na() %>%
   group_by(Gene.Symbol, Protein.Uniprot.Accession) %>%
   summarize(`Mean mRNA Decay Rate` = mean(`mRNA Decay Rate`, na.rm = TRUE))
@@ -192,11 +188,9 @@ df_agg <- agg_score %>%
   drop_na() %>%
   filter(grepl("human", `Uniprot ID`)) %>%
   mutate(Protein.Uniprot.Symbol = toupper(`Uniprot ID`)) %>%
-  left_join(y = uniprot_mapping, by = "Protein.Uniprot.Symbol",
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Protein.Uniprot.Symbol", "Gene.Symbol"),
+            by = "Protein.Uniprot.Symbol",
             na_matches = "never", relationship = "many-to-one") %>%
-  drop_na() %>%
-  mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
   select(-ZaggSC, -Protein.Uniprot.Symbol, -`Uniprot ID`) %>%
   drop_na()
 
@@ -216,10 +210,12 @@ other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
                            df_complexes, df_mobidb, df_ned, df_decay, df_agg)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
-  reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+  reduce(full_join, by = "Protein.Uniprot.Accession",
          relationship = "many-to-one") %>%
-  filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol))) %>%
-  mutate_if(is.numeric, ~replace_na(., 0))
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Protein.Uniprot.Accession",
+            na_matches = "never", relationship = "many-to-one") %>%
+  filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol)))
 
 df_dc_factors_other <- other_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
@@ -227,17 +223,24 @@ df_dc_factors_other <- other_factor_datasets %>%
   filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol))) %>%
   group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
   summarize_if(is.numeric, ~first(na.omit(.))) %>%
-  ungroup() %>%
-  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)"), ~replace_na(., 0))
+  ungroup()
 
 df_dc_factors <- df_dc_factors_ptm %>%
   full_join(y = df_dc_factors_other, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
-            relationship = "many-to-one")
+            relationship = "many-to-one") %>%
+  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)",
+              "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
+              "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Sites"),
+            ~replace_na(., 0))
 
 # === Quality Control ===
 # Check for unmatched and ambiguous rows
-ambig <- df_dc_factors_other %>%
+ambig <- df_dc_factors %>%
   add_count(Gene.Symbol, Protein.Uniprot.Accession) %>%
+  filter(n > 1)
+
+ambig_prot <- df_dc_factors %>%
+  add_count(Protein.Uniprot.Accession) %>%
   filter(n > 1)
 
 ## Determine amount of missing data

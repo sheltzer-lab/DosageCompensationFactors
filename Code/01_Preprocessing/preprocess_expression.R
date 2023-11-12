@@ -31,6 +31,8 @@ procan_expr <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein
 depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics.csv"))
 
 df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
+uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
+
 
 # === Tidy Datasets ===
 
@@ -49,8 +51,9 @@ procan_expr_tidy <- procan_expr %>%
   select(-CellLine.Name) %>%
   inner_join(y = df_celllines, by = "CellLine.SangerModelId",
              relationship = "many-to-one", na_matches = "never") %>%
-  mapIds("UNIPROT", "SYMBOL",
-         "Protein.Uniprot.Accession", "Gene.Symbol") %>%
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Protein.Uniprot.Accession",
+            na_matches = "never", relationship = "many-to-one") %>%
   mutate(Dataset = "ProCan")
 
 depmap_expr_tidy <- depmap_expr %>%

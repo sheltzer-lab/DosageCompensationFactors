@@ -53,23 +53,43 @@ mapIds <- function(df, key_type, value_type, key_col, value_col) {
   return(df)
 }
 
-uniprot_symbol2acc <- function(df, symbol_col = "Protein.Uniprot.Symbol", mart = ensembl_mart) {
-  df_acc <- biomaRt::getBM(attributes = c('uniprot_gn_id', 'uniprot_gn_symbol',
+# For possible ID types look into ensembl_mart$filters
+# E.g. uniprot_gn_id, hgnc_symbol
+id2uniprot_acc <- function(df, id_col, id_type, mart = ensembl_mart) {
+  df_acc <- biomaRt::getBM(attributes = c(id_type, 'uniprot_gn_id',
                                           'uniprotswissprot'),
-                           filters = 'uniprot_gn_symbol',
-                           values = unique(df[[symbol_col]]),
+                           filters = id_type,
+                           values = unique(df[[id_col]]),
                            mart = mart) %>%
     # Use swissprot ID if available
     mutate(uniprotswissprot = if_else(uniprotswissprot == "", NA, uniprotswissprot),
            uniprot_gn_id = if_else(uniprot_gn_id == "", NA, uniprot_gn_id)) %>%
-    group_by(uniprot_gn_symbol) %>%
+    group_by_at(id_type) %>%
     summarize(Protein.Uniprot.Accession = if_else(any(!is.na(uniprotswissprot)),
                                                   first(uniprotswissprot, na_rm = TRUE),
                                                   first(uniprot_gn_id, na_rm = TRUE))) %>%
-    rename(!!symbol_col := 'uniprot_gn_symbol') %>%
+    rename(!!id_col := id_type) %>%
     drop_na()
 
   df <- df %>%
-    left_join(y = df_acc, by = symbol_col,
+    left_join(y = df_acc, by = id_col,
+              na_matches = "never", relationship = "many-to-one")
+}
+
+# For possible ID types look into ensembl_mart$filters
+# E.g. uniprot_gn_id, hgnc_symbol
+uniprot_acc2id <- function(df, id_col, id_type, acc_col = "Protein.Uniprot.Accession", mart = ensembl_mart) {
+  df_acc <- biomaRt::getBM(attributes = c(id_type, 'uniprot_gn_id'),
+                           filters = 'uniprot_gn_id',
+                           values = unique(df[[acc_col]]),
+                           mart = mart) %>%
+    group_by_at("uniprot_gn_id") %>%
+    summarize_at(id_type, ~first(.x, na_rm = TRUE)) %>%
+    rename(!!id_col := id_type,
+           !!acc_col := "uniprot_gn_id") %>%
+    drop_na()
+
+  df <- df %>%
+    left_join(y = df_acc, by = acc_col,
               na_matches = "never", relationship = "many-to-one")
 }
