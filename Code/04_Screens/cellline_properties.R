@@ -85,6 +85,9 @@ data_density_procan <- df_procan %>%
 data_density_depmap <- df_procan %>%
   data_density()
 
+cancers_depmap <- df_depmap %>%
+  distinct(OncotreeLineage, OncotreePrimaryDisease, OncotreeSubtype, OncotreeCode)
+
 # Plot distributions for categorical variables
 cols_procan <- c("tissue_status", "cancer_type", "msi_status",
                  "smoking_status", "gender", "ethnicity",
@@ -130,6 +133,44 @@ df_depmap %>%
   save_plot("cellline_cancer-type_low-aneuploidy_depmap.png", width = 300)
 
 # Statistical comparisons
+## Difference between Leukemia and Non-Leukemia cancer cells
+leuk_procan <- c("B-Cell Non-Hodgkin's Lymphoma", "B-Lymphoblastic Leukemia", "Acute Myeloid Leukemia")
+leuk_depmap <- c("Diffuse Large B-Cell Lymphoma, NOS", "B-Lymphoblastic Leukemia/Lymphoma", "Acute Myeloid Leukemia")
+
+df_procan %>%
+  mutate(Leukemia_Lymphoma = cancer_type %in% leuk_procan) %>%
+  signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("cellline_leukemia_procan.png")
+df_depmap %>%
+  mutate(Lymphoid_Myeloid = OncotreeLineage %in% leuk_depmap) %>%
+  signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("cellline_leukemia_depmap.png")
+
+### Control for low aneuploidy score
+df_leuk_procan <- df_procan %>%
+  filter(cancer_type %in% leuk_procan)
+aneuploidy_leuk_max <- round(quantile(df_leuk_procan$CellLine.AneuploidyScore, probs = 0.9))
+
+df_procan %>%
+  filter(CellLine.AneuploidyScore <= aneuploidy_leuk_max) %>%
+  mutate(Leukemia_Lymphoma = cancer_type %in% leuk_procan) %>%
+  signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("cellline_leukemia_low-aneuploidy_procan.png")
+df_depmap %>%
+  filter(CellLine.AneuploidyScore <= aneuploidy_leuk_max) %>%
+  mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
+  signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("cellline_leukemia_low-aneuploidy_depmap.png")
+
+
 ## Tumor status
 df_procan %>%
   signif_violin_plot(tissue_status, Buffering.CellLine.Ratio,

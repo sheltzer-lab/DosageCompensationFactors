@@ -65,5 +65,5 @@ dc_growth_reg_nowgd <- df_prolif_nowgd %>%
                           label_coords = c(0.25, 7.5), point_size = 1.5,
                           title = paste0("ProCan filtered (Non-WGD), Correlation: ",
                                          "ρ = ", format(round(dc_growth_cor_nowgd$estimate[["rho"]], 3), nsmall = 3),
-                                         ", ", print_signif(dc_growth_cor$p.value, 3))) %>%
+                                         ", ", print_signif(dc_growth_cor_nowgd$p.value, 3))) %>%
   save_plot("dosage_compensation_proliferation_procan_filtered_nowgd.png")
