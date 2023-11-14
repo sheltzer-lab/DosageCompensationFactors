@@ -7,6 +7,7 @@ library(corrplot)
 library(ggsignif)
 library(viridisLite)
 library(ggbeeswarm)
+library(pheatmap)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -290,14 +291,14 @@ scree_plot <- function(pca) {
 bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
                                   cluster_rows = FALSE, cluster_cols = FALSE,
                                   show_rownames = TRUE, show_colnames = TRUE,
-                                  transpose = FALSE, palette_length = 100, color_pal = biderectional_color_pal) {
+                                  transpose = FALSE, palette_length = 100, color_pal = bidirectional_color_pal) {
   mat <- df %>%
     group_by({ { sample_col } }, { { group_col } }) %>%
     summarize(Value = mean({ { value_col } }, na.rm = TRUE)) %>%
     ungroup() %>%
     pivot_wider(names_from = { { sample_col } }, values_from = Value, id_cols = { { group_col } }) %>%
     arrange({ { group_col } }) %>%
-    column_to_rownames(var = quo_name(enquo(group_col)))
+    tibble::column_to_rownames(var = quo_name(enquo(group_col)))
 
   if (transpose) {
     mat <- t(mat)
@@ -332,7 +333,7 @@ bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
                            highlight_color, default_color)) %>%
     ggplot() +
     aes(x = Position, y = { { value_col } }, color = Color) +
-    geom_hline(yintercept = threshold_low, color = biderectional_color_pal[1], linetype="dashed", linewidth = 1/3) +
+    geom_hline(yintercept = threshold_low, color = bidirectional_color_pal[1], linetype="dashed", linewidth = 1/3) +
     geom_hline(yintercept = threshold_high, color = "orange", linetype="dashed", linewidth = 1/3) +
     geom_hline(yintercept = 0, color = default_color) +
     geom_point(alpha = 1/2, size = 1/3) +
