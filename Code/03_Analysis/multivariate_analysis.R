@@ -127,6 +127,20 @@ clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_co
     janitor::clean_names()
 }
 
+split_train_test <- function(df_prep, training_set_ratio) {
+  # Split training & test data
+  training_set <- df_prep %>%
+    slice_sample(by = buffered, prop = training_set_ratio) %>%
+    shuffle_rows()
+
+  test_set <- df_prep %>%
+    anti_join(training_set, by = 'id') %>%
+    shuffle_rows()
+
+  return(list(training = training_set %>% select(-id),
+              test = test_set %>% select(-id)))
+}
+
 prepare_datasets <- function(dataset, buffering_class_col, filter_func,
                              df_factors = dc_factors, factor_cols = dc_factor_cols,
                              training_set_ratio = 0.8, target_balance = 0.7, cv_eval = FALSE) {
@@ -145,25 +159,14 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
 
   if (floor(nrow(df_prep) * training_set_ratio) == 0) return(NA)
 
-  # Split training & test data
-  training_set <- df_prep %>%
-    slice_sample(by = buffered, prop = training_set_ratio) %>%
-    shuffle_rows()
-
-  test_set <- df_prep %>%
-    anti_join(training_set, by = 'id') %>%
-    shuffle_rows()
-
   if (cv_eval == TRUE) {
     # Don't create a test set if evaluation is done entirely using cross validation
-    datasets <- list(training = df_prep %>% shuffle_rows() %>% select(-id),
-                     test = NULL)
-  } else {
-    datasets <- list(training = training_set %>% select(-id),
-                     test = test_set %>% select(-id))
+    return(list(training = df_prep %>% shuffle_rows() %>% select(-id),
+                test = NULL))
   }
 
-  return(datasets)
+  # Split training & test data
+  return(split_train_test(df_prep, training_set_ratio))
 }
 
 run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, train_control,
@@ -228,29 +231,29 @@ tc_p0211["number"] <- 10
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base),
-  list(modelName = "rf", tc = tc_base),
-  list(modelName = "pcaNNet", tc = tc_nn)
+  list(modelName = "xgbLinear", tc = tc_base)
+#  list(modelName = "rf", tc = tc_base),
+#  list(modelName = "pcaNNet", tc = tc_nn)
 )
 
 ## Define datasets to train models on
 datasets <- list(
-  list(dataset = expr_buf_procan, name = "ProCan"),
-  list(dataset = expr_buf_depmap, name = "DepMap"),
-  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
-  list(dataset = buf_wgd, name = "DepMap-WGD"),
-  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
-  list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211)
+  list(dataset = expr_buf_procan, name = "ProCan")
+#  list(dataset = expr_buf_depmap, name = "DepMap"),
+#  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
+#  list(dataset = buf_wgd, name = "DepMap-WGD"),
+#  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
+#  list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211)
 )
 
 ## Define training data conditions
 analysis_conditions <- list(
   # list(buffering = "Buffering.GeneLevel.Class", filter = identity, sub_dir =  list("Gene-Level", "Unfiltered")),
-  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles, sub_dir =  list("Gene-Level", "Filtered")),
-  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain, sub_dir =  list("Gene-Level", "Filtered_Gain")),
-  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss, sub_dir =  list("Gene-Level", "Filtered_Loss")),
-  list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain, sub_dir =  list("ChromosomeArm-Level", "Gain")),
-  list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss, sub_dir =  list("ChromosomeArm-Level", "Loss")),
+  # list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff_quantiles, sub_dir =  list("Gene-Level", "Filtered")),
+  # list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain, sub_dir =  list("Gene-Level", "Filtered_Gain")),
+  # list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss, sub_dir =  list("Gene-Level", "Filtered_Loss")),
+  # list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain, sub_dir =  list("ChromosomeArm-Level", "Gain")),
+  # list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss, sub_dir =  list("ChromosomeArm-Level", "Loss")),
   list(buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_gain, sub_dir = list("ChromosomeArm-Level", "Gain_Log2FC")),
   list(buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_loss, sub_dir = list("ChromosomeArm-Level", "Loss_Log2FC")),
   list(buffering = "Buffering.ChrArmLevel.Average.Class", filter = filter_arm_gain_gene_avg, sub_dir = list("ChromosomeArm-Level", "Gain_Average")),
@@ -447,3 +450,113 @@ rocs_procan_p0211_loss <- list(
 rocs_to_df(rocs_procan_p0211_loss) %>%
   plot_rocs() %>%
   save_plot("roc-summary.png", dir = eval_dir, width = 250)
+
+# === LAB ===
+
+#model <- model_procan_gain_xgb
+#test_set <- model$datasets$test %>% slice_sample(n = 100)
+#train_set <- model$datasets$test %>% slice_sample(n = 100)
+
+shap.score.rank <- function(xgb_model = xgb_mod, shap_approx = TRUE,
+                            X_train = mydata$train_mm){
+  require(xgboost)
+  require(data.table)
+  shap_contrib <- predict(xgb_model, X_train,
+                          predcontrib = TRUE, approxcontrib = shap_approx)
+  shap_contrib <- as.data.table(shap_contrib)
+  shap_contrib[,BIAS:=NULL]
+  cat('make SHAP score by decreasing order\n\n')
+  mean_shap_score <- colMeans(abs(shap_contrib))[order(colMeans(abs(shap_contrib)), decreasing = T)]
+  return(list(shap_score = shap_contrib,
+              mean_shap_score = (mean_shap_score)))
+}
+
+# shap <- predict(model$finalModel, model$datasets$training, predcontrib = TRUE, approxcontrib = TRUE)
+
+## Train model on buffering ratio
+
+df_prep <- expr_buf_procan %>%
+  filter_cn_gain() %>%
+  mutate(Buffered = Buffering.GeneLevel.Ratio) %>%
+  add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  mutate_if(is.numeric, \(x) as.numeric(x)) %>%
+  drop_na(Buffered) %>%
+  select(Buffered, all_of(dc_factor_cols)) %>%
+  janitor::clean_names() %>%
+  # ToDo: Only use imputation on training set
+  impute_na() %>%
+  select(where(~!all(is.na(.x)))) %>% # Remove empty factors
+  # rebalance_binary(buffered, target_balance = target_balance) %>%
+  mutate(id = row_number()) %>%
+  drop_na()
+
+training_set <- df_prep %>%
+    slice_sample(prop = 0.8) %>%
+    shuffle_rows()
+
+test_set <- df_prep %>%
+  anti_join(training_set, by = 'id') %>%
+  shuffle_rows()
+
+training_x <-  training_set %>% select(-buffered, -id) %>% as.matrix()
+training_y <-  training_set$buffered
+test_x <-  test_set %>% select(-buffered, -id) %>% as.matrix()
+test_y <-  test_set$buffered
+
+model <- xgboost(
+  data = training_x,
+  label = training_y,
+  nround = 150,
+  lambda = 0.1,
+  alpha = 0.1,
+  eta = 0.3,
+  verbose = FALSE
+)
+
+### Evaluate continuous model
+predictions <- predict(model, test_x)
+observations <- buffering_class(test_y)
+
+model_roc <- roc(response = observations, predictor = predictions, na.rm = TRUE)
+
+# https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
+library(shapr)
+# Prepare the data for explanation
+training_x_small <- model_procan_gain_xgb$datasets$training %>%
+  select(-buffered) %>%
+  slice_sample(n = 50)
+
+test_x_small <- model_procan_gain_xgb$datasets$test %>%
+  select(-buffered) %>%
+  slice_sample(n = 50)
+
+explainer <- shapr(training_x_small, model_procan_gain_xgb$finalModel, n_combinations = 200)
+
+# Specifying the phi_0, i.e. the expected prediction without any features
+p <- mean(model_procan_gain_xgb$datasets$training$buffered == "Buffered")
+
+explanation <- explain(
+  test_x_small,
+  approach = "ctree",
+  explainer = explainer,
+  prediction_zero = p
+)
+
+plot(explanation, plot_phi0 = FALSE, index_x_test = c(1, 6))
+
+factor_values <- explanation$x_test %>%
+  pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "DosageCompensation.Factor.Value")
+
+df_explanation <- explanation$dt %>%
+  select(-none) %>%
+  pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "SHAP-Score") %>%
+  mutate(Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
+  group_by(DosageCompensation.Factor) %>%
+  mutate(Factor.Value.Relative = (Factor.Value - min(Factor.Value, na.rm = T)) /
+    (max(Factor.Value, na.rm = TRUE) - min(Factor.Value, na.rm = T))) %>%
+  ungroup()
+
+df_explanation %>%
+  jittered_boxplot(DosageCompensation.Factor, `SHAP-Score`, color_col = Factor.Value.Relative)
+
+# === END ===
