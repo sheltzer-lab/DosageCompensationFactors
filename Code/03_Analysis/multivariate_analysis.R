@@ -453,9 +453,7 @@ rocs_to_df(rocs_procan_p0211_loss) %>%
   plot_rocs() %>%
   save_plot("roc-summary.png", dir = eval_dir, width = 250)
 
-# === LAB ===
-
-# https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
+## Explain XGBoost models using SHAP values
 estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method = "ctree") {
   set.seed(42)
 
@@ -471,6 +469,7 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
     ungroup() %>%
     select(-buffered)
 
+  # https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
   explainer <- shapr(training_x_small, model$finalModel, n_combinations = n_combinations)
   # Specifying the phi_0, i.e. the expected prediction without any features
   # Note: buffered column is a factor: 1 = "Buffered", 2 = "Scaling"
@@ -488,33 +487,41 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
   return(explanation)
 }
 
+shap2df <- function(explanation) {
+  factor_values <- explanation$x_test %>%
+    pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "DosageCompensation.Factor.Value")
 
-tm <- Sys.time()
-explanation <- estimate_shap(model_procan_gain_xgb)
-exec_time <- difftime(Sys.time(), tm, units = "secs")[[1]]
+  df_explanation <- explanation$dt %>%
+    select(-none) %>%
+    pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "SHAP.Value") %>%
+    mutate(Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
+    group_by(DosageCompensation.Factor) %>%
+    mutate(Factor.Value.Relative = (Factor.Value - min(Factor.Value, na.rm = T)) /
+      (max(Factor.Value, na.rm = TRUE) - min(Factor.Value, na.rm = T)),
+           SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
+           SHAP.Median.Absolute = median(abs(SHAP.Value)),
+           SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]],
+           SHAP.Factor.Corr = cor.test(Factor.Value, SHAP.Value, method = "spearman")$estimate[["rho"]]) %>%
+    ungroup()
 
-# plot(explanation, plot_phi0 = FALSE, index_x_test = c(1, 6))
+  return(df_explanation)
+}
 
-factor_values <- explanation$x_test %>%
-  pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "DosageCompensation.Factor.Value")
+for (dataset in datasets) {
+  for (analysis in analysis_conditions) {
+    # shapr currently only supports xgboost of all the trained models
+    model_name <- "xgbLinear"
+    sub_dir <- append(dataset$name, analysis$sub_dir)
+    model_filename <- paste0("model_", model_name, "_", paste0(sub_dir, collapse = "_"), ".rds")
 
-df_explanation <- explanation$dt %>%
-  select(-none) %>%
-  pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "SHAP.Value") %>%
-  mutate(Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
-  group_by(DosageCompensation.Factor) %>%
-  mutate(Factor.Value.Relative = (Factor.Value - min(Factor.Value, na.rm = T)) /
-    (max(Factor.Value, na.rm = TRUE) - min(Factor.Value, na.rm = T)),
-         SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
-         SHAP.Median.Absolute = median(abs(SHAP.Value)),
-         SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]],
-         SHAP.Factor.Corr = cor.test(Factor.Value, SHAP.Value, method = "spearman")$estimate[["rho"]]) %>%
-  ungroup()
-
-df_explanation %>%
-  jittered_boxplot(DosageCompensation.Factor, SHAP.Value, color_col = Factor.Value.Relative)
-
-df_explanation %>%
-  shap_importance_plot()
-
-# === END ===
+    df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
+      estimate_shap() %>%
+      shap2df()
+    df_explanation %>%
+      shap_plot() %>%
+      save_plot(paste0("shap-explanation_", model_name, ".png"), dir = here(plots_dir, sub_dir))
+    df_explanation %>%
+      shap_importance_plot() %>%
+      save_plot(paste0("shap-absolute-importance_", model_name, ".png"), dir = here(plots_dir, sub_dir))
+  }
+}

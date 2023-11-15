@@ -476,6 +476,23 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
   return(plot)
 }
 
+
+shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.15) {
+  max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
+
+  df_explanation %>%
+    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Median.Absolute)) %>%
+    arrange(Factor.Value.Relative) %>%
+    ggplot() +
+    aes(x = DosageCompensation.Factor, y = SHAP.Value) +
+    geom_hline(yintercept = 0) +
+    geom_boxplot(outlier.shape = NA, color = "black") +
+    geom_quasirandom(aes(color = Factor.Value.Relative), alpha = alpha, width = jitter_width) +
+    scale_y_continuous(breaks = seq(-max_abs_shap, max_abs_shap, 0.05)) +
+    coord_flip(ylim = c(-max_abs_shap, max_abs_shap)) +
+    scale_colour_viridis_c(option = "C", direction = 1, end = 0.95)
+}
+
 shap_importance_plot <- function(df_explanation,
                                  bar_label_shift = 0.002,
                                  title = NULL, category_lab = "Feature", value_lab = "Median Absolute SHAP-Value",
@@ -489,10 +506,10 @@ shap_importance_plot <- function(df_explanation,
         label = format(round(SHAP.Median.Absolute, 3), nsmall = 3)) +
     geom_hline(yintercept = 0) +
     geom_bar(aes(fill = SHAP.Factor.Corr), color = "black", stat = "identity") +
-    geom_text(color = "black", y = 0 + bar_label_shift, hjust = 0) +
     geom_pointrange(aes(x = DosageCompensation.Factor, y = SHAP.Median.Absolute,
                         ymin = SHAP.p25.Absolute, ymax = SHAP.p75.Absolute),
                     colour = "orange", fatten = 1) +
+    geom_text(color = "black", y = 0 + bar_label_shift, hjust = 0) +
     scale_y_continuous(breaks = seq(0, max(df_explanation$SHAP.p75.Absolute), 0.01)) +
     scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab") +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
