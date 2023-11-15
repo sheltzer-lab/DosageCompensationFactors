@@ -8,6 +8,7 @@ library(ggsignif)
 library(viridisLite)
 library(ggbeeswarm)
 library(pheatmap)
+library(forcats)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -15,7 +16,7 @@ vertical_bar_chart <- function(df, category_col, value_col,
                                color_col = NULL,
                                error_low_col = NULL, error_high_col = NULL,
                                value_range = c(0.45, 0.65), break_steps = 0.05,
-                               line_intercept = 0.5, bar_label_shift = 0.005,
+                               line_intercept = 0.5, bar_label_shift = 0.002,
                                title = NULL, category_lab = NULL, value_lab = NULL, color_lab = NULL) {
   df %>%
     ggplot() +
@@ -28,7 +29,7 @@ vertical_bar_chart <- function(df, category_col, value_col,
       geom_pointrange(aes(x = { { category_col } }, y = { { value_col } },
                           ymin = { { error_low_col } }, ymax = { { error_high_col } }),
                       colour = "orange", fatten = 1) } +
-    geom_text(color = "white", y = value_range[1] + bar_label_shift) +
+    geom_text(color = "white", y = value_range[1] + bar_label_shift, hjust = 0) +
     scale_y_continuous(breaks = seq(value_range[1], value_range[2], break_steps)) +
     scale_fill_viridis_c(option = "G", direction = -1, begin = 0.2, end = 0.8) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
@@ -473,4 +474,27 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
     ggtitle(title, subtitle = NULL)
 
   return(plot)
+}
+
+shap_importance_plot <- function(df_explanation,
+                                 bar_label_shift = 0.002,
+                                 title = NULL, category_lab = "Feature", value_lab = "Median Absolute SHAP-Value",
+                                 color_lab = "Feature Correlation") {
+  df_explanation %>%
+    select(-SHAP.Value) %>%
+    distinct(DosageCompensation.Factor, .keep_all = TRUE) %>%
+    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Median.Absolute)) %>%
+    ggplot() +
+    aes(x = DosageCompensation.Factor, y = SHAP.Median.Absolute,
+        label = format(round(SHAP.Median.Absolute, 3), nsmall = 3)) +
+    geom_hline(yintercept = 0) +
+    geom_bar(aes(fill = SHAP.Factor.Corr), color = "black", stat = "identity") +
+    geom_text(color = "black", y = 0 + bar_label_shift, hjust = 0) +
+    geom_pointrange(aes(x = DosageCompensation.Factor, y = SHAP.Median.Absolute,
+                        ymin = SHAP.p25.Absolute, ymax = SHAP.p75.Absolute),
+                    colour = "orange", fatten = 1) +
+    scale_y_continuous(breaks = seq(0, max(df_explanation$SHAP.p75.Absolute), 0.01)) +
+    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab") +
+    labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
+    coord_flip(ylim = c(0, max(df_explanation$SHAP.p75.Absolute)))
 }
