@@ -5,6 +5,7 @@ library(arrow)
 library(readxl)
 library(assertr)
 library(purrr)
+library(readr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -55,6 +56,8 @@ ned_human <- read_excel(here(factor_data_dir, "NED-Human_RPE-1.xlsx"))
 mrna_decay <- read_excel(here(factor_data_dir, "Yang.2003.mRNADecay.Rates.xlsx"))
 # DOI: 10.1016/j.celrep.2013.09.043, Supplementary Table 2: Supersaturation Database.
 agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 18254)
+# DOI: 10.1371/journal.pgen.1001154, URL: https://www.deciphergenomics.org/about/downloads/data
+hi_scores <- read_table(here(factor_data_dir, "HI_Predictions_Version3.bed.gz"), skip = 1, col_names = FALSE, show_col_types = FALSE)
 
 # === Prepare Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
@@ -194,6 +197,15 @@ df_agg <- agg_score %>%
   select(-ZaggSC, -Protein.Uniprot.Symbol, -`Uniprot ID`) %>%
   drop_na()
 
+## Prepare Haploinsufficiency data
+df_hi <- hi_scores %>%
+  select(X4, X5) %>%
+  separate_wider_delim(X4, delim = "|", names = c("Gene.Symbol", "HI.Score", "HI.Percentile")) %>%
+  select(-HI.Score, -HI.Percentile) %>%
+  rename(`Haploinsufficiency Score` = X5) %>%
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
+  drop_na()
+
 # === Combine Factor Datasets ===
 
 ptm_factor_datasets <- list(
@@ -207,7 +219,7 @@ ptm_factor_datasets <- list(
 )
 
 other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
-                           df_complexes, df_mobidb, df_ned, df_decay, df_agg)
+                           df_complexes, df_mobidb, df_ned, df_decay, df_agg, df_hi)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = "Protein.Uniprot.Accession",
