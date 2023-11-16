@@ -1,3 +1,4 @@
+library(tidyr)
 library(dplyr)
 library(here)
 library(arrow)
