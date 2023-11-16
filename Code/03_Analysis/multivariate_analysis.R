@@ -516,7 +516,7 @@ shap2df <- function(explanation) {
            SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
            SHAP.Median.Absolute = median(abs(SHAP.Value)),
            SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]],
-           SHAP.Factor.Corr = cor.test(Factor.Value, SHAP.Value, method = "spearman")$estimate[["rho"]]) %>%
+           SHAP.Factor.Corr = cor(Factor.Value, SHAP.Value, method = "spearman", use = "na.or.complete")) %>%
     ungroup()
 
   return(df_explanation)
