@@ -507,12 +507,19 @@ shap2df <- function(explanation) {
   return(df_explanation)
 }
 
+pb <- txtProgressBar(min = 0, max = length(datasets) * length(analysis_conditions), style = 3)
 for (dataset in datasets) {
   for (analysis in analysis_conditions) {
     # shapr currently only supports xgboost of all the trained models
     model_name <- "xgbLinear"
     sub_dir <- append(dataset$name, analysis$sub_dir)
     model_filename <- paste0("model_", model_name, "_", paste0(sub_dir, collapse = "_"), ".rds")
+
+    if (!file.exists(here(models_base_dir, model_filename))) {
+      warning("Model ", model_filename, " does not exist!")
+      setTxtProgressBar(pb, pb$getVal() + 1)
+      next
+    }
 
     df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
       estimate_shap() %>%
@@ -523,5 +530,8 @@ for (dataset in datasets) {
     df_explanation %>%
       shap_importance_plot() %>%
       save_plot(paste0("shap-absolute-importance_", model_name, ".png"), dir = here(plots_dir, sub_dir))
+
+    setTxtProgressBar(pb, pb$getVal() + 1)
   }
 }
+close(pb)
