@@ -458,16 +458,31 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
   set.seed(42)
 
   # Prepare the data for explanation
-  training_x_small <- model$datasets$training %>%
-    group_by(buffered) %>%
-    slice_sample(n = n_samples) %>%
-    ungroup() %>%
-    select(-buffered)
-  test_x_small <- model$datasets$test %>%
-    group_by(buffered) %>%
-    slice_sample(n = n_samples) %>%
-    ungroup() %>%
-    select(-buffered)
+  if (is.null(model$datasets$test)) {
+    x_small <- model$datasets$training %>%
+      group_by(buffered) %>%
+      slice_sample(n = 2 * n_samples) %>%
+      mutate(Dataset = c(rep("Training", n_samples), rep("Test", n_samples))) %>%
+      ungroup()
+
+    training_x_small <- x_small %>%
+      filter(Dataset == "Training") %>%
+      select(-Dataset, -buffered)
+    test_x_small <- x_small %>%
+      filter(Dataset == "Test") %>%
+      select(-Dataset, -buffered)
+  } else {
+    training_x_small <- model$datasets$training %>%
+      group_by(buffered) %>%
+      slice_sample(n = n_samples) %>%
+      ungroup() %>%
+      select(-buffered)
+    test_x_small <- model$datasets$test %>%
+      group_by(buffered) %>%
+      slice_sample(n = n_samples) %>%
+      ungroup() %>%
+      select(-buffered)
+  }
 
   # https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
   explainer <- shapr(training_x_small, model$finalModel, n_combinations = n_combinations)
@@ -501,18 +516,25 @@ shap2df <- function(explanation) {
            SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
            SHAP.Median.Absolute = median(abs(SHAP.Value)),
            SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]],
-           SHAP.Factor.Corr = cor.test(Factor.Value, SHAP.Value, method = "spearman")$estimate[["rho"]]) %>%
+           SHAP.Factor.Corr = cor(Factor.Value, SHAP.Value, method = "spearman", use = "na.or.complete")) %>%
     ungroup()
 
   return(df_explanation)
 }
 
+pb <- txtProgressBar(min = 0, max = length(datasets) * length(analysis_conditions), style = 3)
 for (dataset in datasets) {
   for (analysis in analysis_conditions) {
     # shapr currently only supports xgboost of all the trained models
     model_name <- "xgbLinear"
     sub_dir <- append(dataset$name, analysis$sub_dir)
     model_filename <- paste0("model_", model_name, "_", paste0(sub_dir, collapse = "_"), ".rds")
+
+    if (!file.exists(here(models_base_dir, model_filename))) {
+      warning("Model ", model_filename, " does not exist!")
+      setTxtProgressBar(pb, pb$getVal() + 1)
+      next
+    }
 
     df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
       estimate_shap() %>%
@@ -523,5 +545,8 @@ for (dataset in datasets) {
     df_explanation %>%
       shap_importance_plot() %>%
       save_plot(paste0("shap-absolute-importance_", model_name, ".png"), dir = here(plots_dir, sub_dir))
+
+    setTxtProgressBar(pb, pb$getVal() + 1)
   }
 }
+close(pb)

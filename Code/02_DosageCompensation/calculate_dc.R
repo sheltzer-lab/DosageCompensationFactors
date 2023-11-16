@@ -119,11 +119,14 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
     # ToDo: Evaluate if building mean positive/negative CNV per gene is interesting
     mutate(Buffering.GeneLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
                                                        2^Gene.CopyNumber.Baseline, 2^Gene.CopyNumber),
+           Buffering.GeneLevel.SF = scaling_factor(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
+                                                   2^Gene.CopyNumber.Baseline, 2^Gene.CopyNumber),
            Buffering.ChrArmLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
                                                          ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Ratio = buffering_ratio(2^Protein.Expression.Baseline.Unweighted, 2^Protein.Expression.Average,
                                                                  2L, 2L + ChromosomeArm.CNA)) %>%
     mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
+           Buffering.GeneLevel.SF.Class = buffering_class_sf(Buffering.GeneLevel.SF),
            Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio),
            Buffering.ChrArmLevel.Log2FC.Class = buffering_class_log2fc(Log2FC,
                                                                        cn_base = ChromosomeArm.CopyNumber.Baseline,
@@ -228,6 +231,21 @@ expr_baseline_plot <- df_expr_eval %>%
 
 expr_baseline_plot %>%
   save_plot("expression_baseline_methods.png")
+
+## Check correlation between DC Scores and Protein Coefficient of Variance
+## Buffering Score should be negatively correlated with Protein Coefficient of Variance
+dc_cv <- expr_buf_procan %>%
+  select(Gene.Symbol, Protein.Expression.Normalized, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.SF) %>%
+  group_by(Gene.Symbol) %>%
+  mutate(Protein.Expression.CV = log2(sd(Protein.Expression.Normalized, na.rm = TRUE) /
+    abs(mean(Protein.Expression.Normalized, na.rm = TRUE))),
+         Buffering.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
+         Buffering.SF.Average = mean(Buffering.GeneLevel.SF, na.rm = TRUE))
+
+cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.Ratio.Average, method = "spearman")
+cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.SF.Average, method = "spearman")
+cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.GeneLevel.Ratio, method = "spearman")
+cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.GeneLevel.SF, method = "spearman")
 
 ## Check correlation between datasets
 buf_matched <- match_datasets(expr_buf_procan, expr_buf_depmap)

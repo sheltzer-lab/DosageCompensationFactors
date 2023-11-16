@@ -4,9 +4,9 @@ library(dplyr)
 ensembl_mart <- biomaRt::useMart("ENSEMBL_MART_ENSEMBL", dataset = "hsapiens_gene_ensembl") # GRCh38.p14
 
 get_chromosome_arms <- function(df, mart = ensembl_mart, symbol_col = "Gene.Symbol") {
-  chr_location <- biomaRt::getBM(attributes = c("hgnc_symbol",
+  chr_location <- biomaRt::getBM(attributes = c('hgnc_symbol',
                                                 'chromosome_name', 'band',
-                                                "start_position", "end_position"),
+                                                'start_position', 'end_position'),
                                  filters = 'hgnc_symbol',
                                  values = unique(df[[symbol_col]]),
                                  mart = ensembl_mart) %>%
