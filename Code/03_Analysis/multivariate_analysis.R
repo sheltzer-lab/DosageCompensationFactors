@@ -458,16 +458,31 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
   set.seed(42)
 
   # Prepare the data for explanation
-  training_x_small <- model$datasets$training %>%
-    group_by(buffered) %>%
-    slice_sample(n = n_samples) %>%
-    ungroup() %>%
-    select(-buffered)
-  test_x_small <- model$datasets$test %>%
-    group_by(buffered) %>%
-    slice_sample(n = n_samples) %>%
-    ungroup() %>%
-    select(-buffered)
+  if (is.null(model$datasets$test)) {
+    x_small <- model$datasets$training %>%
+      group_by(buffered) %>%
+      slice_sample(n = 2 * n_samples) %>%
+      mutate(Dataset = c(rep("Training", n_samples), rep("Test", n_samples))) %>%
+      ungroup()
+
+    training_x_small <- x_small %>%
+      filter(Dataset == "Training") %>%
+      select(-Dataset, -buffered)
+    test_x_small <- x_small %>%
+      filter(Dataset == "Test") %>%
+      select(-Dataset, -buffered)
+  } else {
+    training_x_small <- model$datasets$training %>%
+      group_by(buffered) %>%
+      slice_sample(n = n_samples) %>%
+      ungroup() %>%
+      select(-buffered)
+    test_x_small <- model$datasets$test %>%
+      group_by(buffered) %>%
+      slice_sample(n = n_samples) %>%
+      ungroup() %>%
+      select(-buffered)
+  }
 
   # https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
   explainer <- shapr(training_x_small, model$finalModel, n_combinations = n_combinations)
