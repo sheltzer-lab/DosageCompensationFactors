@@ -158,7 +158,7 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
     # ToDo: Only use imputation on training set
     impute_na() %>%
-    select(where(~!all(is.na(.x)))) %>% # Remove empty factors
+    select(where(~!all(is.na(.x)))) # Remove empty factors
     # rebalance_binary(buffered, target_balance = target_balance)
 
   if (floor(nrow(df_prep) * training_set_ratio) == 0) return(NA)
