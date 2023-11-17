@@ -130,6 +130,9 @@ clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_co
 }
 
 split_train_test <- function(df_prep, training_set_ratio) {
+  df_prep <- df_prep  %>%
+    mutate(id = row_number())
+
   # Split training & test data
   training_set <- df_prep %>%
     slice_sample(by = buffered, prop = training_set_ratio) %>%
@@ -156,8 +159,7 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
     # ToDo: Only use imputation on training set
     impute_na() %>%
     select(where(~!all(is.na(.x)))) %>% # Remove empty factors
-    # rebalance_binary(buffered, target_balance = target_balance) %>%
-    mutate(id = row_number())
+    # rebalance_binary(buffered, target_balance = target_balance)
 
   if (floor(nrow(df_prep) * training_set_ratio) == 0) return(NA)
 
@@ -462,15 +464,11 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
     x_small <- model$datasets$training %>%
       group_by(buffered) %>%
       slice_sample(n = 2 * n_samples) %>%
-      mutate(Dataset = c(rep("Training", n_samples), rep("Test", n_samples))) %>%
-      ungroup()
+      ungroup() %>%
+      split_train_test(training_set_ratio = 0.5)
 
-    training_x_small <- x_small %>%
-      filter(Dataset == "Training") %>%
-      select(-Dataset, -buffered)
-    test_x_small <- x_small %>%
-      filter(Dataset == "Test") %>%
-      select(-Dataset, -buffered)
+    training_x_small <- x_small$training
+    test_x_small <- x_small$test
   } else {
     training_x_small <- model$datasets$training %>%
       group_by(buffered) %>%
