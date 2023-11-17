@@ -231,18 +231,18 @@ tc_p0211["number"] <- 10
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base)
-#  list(modelName = "rf", tc = tc_base),
-#  list(modelName = "pcaNNet", tc = tc_nn)
+  list(modelName = "xgbLinear", tc = tc_base),
+  list(modelName = "rf", tc = tc_base),
+  list(modelName = "pcaNNet", tc = tc_nn)
 )
 
 ## Define datasets to train models on
 datasets <- list(
-  # list(dataset = expr_buf_procan, name = "ProCan"),
-  # list(dataset = expr_buf_depmap, name = "DepMap"),
-  # list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
-  # list(dataset = buf_wgd, name = "DepMap-WGD"),
-  # list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
+  list(dataset = expr_buf_procan, name = "ProCan"),
+  list(dataset = expr_buf_depmap, name = "DepMap"),
+  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
+  list(dataset = buf_wgd, name = "DepMap-WGD"),
+  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
   list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211)
 )
 
