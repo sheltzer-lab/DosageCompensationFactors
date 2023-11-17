@@ -133,14 +133,11 @@ split_train_test <- function(df_prep, training_set_ratio) {
   df_prep <- df_prep  %>%
     mutate(id = row_number())
 
-  # Split training & test data
   training_set <- df_prep %>%
-    slice_sample(by = buffered, prop = training_set_ratio) %>%
-    shuffle_rows()
+    slice_sample(by = buffered, prop = training_set_ratio)
 
   test_set <- df_prep %>%
-    anti_join(training_set, by = 'id') %>%
-    shuffle_rows()
+    anti_join(training_set, by = 'id')
 
   return(list(training = training_set %>% select(-id),
               test = test_set %>% select(-id)))
@@ -158,16 +155,15 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
     # ToDo: Only use imputation on training set
     impute_na() %>%
-    select(where(~!all(is.na(.x)))) # Remove empty factors
+    select(where(~!all(is.na(.x)))) %>% # Remove empty factors
     # rebalance_binary(buffered, target_balance = target_balance)
+    shuffle_rows()
 
+  # Return NA if no training data remains
   if (floor(nrow(df_prep) * training_set_ratio) == 0) return(NA)
 
-  if (cv_eval == TRUE) {
-    # Don't create a test set if evaluation is done entirely using cross validation
-    return(list(training = df_prep %>% shuffle_rows() %>% select(-id),
-                test = NULL))
-  }
+  # Don't create a test set if evaluation is done entirely using cross validation
+  if (cv_eval == TRUE) return(list(training = df_prep, test = NULL))
 
   # Split training & test data
   return(split_train_test(df_prep, training_set_ratio))
@@ -235,18 +231,18 @@ tc_p0211["number"] <- 10
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base),
-  list(modelName = "rf", tc = tc_base),
-  list(modelName = "pcaNNet", tc = tc_nn)
+  list(modelName = "xgbLinear", tc = tc_base)
+#  list(modelName = "rf", tc = tc_base),
+#  list(modelName = "pcaNNet", tc = tc_nn)
 )
 
 ## Define datasets to train models on
 datasets <- list(
-  list(dataset = expr_buf_procan, name = "ProCan"),
-  list(dataset = expr_buf_depmap, name = "DepMap"),
-  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
-  list(dataset = buf_wgd, name = "DepMap-WGD"),
-  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
+  # list(dataset = expr_buf_procan, name = "ProCan"),
+  # list(dataset = expr_buf_depmap, name = "DepMap"),
+  # list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
+  # list(dataset = buf_wgd, name = "DepMap-WGD"),
+  # list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
   list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211)
 )
 
