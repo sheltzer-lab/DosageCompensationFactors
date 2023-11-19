@@ -59,6 +59,13 @@ df_gene_corr <- df_crispr_buf %>%
   arrange(Corr) %>%
   ungroup()
 
+color_mapping <- scale_color_viridis_c(option = "D")
+
+df_gene_corr %>%
+  distinct(Gene.Symbol, .keep_all = TRUE) %>%
+  plot_volcano(Corr, Corr.p, Gene.Symbol, CRISPR.EffectScore.Average, color_mapping = color_mapping) %>%
+  save_plot("ko-effect_buffering_correlation_volcano.png")
+
 bot_corr <- df_gene_corr %>%
   filter(Corr.p < p_threshold) %>%
   filter(Corr < -0.2) %>%
