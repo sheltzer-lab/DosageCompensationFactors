@@ -15,6 +15,7 @@ source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 
 factor_data_dir <- here(external_data_dir, "Factors")
+screens_data_dir <- here(external_data_dir, "Screens")
 phosphositeplus_data_dir <- here(factor_data_dir, "PhosphoSitePlus")
 output_data_dir <- output_data_base_dir
 plots_dir <- plots_base_dir
@@ -58,6 +59,8 @@ mrna_decay <- read_excel(here(factor_data_dir, "Yang.2003.mRNADecay.Rates.xlsx")
 agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 18254)
 # DOI: 10.1371/journal.pgen.1001154, URL: https://www.deciphergenomics.org/about/downloads/data
 hi_scores <- read_table(here(factor_data_dir, "HI_Predictions_Version3.bed.gz"), skip = 1, col_names = FALSE, show_col_types = FALSE)
+# DepMap Achilles
+crispr_screens <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv"))
 
 # === Prepare Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
@@ -205,6 +208,17 @@ df_hi <- hi_scores %>%
   rename(`Haploinsufficiency Score` = X5) %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   drop_na()
+
+## Prepare Gene Essentiality data
+df_crispr <- crispr_screens %>%
+  rename(CellLine.DepMapModelId = ModelID) %>%
+  pivot_longer(everything() & !CellLine.DepMapModelId,
+               names_to = "Gene", values_to = "CRISPR.EffectScore") %>%
+  mutate(Gene.Symbol = str_extract(Gene, regex_parentheses, group = 1),
+         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2)) %>%
+  group_by(Gene.Symbol) %>%
+  summarize(`Mean Gene Essentiality` = -mean(CRISPR.EffectScore, na.rm = TRUE)) %>%
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 # === Combine Factor Datasets ===
 

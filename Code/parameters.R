@@ -49,7 +49,7 @@ dc_factor_cols <- c(
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
   "Loops In Protein Score", "Protein Polyampholyte Score", "Protein Polarity",
   "Non-Exponential Decay Delta", "Mean mRNA Decay Rate", "Aggregation Score",
-  "Haploinsufficiency Score"
+  "Haploinsufficiency Score", "Mean Gene Essentiality"
 )
 
 ## Dataset-Specific Dosage Compensation Factors

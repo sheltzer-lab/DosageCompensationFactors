@@ -19,7 +19,7 @@ reports_dir <- reports_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(tables_dir, recursive = TRUE)
-dir.ceate(plots_dir, recursive = TRUE)
+dir.create(plots_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
@@ -33,7 +33,7 @@ df_crispr_buf <- crispr_screens %>%
   inner_join(y = expr_buf_procan %>% select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name),
              by = c("CellLine.CustomId", "Protein.Uniprot.Accession", "Gene.Symbol")) %>%
   select(CellLine.CustomId, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol,
-         Buffering.GeneLevel.Ratio, CRISPR.EffectScore)
+         Gene.ChromosomeArm, ChromosomeArm.CNA, Buffering.GeneLevel.Ratio, CRISPR.EffectScore)
 
 ## Check distributions
 df_crispr_buf %>%
@@ -54,17 +54,23 @@ df_gene_corr <- df_crispr_buf %>%
     # ToDo: Avoid calculating correlation twice
     CRISPR.EffectScore.Average = mean(CRISPR.EffectScore, na.rm = TRUE),
     Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$p.value
+    Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$p.value,
+    ChromosomeArm.GainLossRatio = mean(ChromosomeArm.CNA, na.rm = TRUE)
   ) %>%
   arrange(Corr) %>%
   ungroup()
 
-color_mapping <- scale_color_viridis_c(option = "D")
+color_mapping <- scale_color_viridis_c(option = "D", direction = -1)
 
 df_gene_corr %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  plot_volcano(Corr, Corr.p, Gene.Symbol, CRISPR.EffectScore.Average, color_mapping = color_mapping) %>%
-  save_plot("ko-effect_buffering_correlation_volcano.png")
+  arrange(desc(CRISPR.EffectScore.Average)) %>%
+  mutate(Label = if_else(abs(Corr) > 0.2 &
+                           Corr.p < p_threshold &
+                           CRISPR.EffectScore.Average < -0.1,
+                         Gene.Symbol, NA)) %>%
+  plot_volcano(Corr, Corr.p, Label, CRISPR.EffectScore.Average, color_mapping = color_mapping) %>%
+  save_plot("ko-effect_buffering_correlation_volcano.png", width = 250)
 
 bot_corr <- df_gene_corr %>%
   filter(Corr.p < p_threshold) %>%
