@@ -366,7 +366,7 @@ plot_comparison <- function(comparison_results) {
 
   plot_bracket <- broom::tidy(comparison_results$rank_test) %>%
     mutate(Label = paste0(print_signif(p.value),
-                          ", τ = ", format(round(estimate, 3), nsmall = 3))) %>%
+                          ", ", utf8_tau," = ", format(round(estimate, 3), nsmall = 3))) %>%
     ggplot() +
     aes(x = 0, y = 0, label = Label) +
     geom_segment(aes(x = 4, y = 1, xend = 8, yend = 1)) +

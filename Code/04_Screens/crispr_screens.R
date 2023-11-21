@@ -87,8 +87,8 @@ top_corr <- df_gene_corr %>%
 df_gene_corr %>%
   semi_join(y = bot_corr, by = "Gene.Symbol") %>%
   drop_na() %>%
-  mutate(Label = paste0(Gene.Symbol, " (ρ = ", format(round(Corr, 3),
-                                                      nsmall = 3, scientific = FALSE), ")")) %>%
+  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(Corr, 3),
+                                                                   nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, desc(Corr))) %>%
   arrange(Buffering.GeneLevel.Ratio) %>%
   jittered_boxplot(Label, CRISPR.EffectScore, Buffering.GeneLevel.Ratio,
@@ -98,8 +98,8 @@ df_gene_corr %>%
 df_gene_corr %>%
   semi_join(y = top_corr, by = "Gene.Symbol") %>%
   drop_na() %>%
-  mutate(Label = paste0(Gene.Symbol, " (ρ = ", format(round(Corr, 3),
-                                                      nsmall = 3, scientific = FALSE), ")")) %>%
+  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(Corr, 3),
+                                                                   nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, Corr)) %>%
   arrange(Buffering.GeneLevel.Ratio) %>%
   jittered_boxplot(Label, CRISPR.EffectScore, Buffering.GeneLevel.Ratio,

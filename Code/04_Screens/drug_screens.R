@@ -115,8 +115,8 @@ df_sensitivity_agg <- cellline_buf_agg %>%
 
 df_sensitivity_agg %>%
   inner_join(y = top_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
-  mutate(Label = paste0(Drug.Name, " (ρ = ", format(round(Corr.Sensitivity_Buffering, 3),
-                                                    nsmall = 3, scientific = FALSE), ")")) %>%
+  mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
+                                                                 nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, desc(Corr.Sensitivity_Buffering))) %>%
   arrange(Buffering.CellLine.MeanNormRank) %>%
   jittered_boxplot(Label, Drug.MFI.Log2FC, Buffering.CellLine.MeanNormRank,
@@ -125,8 +125,8 @@ df_sensitivity_agg %>%
 
 df_sensitivity_agg %>%
   inner_join(y = bot_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
-  mutate(Label = paste0(Drug.Name, " (ρ = ", format(round(Corr.Sensitivity_Buffering, 3),
-                                                   nsmall = 3, scientific = FALSE), ")")) %>%
+  mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
+                                                                 nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, Corr.Sensitivity_Buffering)) %>%
   arrange(Buffering.CellLine.MeanNormRank) %>%
   jittered_boxplot(Label, Drug.MFI.Log2FC, Buffering.CellLine.MeanNormRank,

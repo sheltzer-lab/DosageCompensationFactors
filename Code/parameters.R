@@ -1,4 +1,5 @@
 library(ggplot2)
+library(here)
 library(RColorBrewer)
 library(viridisLite)
 
@@ -7,9 +8,9 @@ options(encoding = "utf-8")
 Sys.setlocale(category="LC_ALL", locale = "English_United States.1252")
 
 ## Special UTF-8 characters
-utf8_rho <- enc2utf8("\u03C1")
-utf8_tau <- enc2utf8("\u03C4")
-utf8_delta <- enc2utf8("\u0394")
+utf8_rho <- enc2utf8("\u03C1")    # ρ
+utf8_tau <- enc2utf8("\u03C4")    # τ
+utf8_delta <- enc2utf8("\u0394")  # Δ
 
 # === Define Thresholds ===
 log2fc_threshold <- 1     # Log2FC threshold, Default: 1 (= 2-fold change)
