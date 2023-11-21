@@ -2,6 +2,7 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(arrow)
+library(stringr)
 library(readxl)
 library(assertr)
 library(purrr)
@@ -210,6 +211,8 @@ df_hi <- hi_scores %>%
   drop_na()
 
 ## Prepare Gene Essentiality data
+regex_parentheses <- "(.*)\\s+\\((.*)\\)"
+
 df_crispr <- crispr_screens %>%
   rename(CellLine.DepMapModelId = ModelID) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
@@ -233,7 +236,7 @@ ptm_factor_datasets <- list(
 )
 
 other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
-                           df_complexes, df_mobidb, df_ned, df_decay, df_agg, df_hi)
+                           df_complexes, df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = "Protein.Uniprot.Accession",
