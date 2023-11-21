@@ -40,9 +40,10 @@ df_growth <- read_csv_arrow(here(screens_data_dir, "growth_rate_20220907.csv")) 
          CellLine.GrowthRatio = "day4_day1_ratio",
          CellLine.Replicates = "replicates") %>%
   filter(CellLine.Replicates > 2) %>%
-  group_by(CellLine.Name) %>%
+  group_by(CellLine.SangerModelId) %>%
   slice_max(CellLine.Replicates, n = 1) %>%
   ungroup() %>%
+  select(-CellLine.Name) %>%
   left_join(y = df_celllines, by = "CellLine.SangerModelId",
             relationship = "many-to-one", na_matches = "never") %>%
   write_parquet(here(output_data_dir, 'cellline_growth.parquet'),
