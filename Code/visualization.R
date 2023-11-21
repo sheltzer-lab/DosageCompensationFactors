@@ -126,6 +126,10 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
     color_mapping +
     geom_hline(yintercept = -log10(signif_threshold),
                linetype = "dashed", color = "black") +
+    geom_vline(xintercept = abs(value_threshold),
+               linetype = "dashed", color = "black") +
+    geom_vline(xintercept = -abs(value_threshold),
+               linetype = "dashed", color = "black") +
     geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
                      seed = 42, max.iter = 30000, max.time = 1.5,
                      point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,

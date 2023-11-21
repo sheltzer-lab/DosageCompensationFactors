@@ -69,8 +69,8 @@ df_gene_corr %>%
                            Corr.p < p_threshold &
                            CRISPR.EffectScore.Average < -0.1,
                          Gene.Symbol, NA)) %>%
-  plot_volcano(Corr, Corr.p, Label, CRISPR.EffectScore.Average, color_mapping = color_mapping) %>%
-  save_plot("ko-effect_buffering_correlation_volcano.png", width = 250)
+  plot_volcano(Corr, Corr.p, Label, CRISPR.EffectScore.Average, color_mapping = color_mapping, value_threshold = 0.2) %>%
+  save_plot("ko-effect_buffering_correlation_volcano.png", width = 300, height = 250)
 
 bot_corr <- df_gene_corr %>%
   filter(Corr.p < p_threshold) %>%
@@ -109,3 +109,4 @@ df_gene_corr %>%
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)
 
 # === Analyze Cell Line Sensitivity to Buffering ===
+# ToDo: Discretize Cell Lines into Low-/Mid-/High-Buffering groups and check gene essentiality
