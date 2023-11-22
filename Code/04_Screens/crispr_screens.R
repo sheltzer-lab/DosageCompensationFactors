@@ -33,7 +33,7 @@ df_crispr_buf <- crispr_screens %>%
   inner_join(y = expr_buf_procan %>% select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name),
              by = c("CellLine.CustomId", "Protein.Uniprot.Accession", "Gene.Symbol")) %>%
   select(CellLine.CustomId, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol,
-         Gene.ChromosomeArm, ChromosomeArm.CNA, Buffering.GeneLevel.Ratio, CRISPR.EffectScore)
+         Gene.ChromosomeArm, ChromosomeArm.CNA, Buffering.GeneLevel.Ratio, CRISPR.EffectScore, CRISPR.DependencyScore)
 
 ## Check distributions
 df_crispr_buf %>%
@@ -46,6 +46,11 @@ df_crispr_buf %>%
   aes(CRISPR.EffectScore) +
   geom_density(na.rm = TRUE)
 
+df_crispr_buf %>%
+  ggplot() +
+  aes(CRISPR.DependencyScore) +
+  geom_density(na.rm = TRUE)
+
 # === Analyze Gene-wise Essentiality-Buffering-Correlation ===
 
 df_gene_corr <- df_crispr_buf %>%
@@ -53,58 +58,73 @@ df_gene_corr <- df_crispr_buf %>%
   mutate(
     # ToDo: Avoid calculating correlation twice
     CRISPR.EffectScore.Average = mean(CRISPR.EffectScore, na.rm = TRUE),
-    Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$p.value,
+    CRISPR.EffectScore.Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$estimate[["rho"]],
+    CRISPR.EffectScore.Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$p.value,
+    CRISPR.DependencyScore.Average = mean(CRISPR.DependencyScore, na.rm = TRUE),
+    CRISPR.DependencyScore.Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.DependencyScore, method = "spearman")$estimate[["rho"]],
+    CRISPR.DependencyScore.Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.DependencyScore, method = "spearman")$p.value,
     ChromosomeArm.GainLossRatio = mean(ChromosomeArm.CNA, na.rm = TRUE)
   ) %>%
-  arrange(Corr) %>%
   ungroup()
 
-color_mapping <- scale_color_viridis_c(option = "D", direction = -1)
+color_mapping_effect <- scale_color_viridis_c(option = "F", direction = 1, begin = 0.1, end = 0.8)
+color_mapping_dep <- scale_color_viridis_c(option = "G", direction = -1, begin = 0.1, end = 0.8)
 
 df_gene_corr %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   arrange(desc(CRISPR.EffectScore.Average)) %>%
-  mutate(Label = if_else(abs(Corr) > 0.2 &
-                           Corr.p < p_threshold &
+  mutate(Label = if_else(abs(CRISPR.EffectScore.Corr) > 0.2 &
+                           CRISPR.EffectScore.Corr.p < p_threshold &
                            CRISPR.EffectScore.Average < -0.1,
                          Gene.Symbol, NA)) %>%
-  plot_volcano(Corr, Corr.p, Label, CRISPR.EffectScore.Average, color_mapping = color_mapping, value_threshold = 0.2) %>%
+  plot_volcano(CRISPR.EffectScore.Corr, CRISPR.EffectScore.Corr.p, Label, CRISPR.EffectScore.Average,
+               color_mapping = color_mapping_effect, value_threshold = 0.2) %>%
   save_plot("ko-effect_buffering_correlation_volcano.png", width = 300, height = 250)
 
-bot_corr <- df_gene_corr %>%
-  filter(Corr.p < p_threshold) %>%
-  filter(Corr < -0.2) %>%
+df_gene_corr %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(Gene.Symbol)
+  arrange(CRISPR.DependencyScore.Average) %>%
+  mutate(Label = if_else(abs(CRISPR.DependencyScore.Corr) > 0.2 &
+                           CRISPR.DependencyScore.Corr.p < p_threshold &
+                           CRISPR.DependencyScore.Average > 0.1,
+                         Gene.Symbol, NA)) %>%
+  plot_volcano(CRISPR.DependencyScore.Corr, CRISPR.DependencyScore.Corr.p, Label, CRISPR.DependencyScore.Average,
+               color_mapping = color_mapping_dep, value_threshold = 0.2) %>%
+  save_plot("dependency_buffering_correlation_volcano.png", width = 300, height = 250)
+
+bot_corr <- df_gene_corr %>%
+  filter(CRISPR.DependencyScore.Corr.p < p_threshold) %>%
+  filter(CRISPR.DependencyScore.Corr < -0.2) %>%
+  filter(CRISPR.DependencyScore.Average > 0.02) %>%
+  distinct(Gene.Symbol, .keep_all = FALSE)
 
 top_corr <- df_gene_corr %>%
-  filter(Corr.p < p_threshold) %>%
-  filter(Corr > 0.2) %>%
-  distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(Gene.Symbol)
+  filter(CRISPR.DependencyScore.Corr.p < p_threshold) %>%
+  filter(CRISPR.DependencyScore.Corr > 0.2) %>%
+  filter(CRISPR.DependencyScore.Average > 0.02) %>%
+  distinct(Gene.Symbol, .keep_all = FALSE)
 
 df_gene_corr %>%
   semi_join(y = bot_corr, by = "Gene.Symbol") %>%
   drop_na() %>%
-  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(Corr, 3),
+  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(CRISPR.DependencyScore.Corr, 3),
                                                                    nsmall = 3, scientific = FALSE), ")")) %>%
-  mutate(Label = fct_reorder(Label, desc(Corr))) %>%
+  mutate(Label = fct_reorder(Label, desc(CRISPR.DependencyScore.Corr))) %>%
   arrange(Buffering.GeneLevel.Ratio) %>%
-  jittered_boxplot(Label, CRISPR.EffectScore, Buffering.GeneLevel.Ratio,
-                   alpha = 1/2, jitter_width = 0.25) %>%
-  save_plot("ko-effect_buffering_bot-correlation.png", height = 220, width = 180)
+  jittered_boxplot(Label, CRISPR.DependencyScore, Buffering.GeneLevel.Ratio,
+                   alpha = 3/4, jitter_width = 0.2) %>%
+  save_plot("dependency_buffering_bot-correlation.png", height = 220, width = 180)
 
 df_gene_corr %>%
   semi_join(y = top_corr, by = "Gene.Symbol") %>%
   drop_na() %>%
-  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(Corr, 3),
+  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(CRISPR.DependencyScore.Corr, 3),
                                                                    nsmall = 3, scientific = FALSE), ")")) %>%
-  mutate(Label = fct_reorder(Label, Corr)) %>%
+  mutate(Label = fct_reorder(Label, CRISPR.DependencyScore.Corr)) %>%
   arrange(Buffering.GeneLevel.Ratio) %>%
-  jittered_boxplot(Label, CRISPR.EffectScore, Buffering.GeneLevel.Ratio,
-                   alpha = 1/2, jitter_width = 0.25) %>%
-  save_plot("ko-effect_buffering_top-correlation.png", height = 220, width = 180)
+  jittered_boxplot(Label, CRISPR.DependencyScore, Buffering.GeneLevel.Ratio,
+                   alpha = 3/4, jitter_width = 0.2) %>%
+  save_plot("dependency_buffering_top-correlation.png", height = 220, width = 180)
 
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)
 

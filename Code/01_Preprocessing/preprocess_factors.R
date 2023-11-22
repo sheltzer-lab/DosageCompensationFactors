@@ -61,7 +61,8 @@ agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 1
 # DOI: 10.1371/journal.pgen.1001154, URL: https://www.deciphergenomics.org/about/downloads/data
 hi_scores <- read_table(here(factor_data_dir, "HI_Predictions_Version3.bed.gz"), skip = 1, col_names = FALSE, show_col_types = FALSE)
 # DepMap Achilles
-crispr_screens <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv"))
+crispr_effects <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv"))
+crispr_deps <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneDependency.csv"))
 
 # === Prepare Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
@@ -213,14 +214,26 @@ df_hi <- hi_scores %>%
 ## Prepare Gene Essentiality data
 regex_parentheses <- "(.*)\\s+\\((.*)\\)"
 
-df_crispr <- crispr_screens %>%
+df_crispr_eff <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv")) %>%
   rename(CellLine.DepMapModelId = ModelID) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
                names_to = "Gene", values_to = "CRISPR.EffectScore") %>%
   mutate(Gene.Symbol = str_extract(Gene, regex_parentheses, group = 1),
-         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2)) %>%
+         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2))
+
+df_crispr_dep <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneDependency.csv")) %>%
+  rename(CellLine.DepMapModelId = ModelID) %>%
+  pivot_longer(everything() & !CellLine.DepMapModelId,
+               names_to = "Gene", values_to = "CRISPR.DependencyScore") %>%
+  mutate(Gene.Symbol = str_extract(Gene, regex_parentheses, group = 1),
+         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2))
+
+df_crispr <- df_crispr_eff %>%
+  inner_join(y = df_crispr_dep, by = c("CellLine.DepMapModelId", "Gene.Entrez.Id", "Gene.Symbol"),
+            relationship = "one-to-one", na_matches = "never") %>%
   group_by(Gene.Symbol) %>%
-  summarize(`Mean Gene Essentiality` = -mean(CRISPR.EffectScore, na.rm = TRUE)) %>%
+  summarize(`Mean Gene Essentiality` = -mean(CRISPR.EffectScore, na.rm = TRUE),
+            `Mean Gene Dependency` = mean(CRISPR.DependencyScore, na.rm = TRUE)) %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 # === Combine Factor Datasets ===

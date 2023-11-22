@@ -49,10 +49,10 @@ analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = C
 }
 
 # Note: Not required when merging datasets to match genes and cell lines
-filter_genes <- function (df, gene_col = Gene.Symbol, value_col = Protein.Expression.Normalized, keep = "90%") {
+filter_genes <- function(df, gene_col = Gene.Symbol, value_col = Protein.Expression.Normalized, keep = "90%") {
   df %>%
     group_by({ { gene_col } }) %>%
-    mutate(CV = abs(sd({{value_col}}, na.rm = TRUE) / mean({{value_col}}, na.rm = TRUE))) %>%
+    mutate(CV = abs(sd({ { value_col } }, na.rm = TRUE) / mean({ { value_col } }, na.rm = TRUE))) %>%
     ungroup() %>%
     filter(CV < quantile(CV, probs = seq(0, 1, 0.01))[keep])
 }
@@ -60,8 +60,8 @@ filter_genes <- function (df, gene_col = Gene.Symbol, value_col = Protein.Expres
 # Note: Does not seem to improve correlation
 remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
   df %>%
-    group_by({{gene_col}}) %>%
-    mutate(AvgBuf = mean({{buffering_col}}, na.rm = TRUE)) %>%
+    group_by({ { gene_col } }) %>%
+    mutate(AvgBuf = mean({ { buffering_col } }, na.rm = TRUE)) %>%
     filter(buffering_class(AvgBuf) != "Anti-Scaling") %>%
     select(-AvgBuf)
 }
@@ -181,8 +181,8 @@ cellline_pearson <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "Pro
                              method = "pearson")
 
 cellline_spearman <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                             y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
-                             method = "spearman")
+                              y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+                              method = "spearman")
 
 cat(capture.output(cellline_kendall), file = here(reports_dir, "cellline_buffering_correlation.txt"),
     append = FALSE, sep = "\n")

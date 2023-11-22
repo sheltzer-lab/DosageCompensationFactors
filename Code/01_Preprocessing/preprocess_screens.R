@@ -49,16 +49,27 @@ df_growth <- read_csv_arrow(here(screens_data_dir, "growth_rate_20220907.csv")) 
   write_parquet(here(output_data_dir, 'cellline_growth.parquet'),
                 version = "2.6")
 
-df_crispr <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv")) %>%
+df_crispr_eff <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv")) %>%
   rename(CellLine.DepMapModelId = ModelID) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
                names_to = "Gene", values_to = "CRISPR.EffectScore") %>%
   mutate(Gene.Symbol = str_extract(Gene, regex_parentheses, group = 1),
-         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2)) %>%
+         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2))
+
+df_crispr_dep <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneDependency.csv")) %>%
+  rename(CellLine.DepMapModelId = ModelID) %>%
+  pivot_longer(everything() & !CellLine.DepMapModelId,
+               names_to = "Gene", values_to = "CRISPR.DependencyScore") %>%
+  mutate(Gene.Symbol = str_extract(Gene, regex_parentheses, group = 1),
+         Gene.Entrez.Id = str_extract(Gene, regex_parentheses, group = 2))
+
+df_crispr <- df_crispr_eff %>%
+  inner_join(y = df_crispr_dep, by = c("CellLine.DepMapModelId", "Gene.Entrez.Id", "Gene.Symbol"),
+            relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = df_celllines, by = "CellLine.DepMapModelId",
             relationship = "many-to-one", na_matches = "never") %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   select(CellLine.CustomId, CellLine.DepMapModelId, CellLine.SangerModelId, CellLine.Name,
-         Protein.Uniprot.Accession, Gene.Symbol, CRISPR.EffectScore) %>%
+         Protein.Uniprot.Accession, Gene.Symbol, CRISPR.EffectScore, CRISPR.DependencyScore) %>%
   write_parquet(here(output_data_dir, 'crispr_screens.parquet'),
                 version = "2.6")
