@@ -106,7 +106,7 @@ updateGeneSymbols <- function(df, gene_col = "Gene.Symbol") {
 
   df %>%
     left_join(y = updated_genes, by = gene_col,
-              relationship = "many-to-one", na_matches = "never", unmatched = "error") %>%
+              relationship = "many-to-one", unmatched = "error") %>%
     mutate(!!gene_col := toupper(Suggested.Symbol)) %>%
     select(-Approved, -Suggested.Symbol)
 }

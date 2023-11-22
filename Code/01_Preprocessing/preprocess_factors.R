@@ -86,6 +86,8 @@ df_rates <- human_rates %>%
          `mRNA Length` = "lm") %>%
   mapIds("ENSEMBL", "SYMBOL",
          "Gene.ENSEMBL.Id", "Gene.Symbol") %>%
+  drop_na(Gene.Symbol) %>%
+  updateGeneSymbols() %>%
   id2uniprot_acc("Gene.ENSEMBL.Id", "ensembl_gene_id") %>%
   select(-Gene.ENSEMBL.Id)
 
@@ -94,6 +96,8 @@ hippie_filtered <- hippie %>%
   select("Gene Name Interactor A", "Gene Name Interactor B", "Confidence Value") %>%
   rename(Gene.Symbol = "Gene Name Interactor A") %>%
   filter(`Confidence Value` > 0.6) %>%
+  drop_na(Gene.Symbol) %>%
+  updateGeneSymbols() %>%
   count(Gene.Symbol, name = "Protein-Protein Interactions") %>%
   drop_na() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
@@ -107,10 +111,13 @@ half_life_sample_cols <- c("Bcells replicate 1 half_life", "Bcells replicate 2 h
 half_life_avg <- half_life %>%
   select("gene_name", all_of(half_life_sample_cols)) %>%
   rename(Gene.Symbol = "gene_name") %>%
+  drop_na(Gene.Symbol) %>%
+  updateGeneSymbols() %>%
   pivot_longer(all_of(half_life_sample_cols), names_to = "sample", values_to = "half_life_values") %>%
   group_by(Gene.Symbol) %>%
   summarize(`Protein Half-Life` = mean(half_life_values, na.rm = TRUE)) %>%
-  ungroup() %>%
+  mutate_all(~ifelse(is.nan(.), NA, .)) %>%
+  drop_na() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 ## Prepare 3'-/5'-UTR data
@@ -123,15 +130,16 @@ df_utr <- ref_seq %>%
                                   ifelse(strand == "-", abs(cdsStart - txStart), NA))) %>%
   select("name2", "3'-UTR Length", "5'-UTR Length") %>%
   rename(Gene.Symbol = "name2") %>%
+  updateGeneSymbols() %>%
   group_by(Gene.Symbol) %>%
-  mutate(`Median 3'-UTR Length` = median(`3'-UTR Length`, na.rm = TRUE),
-         `Median 5'-UTR Length` = median(`5'-UTR Length`, na.rm = TRUE),
-         `Mean 3'-UTR Length` = mean(`3'-UTR Length`, na.rm = TRUE),
-         `Mean 5'-UTR Length` = mean(`5'-UTR Length`, na.rm = TRUE),
-         `3'-UTR Length` = list(`3'-UTR Length`),
-         `5'-UTR Length` = list(`5'-UTR Length`)) %>%
-  ungroup() %>%
-  distinct() %>%
+  summarize(`Median 3'-UTR Length` = median(`3'-UTR Length`, na.rm = TRUE),
+            `Median 5'-UTR Length` = median(`5'-UTR Length`, na.rm = TRUE),
+            `Mean 3'-UTR Length` = mean(`3'-UTR Length`, na.rm = TRUE),
+            `Mean 5'-UTR Length` = mean(`5'-UTR Length`, na.rm = TRUE),
+            `SD 3'-UTR Length` = sd(`3'-UTR Length`, na.rm = TRUE),
+            `SD 5'-UTR Length` = sd(`5'-UTR Length`, na.rm = TRUE),
+            `3'-UTR Length` = list(`3'-UTR Length`),
+            `5'-UTR Length` = list(`5'-UTR Length`)) %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 ## Prepare CORUM data
@@ -143,7 +151,9 @@ df_complexes <- corum %>%
   rename(Protein.Uniprot.Accession = "subunits(UniProt IDs)") %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
-            na_matches = "never", relationship = "many-to-one")
+            na_matches = "never", relationship = "many-to-one") %>%
+  updateGeneSymbols() %>%
+  drop_na()
 
 ## Prepare MobiDB data
 mobidb_features <- c("prediction-disorder-mobidb_lite", "prediction-low_complexity-merge",
@@ -163,7 +173,9 @@ df_mobidb <- mobidb %>%
          `Protein Polarity` = "prediction-polar-mobidb_lite_sub") %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
-            na_matches = "never", relationship = "many-to-one")
+            na_matches = "never", relationship = "many-to-one") %>%
+  updateGeneSymbols() %>%
+  drop_na(Gene.Symbol)
 
 ## Prepare NED data
 delta_score_col <- paste0(utf8_delta, "-score")
@@ -173,7 +185,11 @@ df_ned <- ned_human %>%
          `Non-Exponential Decay Delta` = delta_score_col) %>%
   select(Protein.Uniprot.Accession, Gene.Symbol , `Non-Exponential Decay Delta`) %>%
   separate_longer_delim(Gene.Symbol, delim = ";") %>%
-  drop_na()
+  drop_na() %>%
+  updateGeneSymbols() %>%
+  group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
+  summarize(`Non-Exponential Decay Delta` = mean(`Non-Exponential Decay Delta`, na.rm = TRUE)) %>%
+  ungroup()
 
 ## Prepare mRNA Decay data
 df_decay <- mrna_decay %>%
@@ -184,10 +200,13 @@ df_decay <- mrna_decay %>%
   rename(Gene.GenBank.Accession = "Accession") %>%
   mapIds("ACCNUM", "SYMBOL",
          "Gene.GenBank.Accession", "Gene.Symbol") %>%
+  drop_na(Gene.Symbol) %>%
+  updateGeneSymbols() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   drop_na() %>%
   group_by(Gene.Symbol, Protein.Uniprot.Accession) %>%
-  summarize(`Mean mRNA Decay Rate` = mean(`mRNA Decay Rate`, na.rm = TRUE))
+  summarize(`Mean mRNA Decay Rate` = mean(`mRNA Decay Rate`, na.rm = TRUE)) %>%
+  ungroup()
 
 ## Prepare Aggregation Score data
 df_agg <- agg_score %>%
@@ -200,14 +219,19 @@ df_agg <- agg_score %>%
             by = "Protein.Uniprot.Symbol",
             na_matches = "never", relationship = "many-to-one") %>%
   select(-ZaggSC, -Protein.Uniprot.Symbol, -`Uniprot ID`) %>%
+  updateGeneSymbols() %>%
   drop_na()
+
 
 ## Prepare Haploinsufficiency data
 df_hi <- hi_scores %>%
   select(X4, X5) %>%
   separate_wider_delim(X4, delim = "|", names = c("Gene.Symbol", "HI.Score", "HI.Percentile")) %>%
   select(-HI.Score, -HI.Percentile) %>%
-  rename(`Haploinsufficiency Score` = X5) %>%
+  drop_na() %>%
+  updateGeneSymbols() %>%
+  group_by(Gene.Symbol) %>%
+  summarize(`Haploinsufficiency Score` = mean(X5, na.rm = TRUE)) %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   drop_na()
 
@@ -231,9 +255,11 @@ df_crispr_dep <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneDependency.csv
 df_crispr <- df_crispr_eff %>%
   inner_join(y = df_crispr_dep, by = c("CellLine.DepMapModelId", "Gene.Entrez.Id", "Gene.Symbol"),
             relationship = "one-to-one", na_matches = "never") %>%
+  updateGeneSymbols() %>%
   group_by(Gene.Symbol) %>%
   summarize(`Mean Gene Essentiality` = -mean(CRISPR.EffectScore, na.rm = TRUE),
             `Mean Gene Dependency` = mean(CRISPR.DependencyScore, na.rm = TRUE)) %>%
+  drop_na() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 # === Combine Factor Datasets ===
@@ -257,7 +283,8 @@ df_dc_factors_ptm <- ptm_factor_datasets %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
-  filter(!(is.na(Protein.Uniprot.Accession) & is.na(Gene.Symbol)))
+  drop_na(Gene.Symbol, Protein.Uniprot.Accession) %>%
+  updateGeneSymbols()
 
 df_dc_factors_other <- other_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),

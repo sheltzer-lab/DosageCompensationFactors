@@ -49,6 +49,7 @@ copy_number <- read.csv(
   inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
              na_matches = "never", relationship = "many-to-one") %>%
   # filter(CellLine.Ploidy < 3.5) %>%     # Removing near-tetraploid cell lines is detrimental for factor prediction
+  updateGeneSymbols() %>%
   write_parquet(here(output_data_dir, 'copy_number.parquet'),
                 version = "2.6")
 

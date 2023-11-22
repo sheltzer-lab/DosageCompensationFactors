@@ -68,6 +68,7 @@ df_crispr <- df_crispr_eff %>%
             relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = df_celllines, by = "CellLine.DepMapModelId",
             relationship = "many-to-one", na_matches = "never") %>%
+  updateGeneSymbols() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   select(CellLine.CustomId, CellLine.DepMapModelId, CellLine.SangerModelId, CellLine.Name,
          Protein.Uniprot.Accession, Gene.Symbol, CRISPR.EffectScore, CRISPR.DependencyScore) %>%

@@ -89,6 +89,7 @@ annotations <- p0211_expr_processed %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
+  updateGeneSymbols() %>%
   drop_na() %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   get_chromosome_arms() %>%

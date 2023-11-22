@@ -52,6 +52,7 @@ procan_expr_tidy <- procan_expr %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
+  updateGeneSymbols() %>%
   unite("UniqueId", c("CellLine.SangerModelId", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE) %>%
   mutate(Dataset = "ProCan")
@@ -72,6 +73,7 @@ depmap_expr_tidy <- depmap_expr %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
+  updateGeneSymbols() %>%
   unite("UniqueId", c("CellLine.DepMapModelId", "Gene.Symbol", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE) %>%
   mutate(Dataset = "DepMap")

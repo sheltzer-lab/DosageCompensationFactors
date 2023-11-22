@@ -248,8 +248,6 @@ data_loss_depmap <- (expr_buf_depmap %>%
             na_matches = "never") %>%
   nrow()) / nrow(expr_buf_depmap)
 
-
-
 ## Check correlation between DC Scores and Protein Coefficient of Variance
 ## Buffering Score should be negatively correlated with Protein Coefficient of Variance
 dc_cv <- expr_buf_procan %>%
