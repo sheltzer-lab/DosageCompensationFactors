@@ -45,8 +45,6 @@ procan_expr_tidy <- procan_expr %>%
   separate_wider_delim(Project_Identifier,
                        delim = ";",
                        names = c("CellLine.SangerModelId", "CellLine.Name")) %>%
-  unite("UniqueId", c("CellLine.SangerModelId", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE) %>%
   # Add cell line identifiers
   select(-CellLine.Name) %>%
   inner_join(y = df_celllines, by = "CellLine.SangerModelId",
@@ -54,6 +52,8 @@ procan_expr_tidy <- procan_expr %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
+  unite("UniqueId", c("CellLine.SangerModelId", "Protein.Uniprot.Accession"),
+        sep = '_', remove = FALSE) %>%
   mutate(Dataset = "ProCan")
 
 depmap_expr_tidy <- depmap_expr %>%
@@ -65,11 +65,15 @@ depmap_expr_tidy <- depmap_expr %>%
            delim = " ",
            names = c("Gene.Symbol", "Protein.Uniprot.Accession")) %>%
   mutate(Protein.Uniprot.Accession = gsub("[()]", "", Protein.Uniprot.Accession)) %>%
-  unite("UniqueId", c("CellLine.DepMapModelId", "Gene.Symbol", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE) %>%
   # Add cell line identifiers
   inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
              relationship = "many-to-one", na_matches = "never") %>%
+  select(-Gene.Symbol) %>%
+  left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Protein.Uniprot.Accession",
+            na_matches = "never", relationship = "many-to-one") %>%
+  unite("UniqueId", c("CellLine.DepMapModelId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+        sep = '_', remove = FALSE) %>%
   mutate(Dataset = "DepMap")
 
 # === Preprocess Datasets ===
@@ -84,14 +88,14 @@ procan_expr_processed <- procan_expr_tidy %>%
 
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
+  group_by(CellLine.CustomId, CellLine.SangerModelId, CellLine.DepMapModelId, CellLine.Name, Dataset,
+           UniqueId, Gene.Symbol, Protein.Uniprot.Accession) %>%
+  summarize(Protein.Expression.Log2 = mean(Protein.Expression.Log2, na.rm = TRUE)) %>%
+  ungroup() %>%
   # ToDo: Reconsider standardization
   # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
-  # This requirement is odd
-  unite("UniqueProtId", c("Gene.Symbol", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE) %>%
-  normalize_samples(CellLine.DepMapModelId, Protein.Expression.Log2, UniqueProtId,
-                    normalized_colname = "Protein.Expression.Normalized") %>%
-  select(-UniqueProtId)
+  normalize_samples(CellLine.DepMapModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
+                    normalized_colname = "Protein.Expression.Normalized")
 
 
 # === Create combined datasets ===

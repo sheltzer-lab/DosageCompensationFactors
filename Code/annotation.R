@@ -94,3 +94,19 @@ uniprot_acc2id <- function(df, id_col, id_type, acc_col = "Protein.Uniprot.Acces
     left_join(y = df_acc, by = acc_col,
               na_matches = "never", relationship = "many-to-one")
 }
+
+updateGeneSymbols <- function(df, gene_col = "Gene.Symbol") {
+  # new.hgnc.table <- getCurrentHumanMap()
+  updated_genes <- HGNChelper::checkGeneSymbols(unique(df[[gene_col]]), unmapped.as.na = FALSE, species = "human") %>%
+    rename(!!gene_col := x)
+
+  message("Unapproved Gene Symbols: ", updated_genes %>%
+    filter(Approved == FALSE) %>%
+    count())
+
+  df %>%
+    left_join(y = updated_genes, by = gene_col,
+              relationship = "many-to-one", na_matches = "never", unmatched = "error") %>%
+    mutate(!!gene_col := toupper(Suggested.Symbol)) %>%
+    select(-Approved, -Suggested.Symbol)
+}

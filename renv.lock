@@ -209,6 +209,18 @@
       ],
       "Hash": "56294b21068b8cb5db1c47d0a42f307b"
     },
+    "HGNChelper": {
+      "Package": "HGNChelper",
+      "Version": "0.8.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "methods",
+        "utils"
+      ],
+      "Hash": "d756e596f0f9ddd90b82921f5964b71b"
+    },
     "IRanges": {
       "Package": "IRanges",
       "Version": "2.34.1",

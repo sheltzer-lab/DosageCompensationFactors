@@ -37,6 +37,9 @@ expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_renorm.parquet"))
 expr_p0211 <- read_parquet(here(output_data_dir, 'expression_p0211.parquet'))
 
+dc_factors_ids <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet")) %>%
+  select(Protein.Uniprot.Accession, Gene.Symbol)
+
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 
 calculate_weights <- function(distances) {
@@ -231,6 +234,21 @@ expr_baseline_plot <- df_expr_eval %>%
 
 expr_baseline_plot %>%
   save_plot("expression_baseline_methods.png")
+
+## Check ratio of data lost after join with factor data
+data_loss_procan <- (expr_buf_procan %>%
+  anti_join(y = dc_factors_ids,
+            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+            na_matches = "never") %>%
+  nrow()) / nrow(expr_buf_procan)
+
+data_loss_depmap <- (expr_buf_depmap %>%
+  anti_join(y = dc_factors_ids,
+            by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
+            na_matches = "never") %>%
+  nrow()) / nrow(expr_buf_depmap)
+
+
 
 ## Check correlation between DC Scores and Protein Coefficient of Variance
 ## Buffering Score should be negatively correlated with Protein Coefficient of Variance
