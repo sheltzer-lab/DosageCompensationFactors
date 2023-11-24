@@ -80,7 +80,7 @@ calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col
     select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }) %>%
     filter({ { chr_arm_cna_col } } == 0) %>%
     group_by({ { gene_col } }) %>%
-    summarize(`Protein Neutral CV` = sd(2^{ { expr_col } }, na.rm = TRUE) / abs(mean(2^{ { expr_col } }, na.rm = TRUE))) %>%
+    summarize(`Protein Neutral CV` = sd(2^{ { expr_col } }, na.rm = TRUE) / mean(2^{ { expr_col } }, na.rm = TRUE)) %>%
     ungroup()
 
   df %>%
@@ -265,7 +265,7 @@ dc_cv <- expr_buf_procan %>%
   select(Gene.Symbol, Protein.Expression.Normalized, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.SF) %>%
   group_by(Gene.Symbol) %>%
   mutate(Protein.Expression.CV = sd(2^Protein.Expression.Normalized, na.rm = TRUE) /
-    abs(mean(2^Protein.Expression.Normalized, na.rm = TRUE)),
+    mean(2^Protein.Expression.Normalized, na.rm = TRUE),
          Buffering.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
          Buffering.SF.Average = mean(Buffering.GeneLevel.SF, na.rm = TRUE))
 
