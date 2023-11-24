@@ -274,7 +274,7 @@ expr_buf_procan %>%
   save_plot("regression_br_cn-diff_loss.png")
 
 expr_buf_procan %>%
-  mutate(log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  mutate(Log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
   group_by(Gene.Symbol) %>%
   summarize(Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
             Log2FC.CopyNumber.Average = mean(Log2FC.CopyNumber, na.rm = TRUE)) %>%
