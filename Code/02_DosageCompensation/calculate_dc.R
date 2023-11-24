@@ -16,12 +16,17 @@ source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
 source(here("Code", "preprocessing.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "evaluation.R"))
 
 output_data_dir <- output_data_base_dir
-plots_dir <- plots_base_dir
+plots_dir <- here(plots_base_dir, "Preprocessing")
+reports_dir <- reports_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
+dir.create(reports_dir, recursive = TRUE)
+
+dc_report <- list()
 
 # === Load Datasets ===
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
@@ -189,7 +194,8 @@ df_cn_eval <- expr_depmap %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral)
 
-cor.test(df_cn_eval$WeightedNeutral.AneuploidyScore, df_cn_eval$MedianAll, method = "spearman")
+dc_report$corr_CNmethod_weightedAS_MedianAll <- cor.test(df_cn_eval$WeightedNeutral.AneuploidyScore,
+                                                         df_cn_eval$MedianAll, method = "spearman")
 
 cn_baseline_plot <- df_cn_eval %>%
   pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "MeanNeutral"),
@@ -222,7 +228,8 @@ df_expr_eval <- expr_depmap %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral)
 
-cor.test(df_expr_eval$WeightedNeutral.AneuploidyScore, df_expr_eval$MeanNeutral, method = "spearman")
+dc_report$corr_ExprMethod_weightedAS_MeanNeutral <- cor.test(df_expr_eval$WeightedNeutral.AneuploidyScore,
+                                                             df_expr_eval$MeanNeutral, method = "spearman")
 
 expr_baseline_plot <- df_expr_eval %>%
   pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "MeanNeutral"),
@@ -242,11 +249,15 @@ data_loss_procan <- (expr_buf_procan %>%
             na_matches = "never") %>%
   nrow()) / nrow(expr_buf_procan)
 
+dc_report$data_loss_procan <- data_loss_procan
+
 data_loss_depmap <- (expr_buf_depmap %>%
   anti_join(y = dc_factors_ids,
             by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
             na_matches = "never") %>%
   nrow()) / nrow(expr_buf_depmap)
+
+dc_report$data_loss_depmap <- data_loss_depmap
 
 ## Check correlation between DC Scores and Protein Coefficient of Variance
 ## Buffering Score should be negatively correlated with Protein Coefficient of Variance
@@ -258,10 +269,14 @@ dc_cv <- expr_buf_procan %>%
          Buffering.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
          Buffering.SF.Average = mean(Buffering.GeneLevel.SF, na.rm = TRUE))
 
-cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.Ratio.Average, method = "spearman")
-cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.SF.Average, method = "spearman")
-cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.GeneLevel.Ratio, method = "spearman")
-cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.GeneLevel.SF, method = "spearman")
+dc_report$corr_CV_BufRatio_Average <- cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.Ratio.Average,
+                                               method = "spearman")
+dc_report$corr_CV_SF_Average <- cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.SF.Average,
+                                         method = "spearman")
+dc_report$corr_CV_BufRatio <- cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.GeneLevel.Ratio,
+                                       method = "spearman")
+dc_report$corr_CV_SF <- cor.test(dc_cv$Protein.Expression.CV, dc_cv$Buffering.GeneLevel.SF,
+                                 method = "spearman")
 
 ## Check correlation between datasets
 buf_matched <- match_datasets(expr_buf_procan, expr_buf_depmap)
@@ -281,11 +296,22 @@ corr_gene %>%
   save_plot("dc_dataset_correlation.png", height = 100)
 
 corr_summary <- list(
-  Chr = list(mean(corr_chr$Correlation, na.rm = TRUE), median(corr_chr$Correlation, na.rm = TRUE), sd(corr_chr$Correlation, na.rm = TRUE)),
-  ChrAvg = list(mean(corr_chr_avg$Correlation, na.rm = TRUE), median(corr_chr_avg$Correlation, na.rm = TRUE), sd(corr_chr_avg$Correlation, na.rm = TRUE)),
-  Gene = list(mean(corr_gene$Correlation, na.rm = TRUE), median(corr_gene$Correlation, na.rm = TRUE), sd(corr_gene$Correlation, na.rm = TRUE))
+  Chr = list(mean = mean(corr_chr$Correlation, na.rm = TRUE),
+             median = median(corr_chr$Correlation, na.rm = TRUE),
+             sd = sd(corr_chr$Correlation, na.rm = TRUE)),
+  ChrAvg = list(mean = mean(corr_chr_avg$Correlation, na.rm = TRUE),
+                median = median(corr_chr_avg$Correlation, na.rm = TRUE),
+                sd = sd(corr_chr_avg$Correlation, na.rm = TRUE)),
+  Gene = list(mean = mean(corr_gene$Correlation, na.rm = TRUE),
+              median = median(corr_gene$Correlation, na.rm = TRUE),
+              sd = sd(corr_gene$Correlation, na.rm = TRUE))
 )
 
+dc_report$corr_procan_depmap_summary <- corr_summary
+
+# === Write Report ===
+report_file <- here(reports_dir, "dc_report.txt")
+write_list(dc_report, report_file)
 
 # Median CN, Weighted Mean Expr:
 #   * Chr:    mean = 0.587, median = 0.599, sd = 0.129
