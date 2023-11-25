@@ -266,7 +266,7 @@ df_depmap %>%
   save_plot("cellline_tetraploidy_depmap.png")
 
 ## High vs. Low Aneuploidy Score
-test <- df_procan %>%
+df_procan %>%
   filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
                      test = wilcox.test) %>%
@@ -276,6 +276,21 @@ df_depmap %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
                      test = wilcox.test) %>%
   save_plot("cellline_aneuploidy-class_depmap.png")
+
+### Control for Whole Genome Doubling
+df_procan %>%
+  filter(CellLine.WGD == 0) %>%
+  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
+  signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
+                     test = wilcox.test) %>%
+  save_plot("cellline_aneuploidy-class_no-wgd_procan.png")
+df_depmap %>%
+  filter(CellLine.WGD == 0) %>%
+  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
+  signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
+                     test = wilcox.test) %>%
+  save_plot("cellline_aneuploidy-class_no-wgd_depmap.png")
+
 
 # Regression analysis
 ## Age
