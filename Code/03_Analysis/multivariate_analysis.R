@@ -531,7 +531,7 @@ for (dataset in datasets) {
     }
 
     df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
-      estimate_shap() %>%
+      estimate_shap(n_samples = 250, n_combinations = 400) %>%  # Only override defaults if 128GB RAM available
       shap2df()
     df_explanation %>%
       shap_plot() %>%
