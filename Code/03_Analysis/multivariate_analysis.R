@@ -129,6 +129,23 @@ clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_co
     janitor::clean_names()
 }
 
+normalize_min_max <- function(x, ...) {
+    return((x - min(x, ...)) /(max(x, ...) - min(x, ...)))
+}
+
+normalize_features <- function (df, method = "min-max", factor_cols = dc_factor_cols) {
+  if (method == "min-max") {
+    df %>%
+      mutate_at(factor_cols, \(x) normalize_min_max(x, na.rm = TRUE))
+  } else if (method == "z-score") {
+    df %>%
+      mutate_at(factor_cols, ~(scale(.) %>% as.vector))
+  } else {
+    warning("Invalid normalization method! Data frame passed as is. Supported methods: min-max, z-score")
+    return(df)
+  }
+}
+
 split_train_test <- function(df_prep, training_set_ratio) {
   df_prep <- df_prep  %>%
     mutate(id = row_number())
@@ -152,6 +169,7 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
   df_prep <- dataset %>%
     filter_func() %>%
     add_factors(df_factors, factor_cols = factor_cols) %>%
+    normalize_features(method = "min-max", factor_cols = factor_cols) %>%
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
     # ToDo: Only use imputation on training set
     impute_na() %>%
@@ -505,8 +523,7 @@ shap2df <- function(explanation) {
     pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "SHAP.Value") %>%
     mutate(Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
     group_by(DosageCompensation.Factor) %>%
-    mutate(Factor.Value.Relative = (Factor.Value - min(Factor.Value, na.rm = T)) /
-      (max(Factor.Value, na.rm = TRUE) - min(Factor.Value, na.rm = T)),
+    mutate(Factor.Value.Relative = normalize_min_max(Factor.Value, na.rm = TRUE),
            SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
            SHAP.Median.Absolute = median(abs(SHAP.Value)),
            SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]],
