@@ -24,6 +24,7 @@ dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
 drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet"))
+drug_meta <- read_parquet(here(output_data_dir, "drug_metadata.parquet"))
 cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
 cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
@@ -133,6 +134,16 @@ df_sensitivity_agg %>%
                    alpha = 3/4, jitter_width = 0.25) %>%
   save_plot("correlation_buffering_sensitivity_bot.png", width = 300)
 
+df_sensitivity_agg %>%
+  semi_join(y = top_sensitivity, by = "Drug.ID") %>%
+  signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
+  save_plot(paste0("buffering_sensitivity_distributions_top.png"), width = 350)
+
+df_sensitivity_agg %>%
+  semi_join(y = bot_sensitivity, by = "Drug.ID") %>%
+  signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
+  save_plot(paste0("buffering_sensitivity_distributions_bot.png"), width = 350)
+
 # Scatter- & Violin-plot visualization of selected drugs
 interesting_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749",
                        "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE")
@@ -152,4 +163,50 @@ for (drug in interesting_drugs) {
 df_sensitivity_agg %>%
   filter(Drug.Name %in% interesting_drugs) %>%
   signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
-  save_plot(paste0("selected_buffering_sensitivity_distributions.png"), width = 350)
+  save_plot(paste0("buffering_sensitivity_distributions_selected.png"), width = 350)
+
+# Get mechanism of action and target of top drugs
+top_meta <- drug_meta %>%
+  semi_join(y = top_sensitivity, by = "Drug.ID")
+
+bot_meta <- drug_meta %>%
+  semi_join(y = bot_sensitivity, by = "Drug.ID")
+
+selected_meta <- drug_meta %>%
+  filter(Drug.Name %in% interesting_drugs)
+
+moa_corr <- cellline_buf_agg %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.MOA, delim = ",") %>%
+  mutate(Drug.MOA = trimws(Drug.MOA)) %>%
+  group_by(Drug.MOA) %>%
+  summarize(
+    # ToDo: Avoid calculating correlation twice
+    Corr.Sensitivity_Buffering = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+                                          method = "spearman")$estimate[["rho"]],
+    Corr.p = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+                      method = "pearson")$p.value
+  )
+
+target_corr <- cellline_buf_agg %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.Target, delim = ",") %>%
+  mutate(Drug.Target = trimws(Drug.Target)) %>%
+  group_by(Drug.Target) %>%
+  summarize(
+    # ToDo: Avoid calculating correlation twice
+    Corr.Sensitivity_Buffering = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+                                          method = "spearman")$estimate[["rho"]],
+    Corr.p = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+                      method = "pearson")$p.value
+  )
+
+
+# ToDo: Heatmap by mode of action
+# ToDo: Check for confounders (WGD, AS) (Heatmap with Buffering Score, Drug Sensitivity (D1, ..., Dn), WGD, AS)

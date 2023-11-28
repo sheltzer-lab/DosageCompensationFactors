@@ -21,6 +21,7 @@ regex_parentheses <- "(.*)\\s+\\((.*)\\)"
 
 df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 
+# PRISM Drug Screens
 df_prism <- read_csv_arrow(here(screens_data_dir, "PRISM_Repurposing_Public_23Q2.csv")) %>%
   rename(CellLine.DepMapModelId = 1) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
@@ -32,6 +33,17 @@ df_prism <- read_csv_arrow(here(screens_data_dir, "PRISM_Repurposing_Public_23Q2
   write_parquet(here(output_data_dir, 'drug_screens.parquet'),
                 version = "2.6")
 
+df_prism_meta <- read_csv_arrow(here(screens_data_dir, "Repurposing_Public_23Q2_Extended_Primary_Compound_List.csv")) %>%
+  select(IDs, Drug.Name, MOA, repurposing_target) %>%
+  rename(Drug.ID = IDs,
+         Drug.MOA = MOA,
+         Drug.Target = repurposing_target,
+         Drug.Name = Drug.Name) %>%
+  distinct() %>%
+  write_parquet(here(output_data_dir, 'drug_metadata.parquet'),
+                version = "2.6")
+
+# Sanger Model Growth / Proliferation data
 df_growth <- read_csv_arrow(here(screens_data_dir, "growth_rate_20220907.csv")) %>%
   select(model_name, model_id, seeding_density, day4_day1_ratio, replicates) %>%
   rename(CellLine.SangerModelId = "model_id",
@@ -49,6 +61,7 @@ df_growth <- read_csv_arrow(here(screens_data_dir, "growth_rate_20220907.csv")) 
   write_parquet(here(output_data_dir, 'cellline_growth.parquet'),
                 version = "2.6")
 
+# DepMap CRISPR Screens
 df_crispr_eff <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv")) %>%
   rename(CellLine.DepMapModelId = ModelID) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
