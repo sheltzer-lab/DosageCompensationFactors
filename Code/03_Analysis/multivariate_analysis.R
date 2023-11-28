@@ -345,6 +345,7 @@ dir.create(eval_dir, recursive = TRUE)
 test_data_depmap <- expr_buf_depmap %>%
   filter_arm_gain() %>%
   add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
   impute_na() %>%
   shuffle_rows()
@@ -366,6 +367,7 @@ dir.create(eval_dir, recursive = TRUE)
 test_data_procan <- expr_buf_procan %>%
   filter_arm_gain() %>%
   add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
   impute_na() %>%
   shuffle_rows()
@@ -386,6 +388,7 @@ dir.create(eval_dir, recursive = TRUE)
 test_data_p0211 <- expr_buf_p0211 %>%
   filter_arm_gain() %>%
   add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
   impute_na() %>%
   shuffle_rows() %>%
@@ -411,6 +414,7 @@ dir.create(eval_dir, recursive = TRUE)
 test_data_depmap <- expr_buf_depmap %>%
   filter_arm_loss() %>%
   add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
   impute_na() %>%
   shuffle_rows()
@@ -432,6 +436,7 @@ dir.create(eval_dir, recursive = TRUE)
 test_data_procan <- expr_buf_procan %>%
   filter_arm_loss() %>%
   add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
   impute_na() %>%
   shuffle_rows()
@@ -452,6 +457,7 @@ dir.create(eval_dir, recursive = TRUE)
 test_data_p0211 <- expr_buf_p0211 %>%
   filter_arm_loss() %>%
   add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
   clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
   impute_na() %>%
   shuffle_rows() %>%
