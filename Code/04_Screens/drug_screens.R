@@ -28,6 +28,8 @@ drug_meta <- read_parquet(here(output_data_dir, "drug_metadata.parquet"))
 cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
 cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
+copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
+  distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
 # Calculate Correlation between Drug Sensitivity and Cell Line Buffering
 analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_col, drug_value_col) {
@@ -145,10 +147,10 @@ df_sensitivity_agg %>%
   save_plot(paste0("buffering_sensitivity_distributions_bot.png"), width = 350)
 
 # Scatter- & Violin-plot visualization of selected drugs
-interesting_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749",
+selected_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749",
                        "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE")
 
-for (drug in interesting_drugs) {
+for (drug in selected_drugs) {
   df <- df_sensitivity_agg %>%
     filter(Drug.Name == drug)
 
@@ -161,7 +163,7 @@ for (drug in interesting_drugs) {
 }
 
 df_sensitivity_agg %>%
-  filter(Drug.Name %in% interesting_drugs) %>%
+  filter(Drug.Name %in% selected_drugs) %>%
   signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
   save_plot(paste0("buffering_sensitivity_distributions_selected.png"), width = 350)
 
@@ -173,7 +175,7 @@ bot_meta <- drug_meta %>%
   semi_join(y = bot_sensitivity, by = "Drug.ID")
 
 selected_meta <- drug_meta %>%
-  filter(Drug.Name %in% interesting_drugs)
+  filter(Drug.Name %in% selected_drugs)
 
 moa_corr <- cellline_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
@@ -209,4 +211,98 @@ target_corr <- cellline_buf_agg %>%
 
 
 # ToDo: Heatmap by mode of action
-# ToDo: Check for confounders (WGD, AS) (Heatmap with Buffering Score, Drug Sensitivity (D1, ..., Dn), WGD, AS)
+
+# Heatmap plotting Drug Sensitivity, Cell Line Buffering and potential confounders
+drug_confounder_heatmap <- function(df) {
+  theme_settings <- theme(axis.line.x = element_blank(),
+                          axis.title.x = element_blank(),
+                          axis.text.x = element_blank(),
+                          axis.ticks.x = element_blank(),
+                          axis.title.y = element_blank())
+
+  horizontal_legend <- theme(legend.direction = "horizontal",
+                             legend.title = element_blank())
+
+  df <- df %>%
+    mutate(Drug.Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
+                                                                        nsmall = 3, scientific = FALSE), ")")) %>%
+    mutate(Drug.Label = fct_reorder(Drug.Label, Corr.Sensitivity_Buffering),
+           CellLine.Name = fct_reorder(CellLine.Name, Buffering.CellLine.MeanNormRank),
+           CellLine.WGD = as.factor(CellLine.WGD))
+
+  heatmap_buffering <- df %>%
+    distinct(CellLine.Name, Buffering.CellLine.MeanNormRank) %>%
+    ggplot() +
+    aes(x = CellLine.Name, y = "Buffering Score", fill = Buffering.CellLine.MeanNormRank) +
+    geom_raster() +
+    scale_fill_viridis_c(option = "mako", labels = c(0, 0.5, 1), breaks = c(0, 0.5, 1), limits = c(0, 1)) +
+    cowplot::theme_minimal_hgrid() +
+    theme_settings +
+    horizontal_legend
+
+  heatmap_drugs <- df %>%
+    ggplot() +
+    aes(x = CellLine.Name, y = Drug.Label, fill = Drug.MFI.Log2FC) +
+    geom_raster() +
+    scale_fill_viridis_c(option = "magma", direction = -1) +
+    cowplot::theme_minimal_hgrid() +
+    theme_settings
+
+  heatmap_wgd <- df %>%
+    distinct(CellLine.Name, CellLine.WGD) %>%
+    ggplot() +
+    aes(x = CellLine.Name, y = "WGD Status", fill = CellLine.WGD) +
+    geom_raster() +
+    scale_fill_viridis_d(option = "viridis") +
+    cowplot::theme_minimal_hgrid() +
+    theme_settings +
+    horizontal_legend
+
+  heatmap_aneuploidy <- df %>%
+    distinct(CellLine.Name, CellLine.AneuploidyScore) %>%
+    ggplot() +
+    aes(x = CellLine.Name, y = "Aneuploidy Score", fill = CellLine.AneuploidyScore) +
+    geom_raster() +
+    scale_fill_viridis_c(option = "rocket") +
+    cowplot::theme_minimal_hgrid() +
+    theme_settings +
+    horizontal_legend
+
+  cowplot::plot_grid(
+    heatmap_buffering, NULL, heatmap_drugs, NULL, heatmap_wgd, NULL, heatmap_aneuploidy,
+    labels = NULL, ncol = 1, align = "v", axis = "lr",
+    rel_heights = c(2, -0.5, length(selected_drugs), -0.5, 2, -0.8, 2)
+  )
+}
+
+cellline_buf_agg %>%
+  inner_join(y = copy_number, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never") %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  inner_join(y = drug_dc_corr_agg_rank, by = c("Drug.ID", "Drug.Name")) %>%
+  filter(Drug.Name %in% selected_drugs) %>%
+  drug_confounder_heatmap() %>%
+  save_plot("drug_confounder_heatmap_selected.png")
+
+cellline_buf_agg %>%
+  inner_join(y = copy_number, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never") %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  inner_join(y = top_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
+  drug_confounder_heatmap() %>%
+  save_plot("drug_confounder_heatmap_top.png")
+
+
+cellline_buf_agg %>%
+  inner_join(y = copy_number, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never") %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  inner_join(y = bot_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
+  drug_confounder_heatmap() %>%
+  save_plot("drug_confounder_heatmap_bot.png")
+
+
+# ToDo: Cleanup Code
