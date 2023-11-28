@@ -126,7 +126,24 @@ df_gene_corr %>%
                    alpha = 3/4, jitter_width = 0.2) %>%
   save_plot("dependency_buffering_top-correlation.png", height = 220, width = 180)
 
-# ToDo: Calculate correlation of effect score with cell line ranking (per gene)
+## Look at selected genes in more detail
+selected_genes <- c("KRAS", "EGFR")
+
+for (gene in selected_genes) {
+  df <- df_gene_corr %>%
+    filter(Gene.Symbol == gene)
+
+  title <- paste0(gene, " (", utf8_rho, " = ", format(round(df$CRISPR.DependencyScore.Corr[1], 3), nsmall = 3),
+                  ", ", print_signif(df$CRISPR.DependencyScore.Corr.p[1], 3), ")")
+
+  df %>%
+    scatter_plot_regression(CRISPR.DependencyScore,
+                          Buffering.GeneLevel.Ratio,
+                          Buffering.GeneLevel.Ratio ~ CRISPR.DependencyScore,
+                          point_size = 2, label_coords = c(0.5, -2), title = title) %>%
+    save_plot(paste0("dependency_buffering_", gene, "_scatterplot.png"))
+}
 
 # === Analyze Cell Line Sensitivity to Buffering ===
+# ToDo: Calculate correlation of effect score with cell line ranking (per gene)
 # ToDo: Discretize Cell Lines into Low-/Mid-/High-Buffering groups and check gene essentiality
