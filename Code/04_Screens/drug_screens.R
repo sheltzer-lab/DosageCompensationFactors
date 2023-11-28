@@ -218,7 +218,10 @@ drug_confounder_heatmap <- function(df) {
                           axis.title.x = element_blank(),
                           axis.text.x = element_blank(),
                           axis.ticks.x = element_blank(),
-                          axis.title.y = element_blank())
+                          axis.title.y = element_blank(),
+                          legend.key.size = unit(12, "points"),
+                          legend.title = element_text(size = 10),
+                          legend.text = element_text(size = 10))
 
   horizontal_legend <- theme(legend.direction = "horizontal",
                              legend.title = element_blank())
