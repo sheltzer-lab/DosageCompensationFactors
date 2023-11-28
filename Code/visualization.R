@@ -150,10 +150,10 @@ get_density <- function(x, y, ...) {
   return(dens$z[ii])
 }
 
-scatter_plot_regression <- function(df, x_col, y_col, formula,
+scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
                                     label_coords = c(0, 0), title = NULL, point_size = 0.3) {
   df <- df %>%
-    select({ { x_col } }, { { y_col } }) %>%
+    select({ { x_col } }, { { y_col } }, { { color_col } }) %>%
     drop_na() %>%
     mutate(Density = get_density({ { x_col } }, { { y_col } }, n = 100))
 
@@ -166,7 +166,10 @@ scatter_plot_regression <- function(df, x_col, y_col, formula,
 
   regression_plot <- df %>%
     ggplot() +
-    aes(x = { { x_col } }, y = { { y_col } }, color = Density) +
+    {
+      if (quo_is_null(enquo(color_col))) aes(x = { { x_col } }, y = { { y_col } }, color = Density)
+      else aes(x = { { x_col } }, y = { { y_col } }, color = { { color_col } })
+    } +
     geom_point(alpha = 0.8, size = point_size) +
     stat_smooth(method = lm, color = "blue") +
     geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
@@ -176,7 +179,9 @@ scatter_plot_regression <- function(df, x_col, y_col, formula,
                                     "* x +", format(round(intercept, 5), nsmall = 5),
                                     ", R² = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
                       )) +
-    scale_colour_viridis_c(option = "D", direction = 1) +
+    {
+      if (quo_is_null(enquo(color_col))) scale_colour_viridis_c(option = "D", direction = 1)
+    } +
     xlab(quo_name(enquo(x_col))) +
     ylab(quo_name(enquo(y_col))) +
     ggtitle(title)
