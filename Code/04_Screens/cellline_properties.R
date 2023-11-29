@@ -173,13 +173,15 @@ df_depmap %>%
 
 ## Tumor status
 df_procan %>%
-  signif_violin_plot(tissue_status, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(tissue_status, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_tumor-status_procan.png")
 df_depmap %>%
   filter(PrimaryOrMetastasis != "NA") %>%
-  signif_violin_plot(PrimaryOrMetastasis, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(PrimaryOrMetastasis, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_tumor-status_depmap.png")
 
 ## Micro-satellite instability
@@ -230,39 +232,62 @@ df_msi_equal %>%
 ## Sex/Gender
 df_procan %>%
   filter(gender != "Unknown") %>%
-  signif_violin_plot(gender, Buffering.CellLine.Ratio,
-                     test = t.test) %>%
+  signif_beeswarm_plot(gender, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
   save_plot("cellline_gender_procan.png")
 df_depmap %>%
   filter(Sex != "Unknown") %>%
-  signif_violin_plot(Sex, Buffering.CellLine.Ratio,
-                     test = t.test) %>%
+  signif_beeswarm_plot(Sex, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
   save_plot("cellline_gender_depmap.png")
 
 ## Whole-genome doubling
 df_procan %>%
-  signif_violin_plot(WGD, Buffering.CellLine.Ratio,
-                     test = t.test) %>%
+  signif_beeswarm_plot(WGD, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
   save_plot("cellline_wgd_procan.png")
 df_depmap %>%
-  signif_violin_plot(WGD, Buffering.CellLine.Ratio,
-                     test = t.test) %>%
+  signif_beeswarm_plot(WGD, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
   save_plot("cellline_wgd_depmap.png")
 df_depmap %>%
   filter(CellLine.WGD == 1 | CellLine.WGD == 2) %>%
-  mutate(CellLine.WGD = factor(CellLine.WGD, levels = c(1,2))) %>%
-  signif_violin_plot(CellLine.WGD, Buffering.CellLine.Ratio,
-                     test = t.test) %>%
+  mutate(CellLine.WGD = factor(CellLine.WGD, levels = c(1, 2))) %>%
+  signif_beeswarm_plot(CellLine.WGD, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
   save_plot("cellline_wgd_levels_depmap.png")
+
+### Control for low aneuploidy score
+max_aneuploidy_nowgd <- round(quantile((df_procan %>% filter(WGD == "Non-WGD"))$CellLine.AneuploidyScore,
+                                       probs = 0.9))
+df_procan %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_nowgd) %>%
+  signif_beeswarm_plot(WGD, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
+  save_plot("cellline_wgd_low-aneuploidy_procan.png")
+df_depmap %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_nowgd) %>%
+  signif_beeswarm_plot(WGD, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = t.test) %>%
+  save_plot("cellline_wgd_low-aneuploidy_depmap.png")
 
 ## Near-tetraploid cell lines
 df_procan %>%
-  signif_violin_plot(`Near-Tetraploid`, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(`Near-Tetraploid`, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_tetraploidy_procan.png")
 df_depmap %>%
-  signif_violin_plot(`Near-Tetraploid`, Buffering.CellLine.Ratio,
-                     test = wilcox.test) %>%
+  signif_beeswarm_plot(`Near-Tetraploid`, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
   save_plot("cellline_tetraploidy_depmap.png")
 
 ## High vs. Low Aneuploidy Score
