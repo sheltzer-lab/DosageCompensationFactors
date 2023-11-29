@@ -315,6 +315,14 @@ df_depmap %>%
   save_plot("cellline_aneuploidy-class_by-wgd_depmap.png")
 
 
+## Mutational Burden
+df_procan %>%
+  mutate(`Mutational Burden` = if_else(mutational_burden > 50, "High", "Low")) %>%
+  signif_beeswarm_plot(`Mutational Burden`, Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
+  save_plot("cellline_mutations_comparison_procan.png")
+
 # Regression analysis
 ## Age
 df_procan %>%
@@ -339,7 +347,7 @@ df_depmap %>%
 ## Mutational burden
 df_procan %>%
   scatter_plot_regression(mutational_burden, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ mutational_burden,
-                          label_coords = c(400, -0.4), point_size = 2) %>%
+                          label_coords = c(200, -0.4), point_size = 2) %>%
   save_plot("cellline_mutations_procan.png")
 
 ## Aneuploidy score
