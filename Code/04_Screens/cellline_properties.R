@@ -144,7 +144,7 @@ df_procan %>%
                        test = wilcox.test) %>%
   save_plot("cellline_leukemia_procan.png")
 df_depmap %>%
-  mutate(Leukemia_Lymphoma = OncotreeLineage %in% leuk_depmap) %>%
+  mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
