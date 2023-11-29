@@ -177,12 +177,13 @@ bot_meta <- drug_meta %>%
 selected_meta <- drug_meta %>%
   filter(Drug.Name %in% selected_drugs)
 
+# Plot correlation by mechanism of action
 moa_corr <- cellline_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
-  separate_longer_delim(Drug.MOA, delim = ",") %>%
+  separate_longer_delim(Drug.MOA, delim = ", ") %>%
   mutate(Drug.MOA = trimws(Drug.MOA)) %>%
   group_by(Drug.MOA) %>%
   summarize(
@@ -193,12 +194,25 @@ moa_corr <- cellline_buf_agg %>%
                       method = "pearson")$p.value
   )
 
+moa_corr %>%
+  filter(Corr.p < p_threshold) %>%
+  filter(Corr.Sensitivity_Buffering < -0.15) %>%
+  slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
+  mutate(Drug.MOA = fct_reorder(Drug.MOA, Corr.Sensitivity_Buffering, .desc = TRUE),
+         `-log10(p)` = -log10(Corr.p)) %>%
+  vertical_bar_chart(Drug.MOA, Corr.Sensitivity_Buffering, Corr.p,
+                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.2,
+                     category_lab = "Mechanism of Action", value_lab = "Correlation Buffering-Sensitivity",
+                     color_lab = "p-value") %>%
+  save_plot("mechanism_buffering_sensitivity_top.png")
+
+# Plot correlation by drug target
 target_corr <- cellline_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
-  separate_longer_delim(Drug.Target, delim = ",") %>%
+  separate_longer_delim(Drug.Target, delim = ", ") %>%
   mutate(Drug.Target = trimws(Drug.Target)) %>%
   group_by(Drug.Target) %>%
   summarize(
@@ -209,8 +223,17 @@ target_corr <- cellline_buf_agg %>%
                       method = "pearson")$p.value
   )
 
-
-# ToDo: Heatmap by mode of action
+target_corr %>%
+  filter(Corr.p < p_threshold) %>%
+  filter(Corr.Sensitivity_Buffering < -0.15) %>%
+  slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
+  mutate(Drug.Target = fct_reorder(Drug.Target, Corr.Sensitivity_Buffering, .desc = TRUE),
+         `-log10(p)` = -log10(Corr.p)) %>%
+  vertical_bar_chart(Drug.Target, Corr.Sensitivity_Buffering, Corr.p,
+                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.2,
+                     category_lab = "Drug Target", value_lab = "Correlation Buffering-Sensitivity",
+                     color_lab = "p-value") %>%
+  save_plot("target_buffering_sensitivity_top.png")
 
 # Heatmap plotting Drug Sensitivity, Cell Line Buffering and potential confounders
 drug_confounder_heatmap <- function(df) {
