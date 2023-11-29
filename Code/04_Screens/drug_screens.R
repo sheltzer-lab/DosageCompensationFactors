@@ -236,7 +236,7 @@ target_corr %>%
   save_plot("target_buffering_sensitivity_top.png")
 
 # Heatmap plotting Drug Sensitivity, Cell Line Buffering and potential confounders
-drug_confounder_heatmap <- function(df) {
+drug_confounder_heatmap <- function(df, desc = FALSE) {
   theme_settings <- theme(axis.line.x = element_blank(),
                           axis.title.x = element_blank(),
                           axis.text.x = element_blank(),
@@ -252,7 +252,7 @@ drug_confounder_heatmap <- function(df) {
   df <- df %>%
     mutate(Drug.Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
                                                                         nsmall = 3, scientific = FALSE), ")")) %>%
-    mutate(Drug.Label = fct_reorder(Drug.Label, Corr.Sensitivity_Buffering),
+    mutate(Drug.Label = fct_reorder(Drug.Label, Corr.Sensitivity_Buffering, .desc = desc),
            CellLine.Name = fct_reorder(CellLine.Name, Buffering.CellLine.MeanNormRank),
            CellLine.WGD = as.factor(CellLine.WGD))
 
@@ -308,7 +308,7 @@ cellline_buf_agg %>%
              relationship = "one-to-many", na_matches = "never") %>%
   inner_join(y = drug_dc_corr_agg_rank, by = c("Drug.ID", "Drug.Name")) %>%
   filter(Drug.Name %in% selected_drugs) %>%
-  drug_confounder_heatmap() %>%
+  drug_confounder_heatmap(desc = TRUE) %>%
   save_plot("drug_confounder_heatmap_selected.png")
 
 cellline_buf_agg %>%
@@ -317,9 +317,8 @@ cellline_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   inner_join(y = top_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
-  drug_confounder_heatmap() %>%
+  drug_confounder_heatmap(desc = TRUE) %>%
   save_plot("drug_confounder_heatmap_top.png")
-
 
 cellline_buf_agg %>%
   inner_join(y = copy_number, by = "CellLine.Name",
