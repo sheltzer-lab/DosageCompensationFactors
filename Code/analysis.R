@@ -208,11 +208,11 @@ mean_norm_rank <- function(df, value_col, group_col, id_col) {
     # Impute missing data
     mutate(Rank = replace_na(Rank, 0.5)) %>%
     # Aggregate normalized ranks
-    summarize(AggregatedRank = mean(Rank)) %>%
-    mutate(AggregatedRank = as.numeric(AggregatedRank),
+    summarize(MeanNormRank = mean(Rank)) %>%
+    mutate(MeanNormRank = as.numeric(MeanNormRank),
            { { id_col } } := factor({ { id_col } },
-                                    levels = { { id_col } }[order(AggregatedRank)])) %>%
-    arrange(desc(AggregatedRank))
+                                    levels = { { id_col } }[order(MeanNormRank)])) %>%
+    arrange(desc(MeanNormRank))
 }
 
 standardized_mean <- function (df, value_col, group_col, id_col) {

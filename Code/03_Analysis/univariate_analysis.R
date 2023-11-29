@@ -205,7 +205,7 @@ rank_gain <- analysis_results %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
                  AnalysisID, DosageCompensation.Factor)
 rank_gain %>%
-  vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
+  vertical_bar_chart(DosageCompensation.Factor, MeanNormRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_gain.png", height = 200, width = 180)
@@ -215,7 +215,7 @@ rank_loss <- analysis_results %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
                  AnalysisID, DosageCompensation.Factor)
 rank_loss %>%
-  vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
+  vertical_bar_chart(DosageCompensation.Factor, MeanNormRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss.png", height = 200, width = 180)
@@ -225,7 +225,7 @@ rank_loss_wgd <- analysis_results %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
                  AnalysisID, DosageCompensation.Factor)
 rank_loss_wgd %>%
-  vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
+  vertical_bar_chart(DosageCompensation.Factor, MeanNormRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss_wgd.png", height = 200, width = 180)
@@ -235,7 +235,7 @@ rank_loss_no_wgd <- analysis_results %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
                  AnalysisID, DosageCompensation.Factor)
 rank_loss_no_wgd %>%
-  vertical_bar_chart(DosageCompensation.Factor, AggregatedRank,
+  vertical_bar_chart(DosageCompensation.Factor, MeanNormRank,
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss_no-wgd.png", height = 200, width = 180)

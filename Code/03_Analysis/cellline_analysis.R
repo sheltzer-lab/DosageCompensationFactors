@@ -224,11 +224,22 @@ cellline_buf_mean <- cellline_buf_filtered_procan %>%
 cellline_buf_agg <- cellline_buf_rank %>%
   inner_join(y = cellline_buf_mean, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never", unmatched = "error") %>%
-  rename(Buffering.CellLine.MeanNormRank = "AggregatedRank",
+  rename(Buffering.CellLine.MeanNormRank = "MeanNormRank",
          Buffering.CellLine.StandardizedMean = "StandardizedMean") %>%
+  mutate(CellLine.Name = fct_reorder(CellLine.Name, Buffering.CellLine.MeanNormRank)) %>%
   write_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"), version = "2.6")
 
 write.xlsx(cellline_buf_agg, here(tables_base_dir, "cellline_buffering_agg.xlsx"),
            colNames = TRUE)
 
-# ToDo: Visualize Top Aggregated results (bar chart)
+cellline_buf_agg %>%
+  slice_max(Buffering.CellLine.MeanNormRank, n = 20) %>%
+  vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
+                     value_range = c(0.5,1), line_intercept = 0.5, value_lab = "Aggregated Rank") %>%
+  save_plot("cellline_buffering_aggregated_top.png")
+
+cellline_buf_agg %>%
+  slice_min(Buffering.CellLine.MeanNormRank, n = 20) %>%
+  vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
+                     value_range = c(0,0.5), line_intercept = 0.5, value_lab = "Aggregated Rank") %>%
+  save_plot("cellline_buffering_aggregated_bot.png")
