@@ -333,10 +333,16 @@ model_procan_gain_rf <- readRDS(here(models_base_dir, "model_rf_ProCan_Chromosom
 model_procan_gain_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds"))
 model_procan_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds"))
 model_matched_renorm_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_MatchedRenorm_ChromosomeArm-Level_Gain_Log2FC.rds"))
+model_p0211_gain_rf <- readRDS(here(models_base_dir, "model_rf_P0211_ChromosomeArm-Level_Gain_Log2FC.rds"))
+model_p0211_gain_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_P0211_ChromosomeArm-Level_Gain_Log2FC.rds"))
+model_p0211_gain_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_P0211_ChromosomeArm-Level_Gain_Log2FC.rds"))
 model_procan_loss_rf <- readRDS(here(models_base_dir, "model_rf_ProCan_ChromosomeArm-Level_Loss_Log2FC.rds"))
 model_procan_loss_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_ProCan_ChromosomeArm-Level_Loss_Log2FC.rds"))
 model_procan_loss_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_ProCan_ChromosomeArm-Level_Loss_Log2FC.rds"))
 model_matched_renorm_loss_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_MatchedRenorm_ChromosomeArm-Level_Loss_Log2FC.rds"))
+model_p0211_loss_rf <- readRDS(here(models_base_dir, "model_rf_P0211_ChromosomeArm-Level_Loss_Log2FC.rds"))
+model_p0211_loss_pcaNN <- readRDS(here(models_base_dir, "model_pcaNNet_P0211_ChromosomeArm-Level_Loss_Log2FC.rds"))
+model_p0211_loss_xgb <- readRDS(here(models_base_dir, "model_xgbLinear_P0211_ChromosomeArm-Level_Loss_Log2FC.rds"))
 
 ## Use ProCan gain model for evaluating DepMap gain data
 eval_dir <- here(plots_dir, "ProCan", "ChromosomeArm-Level", "Gain_Log2FC", "Eval-DepMap")
@@ -406,6 +412,19 @@ rocs_to_df(rocs_procan_p0211_gain) %>%
   plot_rocs() %>%
   save_plot("roc-summary.png", dir = eval_dir, width = 250)
 
+## Use P0211 gain model to evaluate ProCan gain
+eval_dir <- here(plots_dir, "P0211", "ChromosomeArm-Level", "Gain_Log2FC", "Eval-ProCan")
+dir.create(eval_dir, recursive = TRUE)
+
+rocs_p0211_procan_gain <- list(
+  rf = evaluate_model(model_p0211_gain_rf, test_data_procan, eval_dir, filename = "ROC-Curve_rf.png"),
+  pcaNNet = evaluate_model(model_p0211_gain_pcaNN, test_data_procan, eval_dir, filename = "ROC-Curve_pcaNNet.png"),
+  xgbLinear = evaluate_model(model_p0211_gain_xgb, test_data_procan, eval_dir, filename = "ROC-Curve_xgbLinear.png")
+)
+
+rocs_to_df(rocs_procan_p0211_gain) %>%
+  plot_rocs() %>%
+  save_plot("roc-summary.png", dir = eval_dir, width = 250)
 
 ## Use ProCan loss model for evaluating DepMap loss data
 eval_dir <- here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss_Log2FC", "Eval-DepMap")
@@ -469,6 +488,20 @@ rocs_procan_p0211_loss <- list(
   rf = evaluate_model(model_procan_loss_rf, test_data_p0211, eval_dir, filename = "ROC-Curve_rf.png"),
   pcaNNet = evaluate_model(model_procan_loss_pcaNN, test_data_p0211, eval_dir, filename = "ROC-Curve_pcaNNet.png"),
   xgbLinear = evaluate_model(model_procan_loss_xgb, test_data_p0211, eval_dir, filename = "ROC-Curve_xgbLinear.png")
+)
+
+rocs_to_df(rocs_procan_p0211_loss) %>%
+  plot_rocs() %>%
+  save_plot("roc-summary.png", dir = eval_dir, width = 250)
+
+## Use P0211 loss model to evaluate ProCan loss
+eval_dir <- here(plots_dir, "P0211", "ChromosomeArm-Level", "Loss_Log2FC", "Eval-ProCan")
+dir.create(eval_dir, recursive = TRUE)
+
+rocs_p0211_procan_loss <- list(
+  rf = evaluate_model(model_p0211_loss_rf, test_data_procan, eval_dir, filename = "ROC-Curve_rf.png"),
+  pcaNNet = evaluate_model(model_p0211_loss_pcaNN, test_data_procan, eval_dir, filename = "ROC-Curve_pcaNNet.png"),
+  xgbLinear = evaluate_model(model_p0211_loss_xgb, test_data_procan, eval_dir, filename = "ROC-Curve_xgbLinear.png")
 )
 
 rocs_to_df(rocs_procan_p0211_loss) %>%
