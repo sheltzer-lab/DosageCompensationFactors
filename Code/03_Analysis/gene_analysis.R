@@ -111,3 +111,21 @@ expr_buf_p0211 %>%
                         cluster_rows = TRUE, cluster_cols = TRUE,
                         show_rownames = TRUE, show_colnames = TRUE) %>%
   save_plot("genes_chr13_log2fc_absolute_average_p0211.png", width = 500)
+
+## Average Log2FC by Cell Line
+expr_buf_p0211 %>%
+  filter(CellLine.Name != "RPE1") %>%
+  filter(Gene.Chromosome == 13) %>%
+  bidirectional_heatmap(Log2FC.Average, Gene.Symbol, CellLine.Name,
+                        cluster_rows = TRUE, cluster_cols = TRUE,
+                        show_rownames = TRUE, show_colnames = TRUE) %>%
+  save_plot("genes_chr13_log2fc_average_p0211.png", width = 500)
+
+## Log2FC by Sample
+expr_buf_p0211 %>%
+  filter(CellLine.Name != "RPE1") %>%
+  filter(Gene.Chromosome == 13) %>%
+  bidirectional_heatmap(Log2FC, Gene.Symbol, Sample.Name,
+                        cluster_rows = TRUE, cluster_cols = TRUE,
+                        show_rownames = TRUE, show_colnames = TRUE) %>%
+  save_plot("genes_chr13_log2fc_p0211.png", width = 500)

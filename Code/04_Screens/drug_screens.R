@@ -201,7 +201,7 @@ moa_corr %>%
   mutate(Drug.MOA = fct_reorder(Drug.MOA, Corr.Sensitivity_Buffering, .desc = TRUE),
          `-log10(p)` = -log10(Corr.p)) %>%
   vertical_bar_chart(Drug.MOA, Corr.Sensitivity_Buffering, Corr.p,
-                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.2,
+                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.18,
                      category_lab = "Mechanism of Action", value_lab = "Correlation Buffering-Sensitivity",
                      color_lab = "p-value") %>%
   save_plot("mechanism_buffering_sensitivity_top.png")
@@ -230,7 +230,7 @@ target_corr %>%
   mutate(Drug.Target = fct_reorder(Drug.Target, Corr.Sensitivity_Buffering, .desc = TRUE),
          `-log10(p)` = -log10(Corr.p)) %>%
   vertical_bar_chart(Drug.Target, Corr.Sensitivity_Buffering, Corr.p,
-                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.2,
+                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.225,
                      category_lab = "Drug Target", value_lab = "Correlation Buffering-Sensitivity",
                      color_lab = "p-value") %>%
   save_plot("target_buffering_sensitivity_top.png")
