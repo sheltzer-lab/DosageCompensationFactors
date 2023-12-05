@@ -8,7 +8,7 @@ library(assertr)
 library(ggplot2)
 library(limma)
 library(tibble)
-library(pheatmap)
+library(scales)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -179,30 +179,17 @@ p0211_expr_processed %>%
   plot_pca() %>%
   save_plot("p0211_pca_norm.png")
 
-mat_log2 <- p0211_expr_processed %>%
-  select(Sample.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
-  pivot_wider(names_from = Sample.Name, values_from = Protein.Expression.Log2) %>%
-  column_to_rownames(var = "ProteinGroup.UniprotIDs")
+p0211_expr_annotated %>%
+  mutate(ScaledExpression = oob_squish(as.vector(scale(Protein.Expression.Log2)), range = c(-2,2))) %>%
+  bidirectional_heatmap(ScaledExpression, Sample.Name, ProteinGroup.UniprotIDs,
+                        cluster_cols = TRUE, show_rownames = FALSE, palette_length = 11) %>%
+  save_plot("p0211_heatmap_non-norm.png", width = 300, height = 300)
 
-png(here(plots_dir, "p0211_heatmap_non-norm.png"),
-      width = 300, height = 300, units = "mm", res = 300)
-pheatmap(mat_log2, show_rownames = FALSE,
-         scale = "row", na_col = "black", cluster_cols = TRUE, cluster_rows = FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(15))
-dev.off()
-
-mat_norm <- p0211_expr_processed %>%
-  select(Sample.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
-  pivot_wider(names_from = Sample.Name, values_from = Protein.Expression.Normalized) %>%
-  column_to_rownames(var = "ProteinGroup.UniprotIDs")
-
-png(here(plots_dir, "p0211_heatmap_norm.png"),
-      width = 300, height = 300, units = "mm", res = 300)
-pheatmap(mat_norm, show_rownames = FALSE,
-         scale = "row", na_col = "black", cluster_cols = TRUE, cluster_rows = FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(15))
-dev.off()
-
+p0211_expr_annotated %>%
+  mutate(ScaledExpression = oob_squish(as.vector(scale(Protein.Expression.Normalized)), range = c(-2,2))) %>%
+  bidirectional_heatmap(ScaledExpression, Sample.Name, Gene.Symbol,
+                        cluster_cols = TRUE, show_rownames = FALSE, palette_length = 11) %>%
+  save_plot("p0211_heatmap_norm.png", width = 300, height = 300)
 
 p0211_expr_baseline <- p0211_expr_annotated %>%
   filter(CellLine.Name == "RPE1") %>%
@@ -216,12 +203,10 @@ p0211_expr_log2fc <- p0211_expr_annotated %>%
   summarize(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline) %>%
   ungroup()
 
-png(here(plots_dir, "p0211_log2fc_chr.png"),
-      width = 300, height = 100, units = "mm", res = 300)
 p0211_expr_log2fc %>%
   bidirectional_heatmap(Log2FC, Sample.Name, Gene.Chromosome,
-                        transpose = TRUE, cluster_rows = TRUE)
-dev.off()
+                        transpose = TRUE, cluster_rows = TRUE) %>%
+  save_plot("p0211_log2fc_chr.png", width = 300, height = 100)
 
 for (sample in unique(p0211_expr_log2fc$Sample.ID)) {
   title <- (p0211_expr_log2fc %>%

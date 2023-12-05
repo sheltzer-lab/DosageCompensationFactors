@@ -304,8 +304,7 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
                                   transpose = FALSE, palette_length = 100, color_pal = bidirectional_color_pal) {
   mat <- df %>%
     group_by({ { sample_col } }, { { group_col } }) %>%
-    summarize(Value = mean({ { value_col } }, na.rm = TRUE)) %>%
-    ungroup() %>%
+    summarize(Value = mean({ { value_col } }, na.rm = TRUE), .groups = "drop") %>%
     pivot_wider(names_from = { { sample_col } }, values_from = Value, id_cols = { { group_col } }) %>%
     arrange({ { group_col } }) %>%
     tibble::column_to_rownames(var = quo_name(enquo(group_col)))
@@ -317,9 +316,9 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
   # https://stackoverflow.com/questions/31677923/set-0-point-for-pheatmap-in-r
   color <- colorRampPalette(color_pal, space = "Lab")(palette_length)
   # use floor and ceiling to deal with even/odd length pallettelengths
-  breaks <- c(seq(min(mat, na.rm = T), 0,
+  breaks <- c(seq(min(mat, 0 - 10e-10, na.rm = T), 0,
                   length.out = ceiling(palette_length / 2) + 1),
-              seq(max(mat, na.rm = T) / palette_length, max(mat, na.rm = T),
+              seq(max(mat, 0 + 10e-10, na.rm = T) / palette_length, max(mat, na.rm = T),
                   length.out = floor(palette_length / 2)))
 
   pheatmap(mat, na_col = "black",
