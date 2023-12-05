@@ -271,7 +271,7 @@ ptm_factor_datasets <- list(
   count_sites(methyl_sites, colname = "Methylation Sites"),
   count_sites(ace_sites, colname = "Acetylation Sites"),
   count_sites(reg_sites, colname = "Regulatory Sites"),
-  count_sites(kinase_substrates, colname = "Kinase Sites")
+  count_sites(kinase_substrates, colname = "Kinase Interactions")
 )
 
 other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
@@ -299,7 +299,7 @@ df_dc_factors <- df_dc_factors_ptm %>%
             relationship = "many-to-one") %>%
   mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)",
               "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
-              "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Sites"),
+              "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Interactions"),
             ~replace_na(., 0))
 
 # === Quality Control ===

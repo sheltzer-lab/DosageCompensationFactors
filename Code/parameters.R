@@ -19,8 +19,8 @@ p_threshold <- 0.05       # p-value threshold, Default: 0.05
 noisefloor_percentile_threshold <- 0.0001   # Percentile threshold to determine value of noise floor, Default: 0.0001 (0.01%)
 
 # === Bootstrap Settings ===
-bootstrap_n <- 1000
-bootstrap_sample_prop <- 0.9
+bootstrap_n <- 10000
+bootstrap_sample_prop <- 0.8
 
 # === Define Directories ===
 input_data_dir <- here("Data")
@@ -44,7 +44,7 @@ dc_factor_cols <- c(
   "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
   "Mean 3'-UTR Length", "Mean 5'-UTR Length",
   "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
-  "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Sites",
+  "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Interactions",
   "mRNA Abundance", "Protein Abundance", "Transcription Rate",
   "Translation Rate", "Protein Length", "mRNA Length",
   "Intrinsic Protein Disorder", "Low Complexity Score", "Homology Score",
