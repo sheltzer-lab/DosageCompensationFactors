@@ -13,6 +13,7 @@ library(cowplot)
 library(broom)
 library(corrplot)
 library(openxlsx)
+library(parallel)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -65,6 +66,8 @@ reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_col
 }
 
 roc_silent <- function(response, predictor, factor = "") {
+  require(pROC)
+
   if (length(response) == 0) return(NA)
   if (length(predictor) == 0) return(NA)
   if (all(is.na(response))) return(NA)
@@ -253,37 +256,39 @@ write.xlsx(rank_loss_no_wgd, here(tables_base_dir, "dosage_compensation_aggregat
            colNames = TRUE)
 
 # === Statistically compare results ===
+bootstrapped_roc_auc <- function(i, dataset, sample_prop) {
+  require(dplyr)
+  require(tidyr)
 
-run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
-                                      n, sample_prop, df_factors = dc_factors) {
-  set.seed(42)
+  suppressMessages({
+    dataset %>%
+      slice_sample(prop = sample_prop, replace = TRUE) %>%
+      reshape_factors(BufferingClass) %>%
+      determine_rocs() %>%
+      summarize_roc_auc() %>%
+      mutate(Bootstrap.Sample = i)
+  })
+}
+
+run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func, n, sample_prop, cluster,
+                                      df_factors = dc_factors, factor_cols = dc_factor_cols) {
+  set.seed(42) # ToDo: Use doRNG for consistent sampling
 
   dataset <- dataset %>%
     filter_func() %>%
-    add_factors(df_factors)
+    add_factors(df_factors) %>%
+    rename(BufferingClass = { { buffering_class_col } }) %>%
+    select(UniqueId, BufferingClass, all_of(factor_cols))
 
-  results <- data.frame(DosageCompensation.Factor = character(),
-                        DosageCompensation.Factor.ROC.AUC = numeric(),
-                        DosageCompensation.Factor.Observations = integer(),
-                        Bootstrap.Sample = integer())
-  pb <- txtProgressBar(min = 0, max = n, style = 3)
-  for (i in 1:n) {
-    suppressMessages({
-      results <- dataset %>%
-        slice_sample(prop = sample_prop, replace = TRUE) %>%
-        reshape_factors({ { buffering_class_col } }) %>%
-        determine_rocs() %>%
-        summarize_roc_auc() %>%
-        mutate(Bootstrap.Sample = i) %>%
-        bind_rows(results)
-    })
-    setTxtProgressBar(pb, i)
-  }
-  results <- results %>%
+  duration <- system.time(results <- parLapply(cluster, 1:n, bootstrapped_roc_auc, dataset, sample_prop))
+  print(duration)
+
+  df_results <- results %>%
+    bind_rows() %>%
     mutate(DosageCompensation.Factor = factor(DosageCompensation.Factor,
                                               levels = sort(unique(DosageCompensation.Factor))))
-  close(pb)
-  return(results)
+
+  return(df_results)
 }
 
 # Notes for Statistical Tests and Multiple Testing Correction
@@ -319,7 +324,7 @@ compare_conditions <- function(df_condition1, df_condition2) {
 
   # Compare statistical significance between ranks of median values of factors
   df_rank_test <- df_stat %>%
-    # Introduce pertubation to avoid equal ranks, otherwise p-value can't be calculated accurately
+    # Introduce perturbation to avoid equal ranks, otherwise p-value can't be calculated accurately
     mutate(RankValue = numeric.p50 + runif(length(numeric.p50), min = -1e-10, max = 1e-10)) %>%
     group_by(Condition) %>%
     mutate(DosageCompensation.Factor.Rank = as.integer(rank(-RankValue))) %>%
@@ -390,29 +395,36 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
+## Create Cluster & run analysis
+cl <- makeCluster(getOption("cl.cores", max(1, detectCores() - 2)))
+clusterExport(cl = cl, c("slice_sample", "reshape_factors", "determine_rocs", "summarize_roc_auc",
+                         "dc_factor_cols", "roc_silent", "auc_na", "bootstrapped_roc_auc"), envir = environment())
+
 bootstrap_chr_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
-                            filter_func = filter_arm_gain,
+                            filter_func = filter_arm_gain, cluster = cl,
                             n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Chromosome Arm Gain")
 
 bootstrap_chr_loss <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
-                            filter_func = filter_arm_loss,
+                            filter_func = filter_arm_loss, cluster = cl,
                             n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Chromosome Arm Loss")
 
 bootstrap_cn_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
-                            filter_func = filter_cn_gain,
+                            filter_func = filter_cn_gain, cluster = cl,
                             n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Gene Copy Number Gain")
 
 bootstrap_cn_loss <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
-                            filter_func = filter_cn_loss,
+                            filter_func = filter_cn_loss, cluster = cl,
                             n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
   mutate(Condition = "Gene Copy Number Loss")
+
+stopCluster(cl)
 
 ## Checkpoint: Save and load bootstrapped results before continuing
 write_parquet(bootstrap_chr_gain, here(output_data_dir, 'bootstrap_univariate_procan_chrgain.parquet'),
