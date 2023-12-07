@@ -24,8 +24,7 @@ source(here("Code", "analysis.R"))
 
 models_base_dir <- here("Output", "Models")
 output_data_dir <- output_data_base_dir
-plots_dir <- here(plots_base_dir, "Multivariate")
-
+plots_dir <- here(plots_base_dir, "FactorAnalysis", "Multivariate")
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 

@@ -181,6 +181,41 @@ data_density <- function(df) {
     arrange(desc(Density))
 }
 
+# === (Parallelized) Bootstrapping Methods ===
+
+sample_func <- function(i, df, sample_prop, func, ...) {
+  require(dplyr)
+
+  set.seed(i)
+
+  df %>%
+    slice_sample(prop = sample_prop, replace = TRUE) %>%
+    func(...) %>%
+    mutate(Bootstrap.Sample = as.integer(i))
+}
+
+bootstrap_dataframe <- function (df, cluster, n, sample_prop, func, ...) {
+  require(dplyr)
+
+  results <- list()
+
+  # Non-parallelized with progress bar
+  if (is.null(cluster)) {
+    pb <- txtProgressBar(min = 0, max = n, style = 3)
+    for (i in 1:n) {
+      results[[i]] <- sample_func(i, df, sample_prop, func, ...)
+      setTxtProgressBar(pb, i)
+    }
+    close(pb)
+  }
+  # Parallelized without progress bar
+  else {
+    results <- parLapply(cluster, 1:n, sample_func, df, sample_prop, func, ...)
+  }
+
+  return(bind_rows(results))
+}
+
 # === Aggregation & Consensus Methods ===
 
 mean_norm_rank <- function(df, value_col, group_col, id_col) {

@@ -24,12 +24,12 @@ source(here("Code", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
-plots_dir <- here(plots_base_dir, "Univariate")
-procan_plots_dir <- here(plots_base_dir, "Univariate", "ProCan")
+plots_dir <- here(plots_base_dir, "FactorAnalysis", "Univariate")
+procan_plots_dir <- here(plots_dir, "ProCan")
 procan_chr_plots_dir <- here(procan_plots_dir, "ChromosomeArm-Level")
 procan_gene_plots_dir <- here(procan_plots_dir, "Gene-Level")
 procan_comparison_plots_dir <- here(procan_plots_dir, "Comparison")
-depmap_plots_dir <- here(plots_base_dir, "Univariate", "DepMap")
+depmap_plots_dir <- here(plots_dir, "DepMap")
 depmap_chr_plots_dir <- here(depmap_plots_dir, "ChromosomeArm-Level")
 depmap_gene_plots_dir <- here(depmap_plots_dir, "Gene-Level")
 
@@ -54,6 +54,9 @@ expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211
 
 # === Define Processing Functions ===
 reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
+  require(dplyr)
+  require(tidyr)
+
   df %>%
     filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
     mutate(Buffered = ifelse({ { buffering_class_col } } == "Buffered", 1, 0)) %>%
@@ -82,11 +85,15 @@ roc_silent <- function(response, predictor, factor = "") {
 }
 
 auc_na <- function (roc) {
+  require(pROC)
+
   if (!is.list(roc)) return(NA)
   return(auc(roc, partial.auc.correct = TRUE))
 }
 
 determine_rocs <- function(df) {
+  require(dplyr)
+
   df %>%
     group_by(DosageCompensation.Factor) %>%
     group_map(~list(factor = .y$DosageCompensation.Factor,
@@ -97,6 +104,8 @@ determine_rocs <- function(df) {
 }
 
 summarize_roc_auc <- function(factor_rocs) {
+  require(dplyr)
+
   if (length(factor_rocs) == 0) return(data.frame(DosageCompensation.Factor = factor(),
                                                   DosageCompensation.Factor.Observations = integer(),
                                                   DosageCompensation.Factor.ROC.AUC = double()))
@@ -113,6 +122,8 @@ summarize_roc_auc <- function(factor_rocs) {
 }
 
 plot_roc_auc_summary <- function(roc_auc_summary, plots_dir, filename) {
+  require(dplyr)
+
   roc_auc_summary %>%
     drop_na() %>%
     vertical_bar_chart(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC,
@@ -128,6 +139,8 @@ roc_auc_summary_score <- function(df) {
 }
 
 plot_roc_curves <- function(factor_rocs, dir) {
+  require(pROC)
+
   dir <- here(dir, "ROC-Curves")
   dir.create(dir, recursive = TRUE)
 
@@ -145,13 +158,32 @@ plot_roc_curves <- function(factor_rocs, dir) {
   return(factor_rocs)
 }
 
-run_analysis <- function(dataset, buffering_class_col, filter_func, df_factors = dc_factors) {
-  dataset %>%
+factor_roc_auc_prep_pipeline <- function(df, buffering_class_col, filter_func, df_factors, factor_cols) {
+  require(dplyr)
+
+  df %>%
     filter_func() %>%
     add_factors(df_factors) %>%
-    reshape_factors({ { buffering_class_col } }) %>%
+    rename(BufferingClass = { { buffering_class_col } }) %>%
+    select(UniqueId, BufferingClass, all_of(factor_cols))
+}
+
+factor_roc_auc_base_pipeline <- function(df) {
+  require(dplyr)
+
+  df %>%
+    reshape_factors(BufferingClass) %>%
     determine_rocs() %>%
     summarize_roc_auc()
+}
+
+run_analysis <- function(dataset, buffering_class_col, filter_func,
+                         df_factors = dc_factors, factor_cols = dc_factor_cols) {
+  require(dplyr)
+
+  dataset %>%
+    factor_roc_auc_prep_pipeline({ { buffering_class_col } }, filter_func, df_factors, factor_cols) %>%
+    factor_roc_auc_base_pipeline()
 }
 
 # === Calculate ROC for all factors in all datasets ===
@@ -194,7 +226,7 @@ for (dataset in datasets) {
     message("Univariate ROC AUC Analysis: ", analysis_id)
 
     analysis_results <- dataset$dataset %>%
-      run_analysis(buffering_class_col = get(analysis$buffering),
+      run_analysis(buffering_class_col = !!quo(analysis$buffering),
                    filter_func = analysis$filter) %>%
       plot_roc_auc_summary(target_dir, "buffering-factors_roc-auc.png") %>%
       mutate(AnalysisID = analysis_id) %>%
@@ -256,39 +288,20 @@ write.xlsx(rank_loss_no_wgd, here(tables_base_dir, "dosage_compensation_aggregat
            colNames = TRUE)
 
 # === Statistically compare results ===
-bootstrapped_roc_auc <- function(i, dataset, sample_prop) {
-  require(dplyr)
-  require(tidyr)
-
-  suppressMessages({
-    dataset %>%
-      slice_sample(prop = sample_prop, replace = TRUE) %>%
-      reshape_factors(BufferingClass) %>%
-      determine_rocs() %>%
-      summarize_roc_auc() %>%
-      mutate(Bootstrap.Sample = i)
-  })
-}
-
 run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func, n, sample_prop, cluster,
                                       df_factors = dc_factors, factor_cols = dc_factor_cols) {
-  set.seed(42) # ToDo: Use doRNG for consistent sampling
+  require(dplyr)
 
-  dataset <- dataset %>%
-    filter_func() %>%
-    add_factors(df_factors) %>%
-    rename(BufferingClass = { { buffering_class_col } }) %>%
-    select(UniqueId, BufferingClass, all_of(factor_cols))
-
-  duration <- system.time(results <- parLapply(cluster, 1:n, bootstrapped_roc_auc, dataset, sample_prop))
+  duration <- system.time({
+    results <- dataset %>%
+      factor_roc_auc_prep_pipeline({ { buffering_class_col } }, filter_func, df_factors, factor_cols) %>%
+      bootstrap_dataframe(cluster, n, sample_prop, factor_roc_auc_base_pipeline) %>%
+      mutate(DosageCompensation.Factor = factor(DosageCompensation.Factor,
+                                                levels = sort(unique(DosageCompensation.Factor))))
+  })
   print(duration)
 
-  df_results <- results %>%
-    bind_rows() %>%
-    mutate(DosageCompensation.Factor = factor(DosageCompensation.Factor,
-                                              levels = sort(unique(DosageCompensation.Factor))))
-
-  return(df_results)
+  return(results)
 }
 
 # Notes for Statistical Tests and Multiple Testing Correction
@@ -297,6 +310,11 @@ run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func,
 # * Check : ROC AUC of factors may be correlated -> Not independent!
 
 compare_conditions <- function(df_condition1, df_condition2) {
+  require(dplyr)
+  require(tidyr)
+  require(skimr)
+  require(assertr)
+
   # Merge dataframes for unified handling
   df_merged <- df_condition1 %>%
     bind_rows(df_condition2) %>%
@@ -342,6 +360,12 @@ compare_conditions <- function(df_condition1, df_condition2) {
 }
 
 plot_comparison <- function(comparison_results) {
+  require(dplyr)
+  require(tidyr)
+  require(assertr)
+  require(ggplot2)
+  require(cowplot)
+
   conditions <- unique(comparison_results$stat_summary$Condition)
 
   plot1 <- comparison_results$stat_summary %>%
@@ -397,8 +421,9 @@ plot_comparison <- function(comparison_results) {
 
 ## Create Cluster & run analysis
 cl <- makeCluster(getOption("cl.cores", max(1, detectCores() - 2)))
-clusterExport(cl = cl, c("slice_sample", "reshape_factors", "determine_rocs", "summarize_roc_auc",
-                         "dc_factor_cols", "roc_silent", "auc_na", "bootstrapped_roc_auc"), envir = environment())
+clusterExport(cl = cl, c("reshape_factors", "determine_rocs", "summarize_roc_auc", "dc_factor_cols",
+                         "roc_silent", "auc_na", "factor_roc_auc_base_pipeline", "sample_func"),
+              envir = environment())
 
 bootstrap_chr_gain <- expr_buf_procan %>%
   run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
