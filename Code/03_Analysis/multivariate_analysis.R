@@ -425,6 +425,27 @@ rocs_to_df(rocs_procan_p0211_gain) %>%
   plot_rocs() %>%
   save_plot("roc-summary.png", dir = eval_dir, width = 250)
 
+### Only evaluate genes on chromosome 13 (P0211 only has Chromosome CNAs on 13)
+test_data_procan_chr13 <- expr_buf_procan %>%
+  filter_arm_gain() %>%
+  add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
+  filter(Gene.Chromosome == 13) %>%
+  clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
+  impute_na() %>%
+  shuffle_rows()
+
+rocs_p0211_procan_gain_chr13 <- list(
+  rf = evaluate_model(model_p0211_gain_rf, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_rf_chr13.png"),
+  pcaNNet = evaluate_model(model_p0211_gain_pcaNN, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_pcaNNet_chr13.png"),
+  xgbLinear = evaluate_model(model_p0211_gain_xgb, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_xgbLinear_chr13.png")
+)
+
+rocs_to_df(rocs_procan_p0211_gain_chr13) %>%
+  plot_rocs() %>%
+  save_plot("roc-summary.png", dir = eval_dir, width = 250)
+
+
 ## Use ProCan loss model for evaluating DepMap loss data
 eval_dir <- here(plots_dir, "ProCan", "ChromosomeArm-Level", "Loss_Log2FC", "Eval-DepMap")
 dir.create(eval_dir, recursive = TRUE)
@@ -506,6 +527,26 @@ rocs_p0211_procan_loss <- list(
 rocs_to_df(rocs_procan_p0211_loss) %>%
   plot_rocs() %>%
   save_plot("roc-summary.png", dir = eval_dir, width = 250)
+
+### Only evaluate genes on chromosome 13 (P0211 only has Chromosome CNAs on 13)
+test_data_procan_chr13 <- expr_buf_procan %>%
+  filter_arm_loss() %>%
+  add_factors(dc_factors, factor_cols = dc_factor_cols) %>%
+  normalize_features(method = "min-max", factor_cols = dc_factor_cols) %>%
+  filter(Gene.Chromosome == 13) %>%
+  clean_data(Buffering.ChrArmLevel.Log2FC.Class) %>%
+  impute_na() %>%
+  shuffle_rows()
+
+rocs_p0211_procan_loss_chr13 <- list(
+  rf = evaluate_model(model_p0211_loss_rf, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_rf_chr13.png"),
+  pcaNNet = evaluate_model(model_p0211_loss_pcaNN, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_pcaNNet_chr13.png"),
+  xgbLinear = evaluate_model(model_p0211_loss_xgb, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_xgbLinear_chr13.png")
+)
+
+rocs_to_df(rocs_procan_p0211_loss_chr13) %>%
+  plot_rocs() %>%
+  save_plot("roc-summary_chr13.png", dir = eval_dir, width = 250)
 
 ## Explain XGBoost models using SHAP values
 estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method = "ctree") {
