@@ -441,7 +441,7 @@ rocs_p0211_procan_gain_chr13 <- list(
   xgbLinear = evaluate_model(model_p0211_gain_xgb, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_xgbLinear_chr13.png")
 )
 
-rocs_to_df(rocs_procan_p0211_gain_chr13) %>%
+rocs_to_df(rocs_p0211_procan_gain_chr13) %>%
   plot_rocs() %>%
   save_plot("roc-summary.png", dir = eval_dir, width = 250)
 
@@ -544,7 +544,7 @@ rocs_p0211_procan_loss_chr13 <- list(
   xgbLinear = evaluate_model(model_p0211_loss_xgb, test_data_procan_chr13, eval_dir, filename = "ROC-Curve_xgbLinear_chr13.png")
 )
 
-rocs_to_df(rocs_procan_p0211_loss_chr13) %>%
+rocs_to_df(rocs_p0211_procan_loss_chr13) %>%
   plot_rocs() %>%
   save_plot("roc-summary_chr13.png", dir = eval_dir, width = 250)
 
