@@ -245,11 +245,26 @@ print_signif <- function(p, digits = 4) {
                       paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE))))
 }
 
-map_signif <- function (p) {
+print_corr <- function(corr, p.value = NULL, estimate_symbol = utf8_rho, signif = FALSE, digits = 3, map_p = FALSE) {
+  corr_str <- paste(estimate_symbol, "=", format(round(corr, digits), nsmall = digits, scientific = FALSE))
+  if (signif == FALSE) return(corr_str)
+  else {
+    p_str <- print_signif(p.value, digits = digits)
+    if (map_p == TRUE) p_str <- map_signif(p.value)
+    return(paste0(corr_str, ", ", p_str))
+  }
+}
+
+print_corr_obj <- function (corr, estimate_symbol = utf8_rho, signif = TRUE, digits = 3, map_p = FALSE) {
+  return(print_corr(corr$estimate, p.value = corr$p.value,
+                    estimate_symbol = estimate_symbol, signif = signif, digits = digits, map_p = map_p))
+}
+
+map_signif <- function (p, thresholds = c(0.01, 0.001, 0.0001)) {
   case_when(
-      p < 0.0001 ~ "***",
-      p < 0.001 ~ "**",
-      p < 0.01 ~ "*",
+      p < thresholds[3] ~ "***",
+      p < thresholds[2] ~ "**",
+      p < thresholds[1] ~ "*",
       TRUE ~ "N.S."
     )
 }

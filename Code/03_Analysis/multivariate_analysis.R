@@ -13,6 +13,7 @@ library(randomForest)
 library(xgboost)
 library(shapr)
 library(forcats)
+library(openxlsx)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -612,6 +613,7 @@ shap2df <- function(explanation) {
   return(df_explanation)
 }
 
+shap_results <- list()
 pb <- txtProgressBar(min = 0, max = length(datasets) * length(analysis_conditions), style = 3)
 for (dataset in datasets) {
   for (analysis in analysis_conditions) {
@@ -628,7 +630,10 @@ for (dataset in datasets) {
 
     df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
       estimate_shap(n_samples = 250, n_combinations = 400) %>%  # Only override defaults if 128GB RAM available
-      shap2df()
+      shap2df() %>%
+      mutate(Model.Filename = model_filename,
+             Model.BaseModel = model_name,
+             Model.Variant = paste0(sub_dir, collapse = "_"))
     df_explanation %>%
       shap_plot() %>%
       save_plot(paste0("shap-explanation_", model_name, ".png"), dir = here(plots_dir, sub_dir))
@@ -636,7 +641,15 @@ for (dataset in datasets) {
       shap_importance_plot() %>%
       save_plot(paste0("shap-absolute-importance_", model_name, ".png"), dir = here(plots_dir, sub_dir))
 
+    shap_results[[model_filename]] <- df_explanation
     setTxtProgressBar(pb, pb$getVal() + 1)
   }
 }
 close(pb)
+
+### Write results to disk
+shap_results %>%
+  bind_rows() %>%
+  write_parquet(here(output_data_dir, 'shap-analysis.parquet'),
+              version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)

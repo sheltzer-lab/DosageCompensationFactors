@@ -549,3 +549,65 @@ dist_cn_gain <- bootstrap_cn_gain %>%
 dist_cn_loss <- bootstrap_cn_loss %>%
   violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
   save_plot("roc-auc_distribution_cnloss.png", procan_comparison_plots_dir)
+
+## Plot Heatmap to compare conditions in a condensed way
+bootstrap_auc <- bind_rows(bootstrap_chr_gain, bootstrap_chr_loss, bootstrap_cn_gain, bootstrap_cn_loss)
+max_roc_auc <- round(max(bootstrap_auc$DosageCompensation.Factor.ROC.AUC), digits = 1)
+
+rank_tests <- list(
+  comparisons = list(c("Chromosome Arm Gain", "Chromosome Arm Loss"),
+                     c("Gene Copy Number Gain", "Gene Copy Number Loss"),
+                     c("Chromosome Arm Gain", "Gene Copy Number Gain"),
+                     c("Chromosome Arm Loss", "Gene Copy Number Loss")),
+  annotations = c(print_corr_obj(results_chrgain_chrloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                 print_corr_obj(results_cngain_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                 print_corr_obj(results_chrgain_cngain$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                 print_corr_obj(results_chrloss_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE)),
+  y_position = c(1, 1, 1.5, 2)
+)
+
+roc_auc_heatmap <- function(df, rank_tests) {
+  theme_settings <- theme(legend.key.size = unit(16, "points"),
+                        legend.key.width = unit(24, "points"),
+                        legend.title = element_text(size = 12),
+                        legend.text = element_text(size = 10),
+                        legend.position = "top",
+                        legend.direction = "horizontal",
+                        axis.text.x = element_text(angle = 45, hjust = 1),
+                        axis.title.x = element_blank(),
+                        axis.title.y = element_blank())
+
+  heatmap_boot_auc <- df %>%
+    group_by(DosageCompensation.Factor, Condition) %>%
+    summarize(`Median ROC AUC` = median(DosageCompensation.Factor.ROC.AUC), .groups = "drop") %>%
+    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, `Median ROC AUC`, .desc = TRUE)) %>%
+    ggplot() +
+    aes(x = DosageCompensation.Factor, y = Condition,
+        fill = `Median ROC AUC`, label = format(round(`Median ROC AUC`, 2), nsmall = 2, scientific = FALSE)) +
+    geom_raster() +
+    geom_text(color = "white") +
+    scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9,
+                         limits = c(0.5, max_roc_auc), oob = scales::squish) +
+    cowplot::theme_minimal_grid() +
+    theme_settings
+
+  signif_bars <- data.frame(Condition = unique(df$Condition), y = c(2, 2, 2, 2)) %>%
+    ggplot() +
+    aes(x = Condition, y = y) +
+    geom_signif(comparisons = rank_tests$comparisons,
+                annotations = rank_tests$annotations,
+                y_position = rank_tests$y_position,
+                size = 1, textsize = 4, vjust = -0.5
+    ) +
+    cowplot::theme_nothing() +
+    coord_flip(ylim = c(1, 2.2))
+
+  cowplot::plot_grid(
+    heatmap_boot_auc, signif_bars,
+    labels = NULL, nrow = 1, align = "h", axis = "tb",
+    rel_widths = c(10, 1)
+  )
+}
+
+roc_auc_heatmap(bootstrap_auc, rank_tests) %>%
+  save_plot("roc-auc_comparison_heatmap.png", dir = procan_comparison_plots_dir, width = 400)
