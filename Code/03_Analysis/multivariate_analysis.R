@@ -650,6 +650,5 @@ close(pb)
 ### Write results to disk
 shap_results %>%
   bind_rows() %>%
-  write_parquet(here(output_data_dir, 'shap-analysis.parquet'),
-              version = "2.6") %>%
+  write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
   write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)

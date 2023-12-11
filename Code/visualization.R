@@ -499,12 +499,14 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
   return(plot)
 }
 
+# === SHAP-Plots ===
 
 shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.15) {
   max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
 
   df_explanation %>%
-    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Median.Absolute)) %>%
+    mutate(SHAP.Factor.Corr.Absolute = abs(SHAP.Factor.Corr)) %>%
+    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Factor.Corr.Absolute)) %>%
     arrange(Factor.Value.Relative) %>%
     ggplot() +
     aes(x = DosageCompensation.Factor, y = SHAP.Value) +
@@ -535,4 +537,24 @@ shap_importance_plot <- function(df_explanation,
     scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab", limits  = c(-1, 1)) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
     coord_flip(ylim = c(0, max(df_explanation$SHAP.p75.Absolute)))
+}
+
+shap_corr_importance_plot <- function(df_explanation,
+                                      bar_label_shift = 0.02,
+                                      title = NULL, category_lab = "Feature", value_lab = "Absolute SHAP-Value-Feature Correlation",
+                                      color_lab = "Feature Correlation") {
+  df_explanation %>%
+    select(-SHAP.Value) %>%
+    distinct(DosageCompensation.Factor, .keep_all = TRUE) %>%
+    mutate(SHAP.Factor.Corr.Absolute = abs(SHAP.Factor.Corr)) %>%
+    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Factor.Corr.Absolute)) %>%
+    ggplot() +
+    aes(x = DosageCompensation.Factor, y = SHAP.Factor.Corr.Absolute,
+        label = format(round(SHAP.Factor.Corr.Absolute, 3), nsmall = 3)) +
+    geom_hline(yintercept = 0) +
+    geom_bar(aes(fill = SHAP.Factor.Corr), color = "black", stat = "identity") +
+    geom_text(color = "black", y = 0 + bar_label_shift, hjust = 0) +
+    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab", limits = c(-1, 1)) +
+    labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
+    coord_flip(ylim = c(0, max(abs(df_explanation$SHAP.Factor.Corr))))
 }
