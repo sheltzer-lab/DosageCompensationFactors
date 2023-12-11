@@ -501,7 +501,8 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
 
 # === SHAP-Plots ===
 
-shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.15) {
+shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, title = NULL,
+                      category_lab = "Feature", value_lab = "SHAP-Value", color_lab = "Feature Value") {
   max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
 
   df_explanation %>%
@@ -513,13 +514,14 @@ shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.15) {
     geom_hline(yintercept = 0) +
     geom_boxplot(outlier.shape = NA, color = "black") +
     geom_quasirandom(aes(color = Factor.Value.Relative), alpha = alpha, width = jitter_width) +
-    coord_flip(ylim = c(-max_abs_shap, max_abs_shap)) +
-    scale_colour_viridis_c(option = "C", direction = 1, end = 0.95)
+    scale_colour_viridis_c(option = "C", direction = 1, end = 0.95,
+                           limits = c(0,1), breaks = c(0,1), labels = c("Low", "High")) +
+    labs(title = title, x = category_lab, y = value_lab, color = color_lab) +
+    coord_flip(ylim = c(-max_abs_shap, max_abs_shap))
 }
 
-shap_importance_plot <- function(df_explanation,
-                                 bar_label_shift = 0.002,
-                                 title = NULL, category_lab = "Feature", value_lab = "Median Absolute SHAP-Value",
+shap_importance_plot <- function(df_explanation, bar_label_shift = 0.002, title = NULL,
+                                 category_lab = "Feature", value_lab = "Median Absolute SHAP-Value",
                                  color_lab = "Feature Correlation") {
   df_explanation %>%
     select(-SHAP.Value) %>%
@@ -539,9 +541,8 @@ shap_importance_plot <- function(df_explanation,
     coord_flip(ylim = c(0, max(df_explanation$SHAP.p75.Absolute)))
 }
 
-shap_corr_importance_plot <- function(df_explanation,
-                                      bar_label_shift = 0.02,
-                                      title = NULL, category_lab = "Feature", value_lab = "Absolute SHAP-Value-Feature Correlation",
+shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, title = NULL,
+                                      category_lab = "Feature", value_lab = "Absolute SHAP-Value-Feature Correlation",
                                       color_lab = "Feature Correlation") {
   df_explanation %>%
     select(-SHAP.Value) %>%
