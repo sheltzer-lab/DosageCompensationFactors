@@ -606,9 +606,19 @@ shap2df <- function(explanation) {
     mutate(Factor.Value.Relative = normalize_min_max(Factor.Value, na.rm = TRUE),
            SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
            SHAP.Median.Absolute = median(abs(SHAP.Value)),
-           SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]],
-           SHAP.Factor.Corr = cor(Factor.Value, SHAP.Value, method = "spearman", use = "na.or.complete")) %>%
+           SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]]) %>%
     ungroup()
+
+  df_corr <- df_explanation %>%
+    group_by(DosageCompensation.Factor) %>%
+    rstatix::cor_test(Factor.Value, SHAP.Value, method = "spearman", use = "na.or.complete") %>%
+    select(DosageCompensation.Factor, cor, p) %>%
+    rename(SHAP.Factor.Corr = cor, SHAP.Factor.Corr.p = p) %>%
+    mutate(SHAP.Factor.Corr.p.adj = p.adjust(SHAP.Factor.Corr.p, method = "BY"))
+
+  df_explanation <- df_explanation %>%
+    left_join(y = df_corr, by = "DosageCompensation.Factor",
+              relationship = "many-to-one", unmatched = "error", na_matches = "never")
 
   return(df_explanation)
 }
@@ -638,8 +648,8 @@ for (dataset in datasets) {
       shap_plot() %>%
       save_plot(paste0("shap-explanation_", model_name, ".png"), dir = here(plots_dir, sub_dir))
     df_explanation %>%
-      shap_importance_plot() %>%
-      save_plot(paste0("shap-absolute-importance_", model_name, ".png"), dir = here(plots_dir, sub_dir))
+      shap_corr_importance_plot() %>%
+      save_plot(paste0("shap-corr-importance_", model_name, ".png"), dir = here(plots_dir, sub_dir))
 
     shap_results[[model_filename]] <- df_explanation
     setTxtProgressBar(pb, pb$getVal() + 1)
@@ -652,10 +662,3 @@ shap_results %>%
   bind_rows() %>%
   write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
   write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)
-
-
-shap_results[["model_xgbLinear_ProCan_Gene-Level_Filtered_Gain.rds"]] %>%
-  shap_corr_importance_plot()
-
-shap_results[["model_xgbLinear_ProCan_Gene-Level_Filtered_Gain.rds"]] %>%
-  shap_plot()

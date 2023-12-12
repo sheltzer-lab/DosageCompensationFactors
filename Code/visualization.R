@@ -551,7 +551,7 @@ shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, ti
     mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Factor.Corr.Absolute)) %>%
     ggplot() +
     aes(x = DosageCompensation.Factor, y = SHAP.Factor.Corr.Absolute,
-        label = format(round(SHAP.Factor.Corr.Absolute, 3), nsmall = 3)) +
+        label = print_corr(SHAP.Factor.Corr, SHAP.Factor.Corr.p.adj, signif = TRUE, map_p = TRUE)) +
     geom_hline(yintercept = 0) +
     geom_bar(aes(fill = SHAP.Factor.Corr), color = "black", stat = "identity") +
     geom_text(color = "black", y = 0 + bar_label_shift, hjust = 0) +
