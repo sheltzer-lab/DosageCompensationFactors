@@ -223,7 +223,7 @@ save_plot <- function(plot, filename, dir = plots_dir,
   return(plot)
 }
 
-plot_rocs <- function(df_rocs) {
+plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10) {
   df_label <- df_rocs %>%
     distinct(Name, AUC) %>%
     arrange(desc(Name)) %>%
@@ -239,7 +239,10 @@ plot_rocs <- function(df_rocs) {
     geom_line() +
     geom_label(data = df_label, mapping = aes(color = Name, label = AUC, x = x, y = y)) +
     scale_x_reverse(limits = c(1, 0)) +
-    labs(x = "Specificity", y = "Sensitivity", color = "Model")
+    labs(x = "Specificity", y = "Sensitivity", color = "Model") +
+    theme(legend.position = legend_position,
+          legend.text = element_text(size = 8)) +
+    guides(color = guide_legend(nrow = legend_rows))
 
   return(plot)
 }
@@ -520,6 +523,31 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
   return(plot)
 }
 
+simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
+                           x_lab = NULL, y_lab = NULL, legend_lab = NULL) {
+  theme_settings <- theme(legend.key.size = unit(16, "points"),
+                          legend.key.width = unit(24, "points"),
+                          legend.title = element_text(size = 12),
+                          legend.text = element_text(size = 10),
+                          legend.position = "top",
+                          legend.direction = "horizontal",
+                          axis.text.x = element_text(angle = 45, hjust = 1),
+                          axis.title.x = element_blank(),
+                          axis.title.y = element_blank())
+
+  df %>%
+    group_by({ { x_col } }, { { y_col } }) %>%
+    ggplot() +
+    aes(x = { { x_col } }, y = { { y_col } }, fill = { { color_col } }, label = { { label_col } }) +
+    geom_raster() +
+    geom_text(color = "black") +
+    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                         limits = c(-1, 1), oob = scales::squish) +
+    labs(x = x_lab, y = y_lab, fill = legend_lab) +
+    cowplot::theme_minimal_grid() +
+    theme_settings
+}
+
 # === SHAP-Plots ===
 
 shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, title = NULL,
@@ -579,4 +607,27 @@ shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, ti
     scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab", limits = c(-1, 1)) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
     coord_flip(ylim = c(0, max(abs(df_explanation$SHAP.Factor.Corr))))
+}
+
+shap_plot_arrows <- function(df_shap) {
+  arrow_element <- arrow(length = unit(0.30, "cm"), ends = "last", type = "closed")
+  max_abs_shap <- round(max(abs(df_shap$SHAP.Value)), digits = 2)
+
+  plot_arrows <- df_shap %>%
+    ggplot() +
+    aes(x = SHAP.Value) +
+    geom_segment(aes(x = -max_abs_shap * 0.05, y = 2, xend = -max_abs_shap, yend = 2),
+                 arrow = arrow_element, color = bidirectional_color_pal[1]) +
+    geom_segment(aes(x = max_abs_shap * 0.05, y = 2, xend = max_abs_shap, yend = 2),
+                 arrow = arrow_element, color = tail(bidirectional_color_pal, n = 1)) +
+    geom_text(aes(x = -max_abs_shap * 0.5, y = 1, label = "Buffering"),
+              color = bidirectional_color_pal[1]) +
+    geom_text(aes(x = max_abs_shap * 0.5, y = 1, label = "Scaling"),
+              color = tail(bidirectional_color_pal, n = 1)) +
+    ylim(c(0, 3)) +
+    xlim(c(-max_abs_shap, max_abs_shap)) +
+    cowplot::theme_nothing()
+
+  cowplot::plot_grid(shap_plot(df_shap), plot_arrows,
+                     labels = NULL, ncol = 1, align = "v", axis = "lr", rel_heights = c(1, 0.05))
 }

@@ -244,14 +244,11 @@ cellline_buf_agg %>%
                      value_range = c(0,0.5), line_intercept = 0.5, value_lab = "Aggregated Rank") %>%
   save_plot("cellline_buffering_aggregated_bot.png")
 
-# === Combined Plot for Paper ===
-cellline_buf_waterfall_filtered_procan
-cellline_buf_waterfall_filtered_depmap
-
+# === Combine Plots for publishing ===
 plot_bracket <- plot_corr_bracket(cellline_pearson)
 plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_filtered_procan, cellline_buf_waterfall_filtered_depmap,
-                                  nrow = 1, ncol = 2, align = "h", axis = "lr",
-                                  rel_widths = c(1, 1))
+                                  nrow = 1, ncol = 2, align = "h", axis = "lr", labels = c("ProCan", "DepMap"),
+                                  label_y = 0.98, label_x = 0.05, rel_widths = c(1, 1))
 plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
                                   nrow = 2, ncol = 1,
                                   rel_heights = c(0.1, 1))

@@ -76,27 +76,31 @@ rebalance_binary <- function(df, class_col, target_balance = 0.5) {
     select(-Samples)
 }
 
-explain_model <- function(model, dir, filename = "importance.png") {
+explain_model <- function(model, dir, filename = NULL) {
   # See randomForest::importance() and xgboost::xgb.importance() (rescaled, 0-100)
   ## rf: Mean Decrease in Gini Impurity
   ## xgbLinear: Weight of linear coefficients of feature
   ## xgbTree: fractional contribution of each feature
   if (model$method %in% c("rf", "xgbLinear", "xgbTree")) {
-    caret::varImp(model)$importance %>%
+    plot <- caret::varImp(model)$importance %>%
       rename(Importance = "Overall") %>%
       tibble::rownames_to_column(var = "Factor") %>%
       mutate(Factor = factor(Factor, levels = Factor[order(Importance)])) %>%
       arrange(Factor) %>%
       vertical_bar_chart(Factor, Importance,
-                         value_range = c(0, 100), bar_label_shift = 8,
+                         value_range = c(0, 100), bar_label_shift = 1,
                          line_intercept = 0, break_steps = 10,
                          category_lab = "Factor", value_lab = "Relative Importance",
-                         title = paste0("Model Importance (", model$method, ")")) %>%
-      save_plot(filename, dir = dir)
+                         title = paste0("Model Importance (", model$method, ")"))
+
+    if (is.null(filename))
+      return(plot)
+
+    save_plot(plot, filename, dir = dir)
   }
 }
 
-evaluate_model <- function(model, test_set, dir, filename = "ROC-Curve.png", cv_eval = FALSE) {
+evaluate_model <- function(model, test_set, dir, filename = NULL, cv_eval = FALSE) {
   if (cv_eval == TRUE) {
     # Use results from cross validation generated during training for evaluation
     # Get ROC curve across all folds of k-fold CV for model with best parameters
@@ -109,6 +113,9 @@ evaluate_model <- function(model, test_set, dir, filename = "ROC-Curve.png", cv_
     test_predicted_prob <- predict(model, test_set, type = "prob")
     model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]), na.rm = TRUE)
   }
+
+  if (is.null(filename))
+    return(model_roc)
 
   png(here(dir, filename),
       width = 200, height = 200, units = "mm", res = 200)
@@ -662,3 +669,69 @@ shap_results %>%
   bind_rows() %>%
   write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
   write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)
+
+
+# === Combine Plots for publishing ===
+shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
+
+shap_gain <- shap_results %>%
+  filter(Model.Variant == "ProCan_ChromosomeArm-Level_Gain_Log2FC")
+shap_loss <- shap_results %>%
+  filter(Model.Variant == "ProCan_ChromosomeArm-Level_Loss_Log2FC")
+
+shap_arrows_plot_gain <- shap_plot_arrows(shap_gain)
+shap_arrows_plot_loss <- shap_plot_arrows(shap_loss)
+
+shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
+                                     nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                     rel_widths = c(1, 1), labels = c("A", "B"))
+
+shap_imp_plots <- cowplot::plot_grid(shap_corr_importance_plot(shap_gain), shap_corr_importance_plot(shap_loss),
+                                     nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                     rel_widths = c(1, 1), labels = c("C", "D"))
+
+plot_publish_shap <- cowplot::plot_grid(shap_raw_plots, shap_imp_plots,
+                                   nrow = 2, ncol = 1, rel_heights = c(1, 1))
+
+cairo_pdf(here(plots_dir, "multivariate_shap_publish.pdf"), height = 15, width = 12)
+plot_publish_shap
+dev.off()
+
+shap_heatmap <- bind_rows(shap_gain, shap_loss) %>%
+  mutate(Model.Variant = str_remove(Model.Variant, "ProCan_")) %>%
+  mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
+  simple_heatmap(DosageCompensation.Factor, Model.Variant, SHAP.Factor.Corr, Label,
+                 x_lab = "Feature", y_lab = "Model", legend_lab = "SHAP-Value-Feature-Correlation")
+
+plot_publish_shap_alt <- cowplot::plot_grid(shap_raw_plots, shap_heatmap,
+                                   nrow = 2, ncol = 1, rel_heights = c(1, 0.5), labels = c("", "C"))
+
+cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 12, width = 12)
+plot_publish_shap_alt
+dev.off()
+
+model_rocs <- shap_results %>%
+  distinct(Model.Filename, Model.Variant) %>%
+  filter(grepl("ProCan", Model.Filename)) %>%
+  mutate(Model.Variant = str_remove(Model.Variant, "ProCan_")) %>%
+  group_by(Model.Variant) %>%
+  group_map(\(entry, group) {
+    result <- list()
+    model <- readRDS(here(models_base_dir, entry$Model.Filename))
+    result[[group$Model.Variant]] <- evaluate_model(model, model$datasets$test, plots_dir)
+    return(result)
+  })
+
+rocs_summary_xgbLinear <- rocs_to_df(flatten(model_rocs)) %>%
+  plot_rocs(legend_position = "bottom", legend_rows = 5)
+
+rf_gain_importance <- readRDS(here(models_base_dir, "model_rf_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds")) %>%
+  explain_model(plots_dir)
+
+plot_model <- cowplot::plot_grid(rocs_summary_xgbLinear, rf_gain_importance,
+                                 nrow = 1, ncol = 2, labels = c("A", "B"))
+
+cairo_pdf(here(plots_dir, "multivariate_shap_model.pdf"), width = 12)
+plot_model
+dev.off()
