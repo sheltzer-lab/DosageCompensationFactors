@@ -189,14 +189,18 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
   return(regression_plot)
 }
 
-waterfall_plot <- function(df, value_col, rank_col, label_col) {
-  xlim <- c(0, max(df[[quo_name(enquo(rank_col))]]))
+waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) {
+  rank_col_name <- quo_name(enquo(rank_col))
+  value_col_name <- quo_name(enquo(value_col))
+
+  xlim <- c(0, max(df[[rank_col_name]]))
   label_nudge_x <- floor(xlim[2] / 5)
 
-  ylim1 <- c(min(df[[quo_name(enquo(value_col))]]),
-             (df %>% filter({ { rank_col } } == label_nudge_x))[[quo_name(enquo(value_col))]])
-  ylim2 <- c((df %>% filter({ { rank_col } } == xlim[2] - label_nudge_x))[[quo_name(enquo(value_col))]],
-             max(df[[quo_name(enquo(value_col))]]))
+  y_range <- max(df[[value_col_name]]) - min(df[[value_col_name]])
+  ylim1 <- c(min(df[[value_col_name]] - y_range * y_margin),
+             (df %>% filter({ { rank_col } } == label_nudge_x))[[value_col_name]])
+  ylim2 <- c((df %>% filter({ { rank_col } } == xlim[2] - label_nudge_x))[[value_col_name]],
+             max(df[[value_col_name]] + y_range * y_margin))
 
   df %>%
     ggplot() +
@@ -205,10 +209,11 @@ waterfall_plot <- function(df, value_col, rank_col, label_col) {
     geom_point(size = 0.3) +
     geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = 5),
                     xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
-                    seed = 42, color = "darkblue") +
+                    seed = 42, force = 2.2, color = "darkblue") +
     geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = 5),
                     xlim = xlim, ylim = ylim2, direction = "y", nudge_x = -label_nudge_x,
-                    seed = 42, color = "darkred")
+                    seed = 42, force = 2.2, color = "darkred") +
+    lims(y = c(ylim1[1], ylim2[2]))
 }
 
 save_plot <- function(plot, filename, dir = plots_dir,
@@ -267,6 +272,22 @@ map_signif <- function (p, thresholds = c(0.01, 0.001, 0.0001)) {
       p < thresholds[1] ~ "*",
       TRUE ~ "N.S."
     )
+}
+
+plot_corr_bracket <- function(corr, estimate_symbol = utf8_rho, signif = TRUE, digits = 3, map_p = FALSE,
+                              margin = 2, shift = 0) {
+  x_range <- c(0,10)
+  y_range <- c(0,3)
+  x_range_adj <- c(x_range[1] + margin + shift, x_range[2] - margin)
+
+  data.frame(Label = print_corr_obj(corr, estimate_symbol, signif, digits, map_p)) %>%
+    ggplot() +
+    aes(x = x_range[1], y = y_range[1], label = Label) +
+    geom_segment(aes(x = x_range_adj[1], y = 1,
+                     xend = x_range_adj[2], yend = 1)) +
+    geom_text(x = mean(x_range_adj), color = "black", y = 2) +
+    lims(x = x_range, y = y_range) +
+    cowplot::theme_nothing()
 }
 
 jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha = 0.5, jitter_width = 0.15) {

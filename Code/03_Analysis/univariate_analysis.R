@@ -393,21 +393,8 @@ plot_comparison <- function(comparison_results) {
     arrange(DosageCompensation.Factor) %>%
     plot_text_col(DosageCompensation.Factor, DosageCompensation.Factor, align = "right")
 
-  plot_bracket <- broom::tidy(comparison_results$rank_test) %>%
-    mutate(Label = paste0(print_signif(p.value),
-                          ", ", utf8_tau," = ", format(round(estimate, 3), nsmall = 3))) %>%
-    ggplot() +
-    aes(x = 0, y = 0, label = Label) +
-    geom_segment(aes(x = 4, y = 1, xend = 8, yend = 1)) +
-    geom_text(x = 6, color = "black", y = 2) +
-    xlab(NULL) +
-    ylab(NULL) +
-    xlim(c(0, 10)) +
-    ylim(c(0, 3)) +
-    theme_void() +
-    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
-          axis.text.x = element_blank(), axis.ticks.x = element_blank())
-
+  plot_bracket <- plot_corr_bracket(comparison_results$rank_test,
+                                    estimate_symbol = utf8_tau, shift = 2)
 
   plot_stack1 <- cowplot::plot_grid(plot_labels, plot1, plot_factor_signif, plot2,
                                     nrow = 1, ncol = 4, align = "h", axis = "l",

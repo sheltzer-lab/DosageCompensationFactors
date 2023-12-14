@@ -243,3 +243,19 @@ cellline_buf_agg %>%
   vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
                      value_range = c(0,0.5), line_intercept = 0.5, value_lab = "Aggregated Rank") %>%
   save_plot("cellline_buffering_aggregated_bot.png")
+
+# === Combined Plot for Paper ===
+cellline_buf_waterfall_filtered_procan
+cellline_buf_waterfall_filtered_depmap
+
+plot_bracket <- plot_corr_bracket(cellline_pearson)
+plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_filtered_procan, cellline_buf_waterfall_filtered_depmap,
+                                  nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                  rel_widths = c(1, 1))
+plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
+                                  nrow = 2, ncol = 1,
+                                  rel_heights = c(0.1, 1))
+
+cairo_pdf(here(plots_dir, "cellline_buffering_filtered_comparison.pdf"), width = 11)
+plot_stack2
+dev.off()
