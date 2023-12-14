@@ -679,16 +679,17 @@ shap_gain <- shap_results %>%
 shap_loss <- shap_results %>%
   filter(Model.Variant == "ProCan_ChromosomeArm-Level_Loss_Log2FC")
 
-shap_arrows_plot_gain <- shap_plot_arrows(shap_gain)
-shap_arrows_plot_loss <- shap_plot_arrows(shap_loss)
+shap_arrows_plot_gain <- shap_plot_arrows(shap_gain, show_legend = FALSE)
+shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL)
 
 shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
-                                     rel_widths = c(1, 1), labels = c("A", "B"))
+                                     rel_widths = c(0.79, 1), labels = c("A", ""))
 
-shap_imp_plots <- cowplot::plot_grid(shap_corr_importance_plot(shap_gain), shap_corr_importance_plot(shap_loss),
+shap_imp_plots <- cowplot::plot_grid(shap_corr_importance_plot(shap_gain, show_legend = FALSE),
+                                     shap_corr_importance_plot(shap_loss, category_lab = NULL),
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
-                                     rel_widths = c(1, 1), labels = c("C", "D"))
+                                     rel_widths = c(0.75, 1), labels = c("B", ""))
 
 plot_publish_shap <- cowplot::plot_grid(shap_raw_plots, shap_imp_plots,
                                    nrow = 2, ncol = 1, rel_heights = c(1, 1))
@@ -705,9 +706,9 @@ shap_heatmap <- bind_rows(shap_gain, shap_loss) %>%
                  x_lab = "Feature", y_lab = "Model", legend_lab = "SHAP-Value-Feature-Correlation")
 
 plot_publish_shap_alt <- cowplot::plot_grid(shap_raw_plots, shap_heatmap,
-                                   nrow = 2, ncol = 1, rel_heights = c(1, 0.5), labels = c("", "C"))
+                                   nrow = 2, ncol = 1, rel_heights = c(1, 0.45), labels = c("", "B"))
 
-cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 12, width = 12)
+cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 11, width = 12)
 plot_publish_shap_alt
 dev.off()
 
@@ -732,6 +733,6 @@ rf_gain_importance <- readRDS(here(models_base_dir, "model_rf_ProCan_ChromosomeA
 plot_model <- cowplot::plot_grid(rocs_summary_xgbLinear, rf_gain_importance,
                                  nrow = 1, ncol = 2, labels = c("A", "B"))
 
-cairo_pdf(here(plots_dir, "multivariate_shap_model.pdf"), width = 12)
+cairo_pdf(here(plots_dir, "multivariate_model_publish.pdf"), width = 12)
 plot_model
 dev.off()

@@ -550,7 +550,7 @@ simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
 
 # === SHAP-Plots ===
 
-shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, title = NULL,
+shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, show_legend = TRUE, title = NULL,
                       category_lab = "Feature", value_lab = "SHAP-Value", color_lab = "Feature Value") {
   max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
 
@@ -562,14 +562,15 @@ shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, title = 
     aes(x = DosageCompensation.Factor, y = SHAP.Value) +
     geom_hline(yintercept = 0) +
     geom_boxplot(outlier.shape = NA, color = "black") +
-    geom_quasirandom(aes(color = Factor.Value.Relative), alpha = alpha, width = jitter_width) +
+    geom_quasirandom(aes(color = Factor.Value.Relative),
+                     show.legend = show_legend, alpha = alpha, width = jitter_width) +
     scale_colour_viridis_c(option = "C", direction = 1, end = 0.95,
                            limits = c(0,1), breaks = c(0,1), labels = c("Low", "High")) +
     labs(title = title, x = category_lab, y = value_lab, color = color_lab) +
     coord_flip(ylim = c(-max_abs_shap, max_abs_shap))
 }
 
-shap_importance_plot <- function(df_explanation, bar_label_shift = 0.002, title = NULL,
+shap_importance_plot <- function(df_explanation, bar_label_shift = 0.002, show_legend = TRUE, title = NULL,
                                  category_lab = "Feature", value_lab = "Median Absolute SHAP-Value",
                                  color_lab = "Feature Correlation") {
   df_explanation %>%
@@ -580,7 +581,7 @@ shap_importance_plot <- function(df_explanation, bar_label_shift = 0.002, title 
     aes(x = DosageCompensation.Factor, y = SHAP.Median.Absolute,
         label = format(round(SHAP.Median.Absolute, 3), nsmall = 3)) +
     geom_hline(yintercept = 0) +
-    geom_bar(aes(fill = SHAP.Factor.Corr), color = "black", stat = "identity") +
+    geom_bar(aes(fill = SHAP.Factor.Corr), show.legend = show_legend, color = "black", stat = "identity") +
     geom_pointrange(aes(x = DosageCompensation.Factor, y = SHAP.Median.Absolute,
                         ymin = SHAP.p25.Absolute, ymax = SHAP.p75.Absolute),
                     colour = "orange", fatten = 1) +
@@ -590,7 +591,7 @@ shap_importance_plot <- function(df_explanation, bar_label_shift = 0.002, title 
     coord_flip(ylim = c(0, max(df_explanation$SHAP.p75.Absolute)))
 }
 
-shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, title = NULL,
+shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, show_legend = TRUE, title = NULL,
                                       category_lab = "Feature", value_lab = "Absolute SHAP-Value-Feature Correlation",
                                       color_lab = "Feature Correlation") {
   df_explanation %>%
@@ -602,14 +603,15 @@ shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, ti
     aes(x = DosageCompensation.Factor, y = SHAP.Factor.Corr.Absolute,
         label = print_corr(SHAP.Factor.Corr, SHAP.Factor.Corr.p.adj, signif = TRUE, map_p = TRUE)) +
     geom_hline(yintercept = 0) +
-    geom_bar(aes(fill = SHAP.Factor.Corr), color = "black", stat = "identity") +
+    geom_bar(aes(fill = SHAP.Factor.Corr), show.legend = show_legend, color = "black", stat = "identity") +
     geom_text(color = "black", y = 0 + bar_label_shift, hjust = 0) +
     scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab", limits = c(-1, 1)) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
     coord_flip(ylim = c(0, max(abs(df_explanation$SHAP.Factor.Corr))))
 }
 
-shap_plot_arrows <- function(df_shap) {
+shap_plot_arrows <- function(df_shap, show_legend = TRUE,
+                             category_lab = "Feature", value_lab = "SHAP-Value", color_lab = "Feature Value") {
   arrow_element <- arrow(length = unit(0.30, "cm"), ends = "last", type = "closed")
   max_abs_shap <- round(max(abs(df_shap$SHAP.Value)), digits = 2)
 
@@ -628,6 +630,9 @@ shap_plot_arrows <- function(df_shap) {
     xlim(c(-max_abs_shap, max_abs_shap)) +
     cowplot::theme_nothing()
 
-  cowplot::plot_grid(shap_plot(df_shap), plot_arrows,
+  plot_shap <- shap_plot(df_shap, show_legend = show_legend,
+                         category_lab = category_lab, value_lab = value_lab, color_lab = color_lab)
+
+  cowplot::plot_grid(plot_shap, plot_arrows,
                      labels = NULL, ncol = 1, align = "v", axis = "lr", rel_heights = c(1, 0.05))
 }
