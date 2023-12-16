@@ -155,37 +155,37 @@ plot_sample_expr <- function (df, value_col) {
     geom_boxplot()
 }
 
-plot_protein_states(p0211_expr_tidy) %>%
+prot_states <- plot_protein_states(p0211_expr_tidy) %>%
   save_plot("p0211_protein_states.png")
 
-plot_expr_dist(p0211_expr_processed) %>%
+expr_dist <- plot_expr_dist(p0211_expr_processed) %>%
   save_plot("p0211_expression_distribution.png")
 
-p0211_expr_processed %>%
+sample_dist_pre <- p0211_expr_processed %>%
   plot_sample_expr(Protein.Expression.Log2) %>%
   save_plot("p0211_sample_distribution_non-norm.png")
 
-p0211_expr_processed %>%
+sample_dist_norm <- p0211_expr_processed %>%
   plot_sample_expr(Protein.Expression.Normalized) %>%
   save_plot("p0211_sample_distribution_norm.png")
 
-p0211_expr_processed %>%
+pca_pre <- p0211_expr_processed %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
   plot_pca() %>%
   save_plot("p0211_pca_non-norm.png")
 
-p0211_expr_processed %>%
+pca_norm <- p0211_expr_processed %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
   plot_pca() %>%
   save_plot("p0211_pca_norm.png")
 
-p0211_expr_annotated %>%
+prot_heatmap_pre <- p0211_expr_annotated %>%
   mutate(ScaledExpression = oob_squish(as.vector(scale(Protein.Expression.Log2)), range = c(-2,2))) %>%
   bidirectional_heatmap(ScaledExpression, Sample.Name, ProteinGroup.UniprotIDs,
                         cluster_cols = TRUE, show_rownames = FALSE, palette_length = 11) %>%
   save_plot("p0211_heatmap_non-norm.png", width = 300, height = 300)
 
-p0211_expr_annotated %>%
+prot_heatmap_norm <-p0211_expr_annotated %>%
   mutate(ScaledExpression = oob_squish(as.vector(scale(Protein.Expression.Normalized)), range = c(-2,2))) %>%
   bidirectional_heatmap(ScaledExpression, Sample.Name, Gene.Symbol,
                         cluster_cols = TRUE, show_rownames = FALSE, palette_length = 11) %>%
@@ -203,7 +203,7 @@ p0211_expr_log2fc <- p0211_expr_annotated %>%
   summarize(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline) %>%
   ungroup()
 
-p0211_expr_log2fc %>%
+chr_heatmap <- p0211_expr_log2fc %>%
   bidirectional_heatmap(Log2FC, Sample.Name, Gene.Chromosome,
                         transpose = TRUE, cluster_rows = TRUE) %>%
   save_plot("p0211_log2fc_chr.png", width = 300, height = 100)
@@ -222,3 +222,28 @@ for (sample in unique(p0211_expr_log2fc$Sample.ID)) {
                           x_lab = "Chromosome & Gene Position", title = title) %>%
     save_plot(paste0("p0211_log2fc_chr_sample", sample, ".png"), height = 100)
 }
+
+title <- (p0211_expr_log2fc %>%
+    filter(Sample.ID == 7) %>%
+    distinct(Sample.Name))$Sample.Name
+expr_bucket <- p0211_expr_log2fc %>%
+  filter(Sample.ID == 7) %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        highlight_buckets = 13,
+                        threshold_low = log2(1) - log(2),
+                        threshold_high = log2(3) - log2(2),
+                        x_lab = "Chromosome & Gene Position", title = title)
+
+grid1 <- cowplot::plot_grid(pca_norm + theme(legend.position = "none"), expr_bucket,
+                            nrow = 1, ncol = 2, rel_widths = c(1, 1.5), labels = c("B", "C"))
+
+grid2 <- cowplot::plot_grid(grid1, chr_heatmap$gtable, nrow = 2, ncol = 1,
+                            rel_heights = c(1, 2/3), labels = c("", "D"))
+
+plot_publish <- cowplot::plot_grid(sample_dist_norm + theme(legend.position = "none"), grid2,
+                                   nrow = 1, ncol = 2,
+                                   rel_widths = c(1, 2), labels = c("A", ""))
+
+cairo_pdf(here(plots_dir, "preprocessing_publish.pdf"), width = 12)
+plot_publish
+dev.off()
