@@ -51,8 +51,7 @@ add_fields <- function(df_buf) {
 
 expr_buf_procan <- expr_buf_procan %>%
   add_fields()
-
-expr_buf_depmap <- expr_buf_procan %>%
+expr_buf_depmap <- expr_buf_depmap %>%
   add_fields()
 
 ## Define datasets to be processed
