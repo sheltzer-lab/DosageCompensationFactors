@@ -133,7 +133,8 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
     geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
                      seed = 42, max.iter = 30000, max.time = 1.5,
                      point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
-                     force = 2, max.overlaps = 20)
+                     force = 2, max.overlaps = 20) +
+    labs(title = title, subtitle = subtitle)
 }
 
 # Get density of points in 2 dimensions.
@@ -150,19 +151,36 @@ get_density <- function(x, y, ...) {
   return(dens$z[ii])
 }
 
-scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
-                                    label_coords = c(0, 0), title = NULL, point_size = 0.3) {
+# Source: https://rpubs.com/Bio-Geek/71339, https://slowkow.com/notes/ggplot2-color-by-density/
+scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL, x_lab = NULL, y_lab = NULL,
+                                    label_coords = NULL, title = NULL, point_size = 0.3) {
+  x_col_name <- quo_name(enquo(x_col))
+  y_col_name <- quo_name(enquo(y_col))
+
   df <- df %>%
     select({ { x_col } }, { { y_col } }, { { color_col } }) %>%
     drop_na() %>%
+    filter_all(all_vars(!is.infinite(.))) %>%
     mutate(Density = get_density({ { x_col } }, { { y_col } }, n = 100))
 
-  regression <- lm(formula, df)
-  pred.int <- predict(regression, interval = "prediction")
-  regression_summary <- summary(regression)
-  df <- cbind(df, pred.int)
-  slope <- regression$coefficients[[quo_name(enquo(x_col))]]
-  intercept <- regression$coefficients[["(Intercept)"]]
+  suppressWarnings({
+    regression <- lm(formula, df)
+    pred.int <- predict(regression, interval = "prediction")
+    regression_summary <- summary(regression)
+    df <- cbind(df, pred.int)
+    slope <- regression$coefficients[[x_col_name]]
+    intercept <- regression$coefficients[["(Intercept)"]]
+  })
+
+  if (is.null(x_lab)) x_lab <- x_col_name
+  if (is.null(y_lab)) y_lab <- y_col_name
+
+  x_range <- c(min(df[[x_col_name]]), max(df[[x_col_name]]))
+  y_range <- c(min(df[[y_col_name]]), max(df[[y_col_name]]))
+
+  if (is.null(label_coords)) {
+    label_coords <- c(mean(x_range), y_range[1] + 0.05 * abs(y_range[2] - y_range[1]))
+  }
 
   regression_plot <- df %>%
     ggplot() +
@@ -177,14 +195,12 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
     ggplot2::annotate("text", x = label_coords[1], y = label_coords[2], color = "blue",
                       label = paste("y =", format(round(slope, 5), nsmall = 5),
                                     "* x +", format(round(intercept, 5), nsmall = 5),
-                                    ", R² = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
+                                    ", R^2 = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
                       )) +
     {
       if (quo_is_null(enquo(color_col))) scale_colour_viridis_c(option = "D", direction = 1)
     } +
-    xlab(quo_name(enquo(x_col))) +
-    ylab(quo_name(enquo(y_col))) +
-    ggtitle(title)
+    labs(x = x_lab, y = y_lab, title = title)
 
   return(regression_plot)
 }
