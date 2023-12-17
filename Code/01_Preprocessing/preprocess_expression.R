@@ -18,7 +18,7 @@ source(here("Code", "preprocessing.R"))
 
 expression_data_dir <- here(external_data_dir, "Expression")
 output_data_dir <- output_data_base_dir
-plots_dir <- plots_base_dir
+plots_dir <- here(plots_base_dir, "Preprocessing", "Expression")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)

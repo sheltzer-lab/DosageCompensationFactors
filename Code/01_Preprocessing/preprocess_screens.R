@@ -12,7 +12,7 @@ source(here("Code", "annotation.R"))
 copynumber_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")
 output_data_dir <- output_data_base_dir
-plots_dir <- plots_base_dir
+plots_dir <- here(plots_base_dir, "Preprocessing", "Screens")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)

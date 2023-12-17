@@ -19,7 +19,7 @@ source(here("Code", "analysis.R"))
 source(here("Code", "evaluation.R"))
 
 output_data_dir <- output_data_base_dir
-plots_dir <- here(plots_base_dir, "Preprocessing")
+plots_dir <- here(plots_base_dir, "Preprocessing", "DosageCompensation")
 reports_dir <- reports_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
@@ -290,9 +290,11 @@ corr_chr_avg <- dataset_correlation(buf_matched,
                                     Dataset, Buffering.ChrArmLevel.Average.Ratio,
                                     "Chromosome Arm (Average)")
 
-corr_gene %>%
+dc_dataset_corr_plot <- corr_gene %>%
   bind_rows(corr_chr, corr_chr_avg) %>%
-  jittered_boxplot(Comparison, Correlation) %>%
+  rename(`Inter-Dataset Correlation` = "Correlation",
+         `Buffering Level` = "Comparison") %>%
+  jittered_boxplot(`Buffering Level`, `Inter-Dataset Correlation`, alpha = 0.75, jitter_width = 0.2) %>%
   save_plot("dc_dataset_correlation.png", height = 100)
 
 corr_summary <- list(
@@ -346,3 +348,15 @@ write_list(dc_report, report_file)
 #   * Chr:    mean = 0.573, median = 0.590, sd = 0.124
 #   * ChrAvg: mean = 0.926, median = 0.932, sd = 0.032
 #   * Gene:   mean = 0.537, median = 0.548, sd = 0.122
+
+# === Combine Plots for publishing ===
+br_cn_gain <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = 1)
+br_cn_loss <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = -1)
+
+plot_publish <- cowplot::plot_grid(br_cn_gain, br_cn_loss, cn_baseline_plot, dc_dataset_corr_plot,
+                                   rel_heights = c(1,1,0.8,0.8),
+                                   nrow = 2, ncol = 2, labels = c("A", "B", "C", "D"))
+
+cairo_pdf(here(plots_dir, "dc-method_evaluation_publish.pdf"), width = 11)
+plot_publish
+dev.off()

@@ -110,10 +110,10 @@ comparisons <- list(
        name = "br-mean_cn-mean", label_coords = c(0.5, 10)),
   ## Log2FC vs. Copy Number
   list(x = "Gene.CopyNumber", y = "Log2FC",
-       name = "br_cn", label_coords = c(0.5, 10)),
+       name = "log2fc_cn", label_coords = c(0.5, 10)),
   ## Mean Log2FC vs. Mean Copy Number
   list(x = "Gene.CopyNumber.Average", y = "Log2FC.Average",
-       name = "br-mean_cn-mean", label_coords = c(1, 2)),
+       name = "log2fc-mean_cn-mean", label_coords = c(1, 2)),
   ## Buffering Ratio vs. Copy Number Diff
   list(x = "Log2FC.CopyNumber", y = "Buffering.GeneLevel.Ratio",
        name = "br_cn-diff", label_coords = c(4, 10)),
@@ -197,3 +197,17 @@ expr_buf_procan %>%
   ylab(NULL) +
   theme_void() +
   theme(legend.position = "none")
+
+# === Combine Plots for publishing ===
+plot1 <- flatten(plots[sapply(plots, \(x) x$name == "br_base-expr_ProCan_CN-Gain")])
+plot2 <- flatten(plots[sapply(plots, \(x) x$name == "br_base-expr_ProCan_CN-Loss")])
+plot3 <- flatten(plots[sapply(plots, \(x) x$name == "br_cn-diff_DepMap")])
+plot4 <- flatten(plots[sapply(plots, \(x) x$name == "br_cn_ProCan_CN-Gain")])
+
+plot_publish <- cowplot::plot_grid(plot1$plot, plot2$plot, plot3$plot, plot4$plot,
+                                   nrow = 2, ncol = 2, labels = c("A", "B", "C", "D"))
+
+cairo_pdf(here(plots_dir, "artifact_publish.pdf"), width = 11)
+plot_publish
+dev.off()
+
