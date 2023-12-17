@@ -34,6 +34,9 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 # Plot regression between Buffering Ratio, Protein Expression, etc. to uncover non-linearities and compression artifacts
 # for Dosage Compensation of heavily amplified genes
 
+## Plots may be too large if all values are used
+downsample_n <-  25000
+
 ## Add additional fields (mean, sd)
 add_fields <- function(df_buf) {
   df_buf %>%
@@ -154,8 +157,11 @@ plots <- lapply(datasets, \(dataset) {
     filename <- paste0("regression_", comparison$name, ".png")
     sub_dir <- dataset$name
 
+    set.seed(42)
+
     plot <- dataset$dataset %>%
       rename(x = comparison$x, y = comparison$y) %>%
+      slice_sample(n = downsample_n) %>%
       compare_variables(var_x = x, var_y = y, x_lab = comparison$x, y_lab = comparison$y)
 
     setTxtProgressBar(pb, pb$getVal() + 1)
@@ -183,7 +189,20 @@ plots_output <- lapply(plots, \(plot) {
 })
 close(pb)
 
-## bonus
+# === Combine Plots for publishing ===
+plot1 <- purrr::list_flatten(plots[sapply(plots, \(x) x$name == "br_base-expr_ProCan_CN-Gain")])
+plot2 <- purrr::list_flatten(plots[sapply(plots, \(x) x$name == "br_base-expr_ProCan_CN-Loss")])
+plot3 <- purrr::list_flatten(plots[sapply(plots, \(x) x$name == "br_cn-diff_DepMap")])
+plot4 <- purrr::list_flatten(plots[sapply(plots, \(x) x$name == "br_cn-diff_ProCan_CN-Gain")])
+
+plot_publish <- cowplot::plot_grid(plot1$plot, plot2$plot, plot3$plot, plot4$plot,
+                                   nrow = 2, ncol = 2, labels = c("A", "B", "C", "D"))
+
+cairo_pdf(here(plots_dir, "artifact_publish.pdf"), width = 11)
+plot_publish
+dev.off()
+
+# === Bonus ===
 expr_buf_procan %>%
   select(Protein.Expression.Normalized, Buffering.GeneLevel.Ratio) %>%
   slice_sample(n = 800000) %>%
@@ -197,17 +216,3 @@ expr_buf_procan %>%
   ylab(NULL) +
   theme_void() +
   theme(legend.position = "none")
-
-# === Combine Plots for publishing ===
-plot1 <- flatten(plots[sapply(plots, \(x) x$name == "br_base-expr_ProCan_CN-Gain")])
-plot2 <- flatten(plots[sapply(plots, \(x) x$name == "br_base-expr_ProCan_CN-Loss")])
-plot3 <- flatten(plots[sapply(plots, \(x) x$name == "br_cn-diff_DepMap")])
-plot4 <- flatten(plots[sapply(plots, \(x) x$name == "br_cn_ProCan_CN-Gain")])
-
-plot_publish <- cowplot::plot_grid(plot1$plot, plot2$plot, plot3$plot, plot4$plot,
-                                   nrow = 2, ncol = 2, labels = c("A", "B", "C", "D"))
-
-cairo_pdf(here(plots_dir, "artifact_publish.pdf"), width = 11)
-plot_publish
-dev.off()
-
