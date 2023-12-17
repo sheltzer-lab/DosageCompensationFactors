@@ -20,18 +20,19 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet"))
-cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
+cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_procan.parquet"))
+cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
 # ToDo: Use Cell Line ID instead of cell line name
-df_prolif <- cellline_buf_filtered_procan %>%
+df_prolif <- cellline_buf_procan %>%
   inner_join(y = df_growth, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never")
 
-dc_growth_cor <- cor.test(x = df_prolif$Buffering.CellLine.Ratio.ZScore,
+dc_growth_cor <- cor.test(x = df_prolif$Buffering.CellLine.Ratio,
                           y = df_prolif$CellLine.GrowthRatio,
                           method = "spearman")
 
@@ -39,19 +40,19 @@ cat(capture.output(dc_growth_cor), file = here(reports_dir, "dosage_compensation
     append = FALSE, sep = "\n")
 
 dc_growth_reg <- df_prolif %>%
-  scatter_plot_regression(x = Buffering.CellLine.Ratio.ZScore, y = CellLine.GrowthRatio,
-                          formula = CellLine.GrowthRatio ~ Buffering.CellLine.Ratio.ZScore,
-                          label_coords = c(0.25, 7.5), point_size = 1.5,
-                          title = paste0("ProCan filtered, Correlation: ",
-                                         utf8_rho, " = ", format(round(dc_growth_cor$estimate[["rho"]], 3), nsmall = 3),
-                                         ", ", print_signif(dc_growth_cor$p.value, 3))) %>%
-  save_plot("dosage_compensation_proliferation_procan_filtered.png")
+  scatter_plot_regression(x_col = Buffering.CellLine.Ratio, y_col = CellLine.GrowthRatio,
+                          formula = CellLine.GrowthRatio ~ Buffering.CellLine.Ratio,
+                          point_size = 1.5, label_coords = c(0, 0),
+                          title = paste0("ProCan, Correlation: ",
+                                         print_corr(dc_growth_cor$estimate[["rho"]],
+                                                    dc_growth_cor$p.value, signif = TRUE))) %>%
+  save_plot("dosage_compensation_proliferation_procan.png")
 
 # Exclude whole-genome doubling
 df_prolif_nowgd <- df_prolif %>%
   filter(CellLine.WGD == 0)
 
-dc_growth_cor_nowgd <- cor.test(x = df_prolif_nowgd$Buffering.CellLine.Ratio.ZScore,
+dc_growth_cor_nowgd <- cor.test(x = df_prolif_nowgd$Buffering.CellLine.Ratio,
                                 y = df_prolif_nowgd$CellLine.GrowthRatio,
                                 method = "spearman")
 
@@ -60,10 +61,17 @@ cat(capture.output(dc_growth_cor_nowgd),
     append = FALSE, sep = "\n")
 
 dc_growth_reg_nowgd <- df_prolif_nowgd %>%
-  scatter_plot_regression(x = Buffering.CellLine.Ratio.ZScore, y = CellLine.GrowthRatio,
-                          formula = CellLine.GrowthRatio ~ Buffering.CellLine.Ratio.ZScore,
-                          label_coords = c(0.25, 7.5), point_size = 1.5,
-                          title = paste0("ProCan filtered (Non-WGD), Correlation: ",
-                                         utf8_rho, " = ", format(round(dc_growth_cor_nowgd$estimate[["rho"]], 3), nsmall = 3),
-                                         ", ", print_signif(dc_growth_cor_nowgd$p.value, 3))) %>%
-  save_plot("dosage_compensation_proliferation_procan_filtered_nowgd.png")
+  scatter_plot_regression(x_col = Buffering.CellLine.Ratio, y_col = CellLine.GrowthRatio,
+                          formula = CellLine.GrowthRatio ~ Buffering.CellLine.Ratio,
+                          point_size = 1.5, label_coords = c(0, 0),
+                          title = paste0("ProCan (No-WGD), Correlation: ",
+                                         print_corr(dc_growth_cor_nowgd$estimate[["rho"]],
+                                                    dc_growth_cor_nowgd$p.value, signif = TRUE))) %>%
+  save_plot("dosage_compensation_proliferation_procan_nowgd.png")
+
+# === Combine Plots for publishing ===
+plot_publish <- cowplot::plot_grid(dc_growth_reg, dc_growth_reg_nowgd)
+
+cairo_pdf(here(plots_dir, "proliferation_publish.pdf"), height = 5, width = 12)
+plot_publish
+dev.off()

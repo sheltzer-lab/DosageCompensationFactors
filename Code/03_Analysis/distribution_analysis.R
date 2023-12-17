@@ -19,7 +19,7 @@ source(here("Code", "analysis.R"))
 
 output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
-plots_dir <- here(plots_base_dir, "Univariate", "ProCan")
+plots_dir <- here(plots_base_dir, "Distribution")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(tables_dir, recursive = TRUE)
@@ -61,12 +61,25 @@ summary_tbl_merged %>%
 ## Plot Copy Number Distribution and Filter Thresholds
 cn_diff_quantiles <- quantile(expr_buf_procan$Gene.CopyNumber - expr_buf_procan$Gene.CopyNumber.Baseline,
                               probs = seq(0, 1, 0.01))
+
+cn_loss_thresh <- cn_diff_quantiles["10%"]
+cn_gain_thresh <- cn_diff_quantiles["90%"]
+breaks <- c(seq(-2, 6, 0.5), signif(cn_gain_thresh, digits = 2), signif(cn_loss_thresh, digits = 2))
+labels <- c(seq(-2, 6, 0.5), signif(cn_gain_thresh, digits = 2), signif(cn_loss_thresh, digits = 2))
+colors <- c(rep("black", length(seq(-2, 6, 0.5))), "red", "red")
+
 cn_dist <- expr_buf_procan %>%
-  mutate(Log2FC.CopyNumber =  Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
+  mutate(Log2FC.CopyNumber = Gene.CopyNumber - Gene.CopyNumber.Baseline) %>%
   ggplot() +
   aes(x = Log2FC.CopyNumber) +
   geom_density() +
-  geom_vline(xintercept = cn_diff_quantiles["5%"], linetype = "dashed", color = "red") +
-  geom_vline(xintercept = cn_diff_quantiles["95%"], linetype = "dashed", color = "red") +
-  scale_x_continuous(breaks = seq(-2, 6, 0.5))
-save_plot(cn_dist, "copy_number_distribution.png", width = 300)
+  geom_vline(xintercept = cn_loss_thresh, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = cn_gain_thresh, linetype = "dashed", color = "red") +
+  annotate(x = cn_loss_thresh, y = -Inf, label = paste0("I\n", signif(cn_loss_thresh, digits = 2)), geom = "text",
+           color = "red", lineheight = .8, vjust = 1) +
+  annotate(x = cn_gain_thresh, y = -Inf, label = paste0("I\n", signif(cn_gain_thresh, digits = 2)), geom = "text",
+           color = "red", lineheight = .8, vjust = 1) +
+  scale_x_continuous(breaks = seq(-2, 6, 0.5)) +
+  ylab("Density") +
+  coord_cartesian(clip = "off")
+save_plot(cn_dist, "copy_number_distribution_procan.png", height = 100)

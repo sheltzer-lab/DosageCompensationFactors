@@ -185,7 +185,7 @@ df_depmap %>%
   save_plot("cellline_tumor-status_depmap.png")
 
 ## Micro-satellite instability
-df_procan %>%
+msi_comparison <- df_procan %>%
   signif_beeswarm_plot(msi_status, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
@@ -200,7 +200,7 @@ msi_procan <- df_procan %>% filter(msi_status == "MSI")
 fivenum_msi_aneuploidy <- fivenum(msi_procan$CellLine.AneuploidyScore)
 max_msi_aneuploidy <- max(msi_procan$CellLine.AneuploidyScore)
 
-df_procan %>%
+msi_comparison_low <- df_procan %>%
   filter(CellLine.AneuploidyScore <= max_msi_aneuploidy) %>%
   signif_beeswarm_plot(msi_status, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore,
@@ -244,7 +244,7 @@ df_depmap %>%
   save_plot("cellline_gender_depmap.png")
 
 ## Whole-genome doubling
-df_procan %>%
+wgd_comparison <- df_procan %>%
   signif_beeswarm_plot(WGD, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
@@ -265,7 +265,7 @@ df_depmap %>%
 ### Control for low aneuploidy score
 max_aneuploidy_nowgd <- round(quantile((df_procan %>% filter(WGD == "Non-WGD"))$CellLine.AneuploidyScore,
                                        probs = 0.9))
-df_procan %>%
+wgd_comparison_low <- df_procan %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_nowgd) %>%
   signif_beeswarm_plot(WGD, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore,
@@ -308,7 +308,7 @@ df_procan %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio, WGD,
                      test = wilcox.test) %>%
   save_plot("cellline_aneuploidy-class_by-wgd_procan.png")
-df_depmap %>%
+aneuploidy_comparison_wgd <- df_depmap %>%
   filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio, WGD,
                      test = wilcox.test) %>%
@@ -316,8 +316,9 @@ df_depmap %>%
 
 
 ## Mutational Burden
-df_procan %>%
-  mutate(`Mutational Burden` = if_else(mutational_burden > 50, "High", "Low")) %>%
+mutational_burden_comparison <- df_procan %>%
+  mutate(`Mutational Burden` = if_else(mutational_burden > mean(df_procan$mutational_burden),
+                                       "High", "Low")) %>%
   signif_beeswarm_plot(`Mutational Burden`, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
@@ -327,47 +328,81 @@ df_procan %>%
 ## Age
 df_procan %>%
   scatter_plot_regression(age_at_sampling, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ age_at_sampling,
-                          label_coords = c(50, -0.4), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_age_procan.png")
 df_depmap %>%
   scatter_plot_regression(Age, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ Age,
-                          label_coords = c(50, -0.2), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_age_depmap.png")
 
 ## Ploidy
 df_procan %>%
   scatter_plot_regression(ploidy_wes, Buffering.CellLine.Ratio,  Buffering.CellLine.Ratio ~ ploidy_wes,
-                          label_coords = c(3.5, 0.7), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_ploidy_procan.png")
 df_depmap %>%
   scatter_plot_regression(CellLine.Ploidy, Buffering.CellLine.Ratio,  Buffering.CellLine.Ratio ~ CellLine.Ploidy,
-                          label_coords = c(5, 0.2), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_ploidy_depmap.png")
 
 ## Mutational burden
-df_procan %>%
+mutational_burden_reg_plot <- df_procan %>%
   scatter_plot_regression(mutational_burden, Buffering.CellLine.Ratio, Buffering.CellLine.Ratio ~ mutational_burden,
-                          label_coords = c(200, -0.4), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_mutations_procan.png")
 
 ## Aneuploidy score
-df_procan %>%
+aneuploidy_reg_plot <- df_procan %>%
   scatter_plot_regression(CellLine.AneuploidyScore, Buffering.CellLine.Ratio,
                           Buffering.CellLine.Ratio ~ CellLine.AneuploidyScore, color_col = WGD,
-                          label_coords = c(25, 0.8), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_aneuploidy_procan.png")
 df_depmap %>%
   scatter_plot_regression(CellLine.AneuploidyScore, Buffering.CellLine.Ratio,
                           Buffering.CellLine.Ratio ~ CellLine.AneuploidyScore, color_col = WGD,
-                          label_coords = c(25, 0.3), point_size = 2) %>%
+                          point_size = 2) %>%
   save_plot("cellline_aneuploidy_depmap.png")
 
 ## Misc
 df_procan %>%
-  scatter_plot_regression(age_at_sampling, ploidy_wes, ploidy_wes ~ age_at_sampling,
-                          label_coords = c(40, 1), point_size = 2)
+  scatter_plot_regression(age_at_sampling, ploidy_wes, ploidy_wes ~ age_at_sampling, point_size = 2)
 
 ### Ploidy measurements differ across datasets
 df_procan %>%
-  scatter_plot_regression(ploidy_wes, CellLine.Ploidy, CellLine.Ploidy ~ ploidy_wes,
-                          label_coords = c(3, 6), point_size = 2)
+  scatter_plot_regression(ploidy_wes, CellLine.Ploidy, CellLine.Ploidy ~ ploidy_wes, point_size = 2)
+
+# === Combine Plots for publishing ===
+as_legend_label <- str_wrap("Aneuploidy Score", 10)
+
+cancer_type_comparison <- df_depmap %>%
+  sorted_beeswarm_plot("OncotreeCode", Buffering.CellLine.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 0.5) +
+  labs(x = "Oncotree Cancer Code", color = as_legend_label)
+
+bottom <- theme(legend.position = "bottom")
+legend <- theme(legend.key.size = unit(14, "points"),
+                legend.title = element_text(size = 10),
+                legend.text = element_text(size = 8))
+
+plot1 <- cowplot::plot_grid(aneuploidy_reg_plot + legend + bottom + labs(x = "Aneuploidy Score"),
+                            aneuploidy_comparison_wgd + labs(y = NULL),
+                            wgd_comparison + legend + bottom + labs(color = as_legend_label, y = NULL, x = NULL),
+                            wgd_comparison_low + legend + bottom + labs(color = as_legend_label, y = NULL, x = NULL),
+                            rel_widths = c(1, 1, 0.75, 0.75), nrow = 1, ncol = 4, labels = c("A", "B", "C", ""))
+
+plot_msi <- cowplot::plot_grid(msi_comparison + legend + bottom + labs(color = as_legend_label, x = NULL),
+                               msi_comparison_low + legend + bottom + labs(y = NULL, x = NULL, color = as_legend_label),
+                               ncol = 2, align = "vh", axis = "tblr")
+
+plot3 <- cowplot::plot_grid(plot_msi,
+                            mutational_burden_reg_plot + legend + bottom + labs(y = NULL, x = "Mutational Burden"),
+                            mutational_burden_comparison + legend + bottom + labs(y = NULL, color = as_legend_label),
+                            rel_widths = c(1.75, 1, 0.75), nrow = 1, ncol = 3, labels = c("E", "F", ""))
+
+plot_publish <- cowplot::plot_grid(plot1, NULL, cancer_type_comparison + legend, NULL, plot3,
+                                   ncol = 1, nrow = 5, labels = c("", "", "D", "", ""),
+                                   rel_heights = c(1, 0.05, 1, 0.05, 1))
+
+cairo_pdf(here(plots_dir, "cellline_properties_publish.pdf"), height = 11, width = 12)
+plot_publish
+dev.off()

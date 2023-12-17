@@ -193,9 +193,9 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
     geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
     geom_line(aes(y = upr), color = "red", linetype = "dashed") +
     ggplot2::annotate("text", x = label_coords[1], y = label_coords[2], color = "blue",
-                      label = paste("y =", format(round(slope, 5), nsmall = 5),
-                                    "* x +", format(round(intercept, 5), nsmall = 5),
-                                    ", R^2 = ", format(round(regression_summary$r.squared, 5), nsmall = 5)
+                      label = paste("y =", signif(slope, 2),
+                                    "* x +", signif(intercept, 2),
+                                    ", R^2 = ", signif(regression_summary$r.squared, 2)
                       )) +
     {
       if (quo_is_null(enquo(color_col))) scale_colour_viridis_c(option = "D", direction = 1)
