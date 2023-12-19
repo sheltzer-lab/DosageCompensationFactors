@@ -6,6 +6,7 @@ library(arrow)
 library(assertr)
 library(ggplot2)
 library(ggrepel)
+library(ggvenn)
 library(skimr)
 library(openxlsx)
 
@@ -165,6 +166,13 @@ cellline_buf_waterfall_filtered_depmap <- cellline_buf_filtered_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_depmap.png")
 
+### Show cell line intersection betwen datasets in Venn diagram
+celllines <- list(ProCan = (expr_buf_procan_filtered %>% distinct(CellLine.Name))$CellLine.Name,
+                  DepMap = (expr_buf_depmap_filtered %>% distinct(CellLine.Name))$CellLine.Name)
+
+ggvenn(celllines, columns = c("ProCan", "DepMap"), fill_alpha = 2/3,
+       fill_color = c(bidirectional_color_pal[1], bidirectional_color_pal[5]), show_percentage = FALSE) %>%
+  save_plot("cellline_venn_filtered.png", height = 120, width = 150)
 
 # === Determine Correlation between Datasets ===
 cellline_dist <- cellline_buf_merged %>%
