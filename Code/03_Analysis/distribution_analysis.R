@@ -85,8 +85,7 @@ cn_dist <- expr_buf_procan %>%
 save_plot(cn_dist, "copy_number_distribution_procan.png", height = 100)
 
 # === Plot categorical distribution of buffering classes by analysis type ===
-
-expr_buf_procan %>%
+stacked_buf_class <- expr_buf_procan %>%
   select(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
          Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
   pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
@@ -98,3 +97,22 @@ expr_buf_procan %>%
   aes(fill = BufferingClass, y = n, x = AnalysisVariant) +
   geom_bar(position = "fill", stat = "identity") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+stacked_buf_class %>%
+  save_plot("buffering_class_distribution_procan.png")
+
+stacked_buf_class <- expr_buf_depmap %>%
+  select(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+         Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
+  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+                 Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
+               names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
+  drop_na() %>%
+  count(AnalysisVariant, BufferingClass) %>%
+  ggplot() +
+  aes(fill = BufferingClass, y = n, x = AnalysisVariant) +
+  geom_bar(position = "fill", stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+stacked_buf_class %>%
+  save_plot("buffering_class_distribution_depmap.png")
