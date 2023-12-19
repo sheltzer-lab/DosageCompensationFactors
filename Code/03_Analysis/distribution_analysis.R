@@ -58,7 +58,7 @@ summary_tbl_merged %>%
   as_gt() %>%
   gt::gtsave(filename = here(tables_dir, "summary_table.html"))
 
-## Plot Copy Number Distribution and Filter Thresholds
+# === Plot Copy Number Distribution and Filter Thresholds ===
 cn_diff_quantiles <- quantile(expr_buf_procan$Gene.CopyNumber - expr_buf_procan$Gene.CopyNumber.Baseline,
                               probs = seq(0, 1, 0.01))
 
@@ -83,3 +83,18 @@ cn_dist <- expr_buf_procan %>%
   ylab("Density") +
   coord_cartesian(clip = "off")
 save_plot(cn_dist, "copy_number_distribution_procan.png", height = 100)
+
+# === Plot categorical distribution of buffering classes by analysis type ===
+
+expr_buf_procan %>%
+  select(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+         Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
+  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+                 Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
+               names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
+  drop_na() %>%
+  count(AnalysisVariant, BufferingClass) %>%
+  ggplot() +
+  aes(fill = BufferingClass, y = n, x = AnalysisVariant) +
+  geom_bar(position = "fill", stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
