@@ -54,9 +54,9 @@ df_crispr_buf %>%
 # === Analyze Gene-wise Essentiality-Buffering-Correlation ===
 
 df_gene_corr <- df_crispr_buf %>%
-  group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
+  group_by(Gene.Symbol) %>%
   mutate(
-    # ToDo: Avoid calculating correlation twice
+    # ToDo: Replace with rstatix cor_test
     CRISPR.EffectScore.Average = mean(CRISPR.EffectScore, na.rm = TRUE),
     CRISPR.EffectScore.Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$estimate[["rho"]],
     CRISPR.EffectScore.Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$p.value,
@@ -107,8 +107,7 @@ top_corr <- df_gene_corr %>%
 df_gene_corr %>%
   semi_join(y = bot_corr, by = "Gene.Symbol") %>%
   drop_na() %>%
-  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(CRISPR.DependencyScore.Corr, 3),
-                                                                   nsmall = 3, scientific = FALSE), ")")) %>%
+  mutate(Label = paste0(Gene.Symbol, " (", print_corr(CRISPR.DependencyScore.Corr), ")")) %>%
   mutate(Label = fct_reorder(Label, desc(CRISPR.DependencyScore.Corr))) %>%
   arrange(Buffering.GeneLevel.Ratio) %>%
   jittered_boxplot(Label, CRISPR.DependencyScore, Buffering.GeneLevel.Ratio,
@@ -118,8 +117,7 @@ df_gene_corr %>%
 df_gene_corr %>%
   semi_join(y = top_corr, by = "Gene.Symbol") %>%
   drop_na() %>%
-  mutate(Label = paste0(Gene.Symbol, " (", utf8_rho, " = ", format(round(CRISPR.DependencyScore.Corr, 3),
-                                                                   nsmall = 3, scientific = FALSE), ")")) %>%
+  mutate(Label = paste0(Gene.Symbol, " (", print_corr(CRISPR.DependencyScore.Corr), ")")) %>%
   mutate(Label = fct_reorder(Label, CRISPR.DependencyScore.Corr)) %>%
   arrange(Buffering.GeneLevel.Ratio) %>%
   jittered_boxplot(Label, CRISPR.DependencyScore, Buffering.GeneLevel.Ratio,
@@ -130,20 +128,13 @@ df_gene_corr %>%
 selected_genes <- c("KRAS", "EGFR")
 
 for (gene in selected_genes) {
-  df <- df_gene_corr %>%
-    filter(Gene.Symbol == gene)
-
-  title <- paste0(gene, " (", utf8_rho, " = ", format(round(df$CRISPR.DependencyScore.Corr[1], 3), nsmall = 3),
-                  ", ", print_signif(df$CRISPR.DependencyScore.Corr.p[1], 3), ")")
-
-  df %>%
-    scatter_plot_regression(CRISPR.DependencyScore,
-                          Buffering.GeneLevel.Ratio,
-                          Buffering.GeneLevel.Ratio ~ CRISPR.DependencyScore,
-                          point_size = 2, label_coords = c(0.5, -2), title = title) %>%
+  df_gene_corr %>%
+    filter(Gene.Symbol == gene) %>%
+    scatter_plot_reg_corr(CRISPR.DependencyScore, Buffering.GeneLevel.Ratio,
+                          point_size = 2, title_prefix = gene) %>%
     save_plot(paste0("dependency_buffering_", gene, "_scatterplot.png"))
 }
 
 # === Analyze Cell Line Sensitivity to Buffering ===
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)
-# ToDo: Discretize Cell Lines into Low-/Mid-/High-Buffering groups and check gene essentiality
+# ToDo: Discretize Cell Lines into Low-/Mid-/High-Buffering groups and check gene essentiality difference between groups

@@ -48,7 +48,7 @@ analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_co
       Corr.Sensitivity_Buffering = cor.test({ { cellline_value_col } }, { { drug_value_col } },
                                             method = "spearman")$estimate[["rho"]],
       Corr.p = cor.test({ { cellline_value_col } }, { { drug_value_col } },
-                        method = "pearson")$p.value,
+                        method = "spearman")$p.value,
       # Statistical test sensitivity low vs. high buffering
       BufferingGroup.Sensitivity.Diff = if_else(Group.Mean[CellLine.Group == "High"][1] < Group.Mean[CellLine.Group == "Low"][1],
                                     "Higher", "Lower"),
@@ -151,14 +151,10 @@ selected_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "IN
                        "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE")
 
 for (drug in selected_drugs) {
-  df <- df_sensitivity_agg %>%
-    filter(Drug.Name == drug)
-
-  df %>%
-    scatter_plot_regression(Buffering.CellLine.MeanNormRank,
-                          Drug.MFI.Log2FC,
-                          Drug.MFI.Log2FC ~ Buffering.CellLine.MeanNormRank,
-                          point_size = 2, label_coords = c(0.5, -2)) %>%
+  df_sensitivity_agg %>%
+    filter(Drug.Name == drug) %>%
+    scatter_plot_reg_corr(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+                          point_size = 2, title_prefix = drug) %>%
     save_plot(paste0("buffering_sensitivity_", drug, "_scatterplot.png"))
 }
 

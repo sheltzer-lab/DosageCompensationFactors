@@ -205,6 +205,31 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
   return(regression_plot)
 }
 
+scatter_plot_reg_corr <- function(df, x_col, y_col, color_col = NULL, cor_method = "spearman",
+                                  cor_symbol = utf8_rho, label_coords = NULL, point_size = 0.3,
+                                  x_lab = NULL, y_lab = NULL, title_prefix = NULL) {
+  df_ <- df %>%
+    rename(x = { { x_col } }, y = { { y_col } })
+
+  cor_result <- df_ %>%
+    rstatix::cor_test(x, y, method = cor_method)
+
+  if (is.null(title_prefix)) {
+    plot_title <- paste0("Correlation: ",
+                         print_corr(cor_result$cor, p.value = cor_result$p, signif = TRUE, estimate_symbol = cor_symbol))
+  } else {
+    plot_title <- paste0(title_prefix, " (",
+                         print_corr(cor_result$cor, p.value = cor_result$p, signif = TRUE, estimate_symbol = cor_symbol), ")")
+  }
+
+  if (is.null(x_lab)) x_lab <- quo_name(enquo(x_col))
+  if (is.null(y_lab)) y_lab <- quo_name(enquo(y_col))
+
+  df_ %>%
+    scatter_plot_regression(x, y, y ~ x, color_col = { { color_col } }, x_lab = x_lab, y_lab = y_lab,
+                            label_coords = label_coords, title = plot_title, point_size = point_size)
+}
+
 waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) {
   rank_col_name <- quo_name(enquo(rank_col))
   value_col_name <- quo_name(enquo(value_col))
@@ -484,7 +509,7 @@ signif_violin_plot <- function(df, x, y, facet_col = NULL,
 
   plot <- prep$df %>%
     ggplot() +
-    aes(x = { { x } }, y = { { y } }) +
+    aes(x = { { x } }, y = { { y } }, label = paste0("n = ", n)) +
     geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
                 color = "#4080DB") +
     geom_signif(
@@ -493,8 +518,8 @@ signif_violin_plot <- function(df, x, y, facet_col = NULL,
       tip_length = 0, extend_line = -0.05,
       test = test, test.args = test.args
     ) +
+    geom_text(aes(y = min({ { y } }) - 0.2 * abs(max({ { y } }) - min({ { y } })))) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    scale_x_discrete(labels = prep$labels$Label, breaks = prep$labels$Levels) +
     {if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket)} +
     xlab(as_name(enquo(x))) +
     # ToDo: Use name of test as subtitle
@@ -512,7 +537,7 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
 
   plot <- prep$df %>%
     ggplot() +
-    aes(x = { { x } }, y = { { y } }) +
+    aes(x = { { x } }, y = { { y } }, label = paste0("n = ", n)) +
     geom_violin(trim = FALSE, draw_quantiles = 0.5,
                 fill = "darkgrey", color = "darkgrey", alpha = 1/3) +
     {
@@ -528,8 +553,8 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
       tip_length = 0, extend_line = -0.05,
       test = test, test.args = test.args
     ) +
+    geom_text(aes(y = min({ { y } }) - 0.2 * abs(max({ { y } }) - min({ { y } })))) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    scale_x_discrete(labels = prep$labels$Label, breaks = prep$labels$Levels) +
     scale_colour_viridis_c(option = "D", direction = 1) +
     { if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket) } +
     xlab(as_name(enquo(x))) +

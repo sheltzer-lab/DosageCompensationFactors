@@ -35,7 +35,7 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 # for Dosage Compensation of heavily amplified genes
 
 ## Plots may be too large if all values are used
-downsample_n <-  25000
+downsample_n <-  50000
 
 ## Add additional fields (mean, sd)
 add_fields <- function(df_buf) {
@@ -131,23 +131,6 @@ comparisons <- list(
        name = "br-mean_log2fc-mean", label_coords = c(1, 2))
 )
 
-## Compare Variables
-compare_variables <- function(df, var_x, var_y, cor_method = "spearman", x_lab = NULL, y_lab = NULL,
-                              cor_symbol = utf8_rho, label_coords = NULL) {
-  df_ <- df %>%
-    select({ { var_x } }, { { var_y } }) %>%
-    rename(x = { { var_x } }, y = { { var_y } }) %>%
-    distinct()
-  cor_result <- df_ %>%
-    rstatix::cor_test(x, y, method = cor_method)
-  plot_title <- paste0("Correlation (", cor_method , "): ",
-                       print_corr(cor_result$cor, p.value = cor_result$p, signif = TRUE, estimate_symbol = cor_symbol))
-
-  df_ %>%
-    scatter_plot_regression(x, y, y ~ x, x_lab = x_lab, y_lab = y_lab,
-                            label_coords = label_coords, title = plot_title)
-}
-
 ### Generate plots
 print("Analyzing...")
 pb <- txtProgressBar(min = 0, max = length(datasets) * length(comparisons), style = 3)
@@ -162,7 +145,8 @@ plots <- lapply(datasets, \(dataset) {
     plot <- dataset$dataset %>%
       rename(x = comparison$x, y = comparison$y) %>%
       slice_sample(n = downsample_n) %>%
-      compare_variables(var_x = x, var_y = y, x_lab = comparison$x, y_lab = comparison$y)
+      distinct(x, y) %>%
+      scatter_plot_reg_corr(x_col = x, y_col = y, x_lab = comparison$x, y_lab = comparison$y)
 
     setTxtProgressBar(pb, pb$getVal() + 1)
     return(list(name = name, filename = filename, sub_dir = sub_dir, plot = plot))

@@ -40,12 +40,9 @@ cat(capture.output(dc_growth_cor), file = here(reports_dir, "dosage_compensation
     append = FALSE, sep = "\n")
 
 dc_growth_reg <- df_prolif %>%
-  scatter_plot_regression(x_col = Buffering.CellLine.Ratio, y_col = CellLine.GrowthRatio,
-                          formula = CellLine.GrowthRatio ~ Buffering.CellLine.Ratio,
+  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
                           point_size = 1.5, label_coords = c(0, 0),
-                          title = paste0("ProCan, Correlation: ",
-                                         print_corr(dc_growth_cor$estimate[["rho"]],
-                                                    dc_growth_cor$p.value, signif = TRUE))) %>%
+                          title_prefix = "ProCan, Correlation: ") %>%
   save_plot("dosage_compensation_proliferation_procan.png")
 
 # Exclude whole-genome doubling
@@ -61,12 +58,9 @@ cat(capture.output(dc_growth_cor_nowgd),
     append = FALSE, sep = "\n")
 
 dc_growth_reg_nowgd <- df_prolif_nowgd %>%
-  scatter_plot_regression(x_col = Buffering.CellLine.Ratio, y_col = CellLine.GrowthRatio,
-                          formula = CellLine.GrowthRatio ~ Buffering.CellLine.Ratio,
+  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
                           point_size = 1.5, label_coords = c(0, 0),
-                          title = paste0("ProCan (No-WGD), Correlation: ",
-                                         print_corr(dc_growth_cor_nowgd$estimate[["rho"]],
-                                                    dc_growth_cor_nowgd$p.value, signif = TRUE))) %>%
+                          title_prefix = "ProCan, Correlation: ") %>%
   save_plot("dosage_compensation_proliferation_procan_nowgd.png")
 
 # === Combine Plots for publishing ===
