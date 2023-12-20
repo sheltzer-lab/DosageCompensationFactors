@@ -589,6 +589,37 @@ simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
     theme_settings
 }
 
+unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FALSE) {
+  theme_settings <- theme(legend.key.size = unit(16, "points"),
+                        legend.key.width = unit(24, "points"),
+                        legend.title = element_text(size = 12),
+                        legend.text = element_text(size = 10),
+                        legend.position = "top",
+                        legend.direction = "horizontal",
+                        axis.text.x = element_text(angle = 45, hjust = 1),
+                        axis.title.x = element_blank(),
+                        axis.title.y = element_blank())
+
+  color_col_name <- quo_name(enquo(color_col))
+  x_col_name <- quo_name(enquo(x_col))
+
+  max_value <- round(max(df[[color_col_name]]), digits = 1)
+
+  df %>%
+    group_by({ { x_col } }, { { y_col } }) %>%
+    summarize(!!color_col_name := median({ { color_col } }, na.rm = TRUE), .groups = "drop") %>%
+    mutate(!!x_col_name := fct_reorder({ { x_col } }, { { color_col } }, .desc = order_desc)) %>%
+    ggplot() +
+    aes(x = { { x_col } }, y = { { y_col } },
+        fill = { { color_col } }, label = format(round({ { color_col } }, 2), nsmall = 2, scientific = FALSE)) +
+    geom_raster() +
+    geom_text(color = "white") +
+    scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9,
+                         limits = c(0.5, max_value), oob = scales::squish) +
+    cowplot::theme_minimal_grid() +
+    theme_settings
+}
+
 # === SHAP-Plots ===
 
 shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, show_legend = TRUE, title = NULL,

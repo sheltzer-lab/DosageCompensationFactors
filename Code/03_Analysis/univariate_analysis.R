@@ -276,16 +276,26 @@ rank_loss_no_wgd %>%
   save_plot("buffering-factors_rank_loss_no-wgd.png", height = 200, width = 180)
 
 ## Save results
-write.xlsx(analysis_results, here(tables_base_dir, "dosage_compensation_univariate.xlsx"),
-           colNames = TRUE)
-write.xlsx(rank_gain, here(tables_base_dir, "dosage_compensation_aggregated-rank_gain.xlsx"),
-           colNames = TRUE)
-write.xlsx(rank_loss, here(tables_base_dir, "dosage_compensation_aggregated-rank_loss.xlsx"),
-           colNames = TRUE)
-write.xlsx(rank_loss_wgd, here(tables_base_dir, "dosage_compensation_aggregated-rank_loss_WGD.xlsx"),
-           colNames = TRUE)
-write.xlsx(rank_loss_no_wgd, here(tables_base_dir, "dosage_compensation_aggregated-rank_loss_NoWGD.xlsx"),
-           colNames = TRUE)
+analysis_results %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate.xlsx"),
+             colNames = TRUE)
+rank_gain %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_gain.xlsx"),
+             colNames = TRUE)
+rank_loss %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_loss.xlsx"),
+             colNames = TRUE)
+rank_loss_wgd %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_WGD.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_loss_WGD.xlsx"),
+             colNames = TRUE)
+rank_loss_no_wgd %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.xlsx"),
+             colNames = TRUE)
 
 # === Statistically compare results ===
 run_bootstrapped_analysis <- function(dataset, buffering_class_col, filter_func, n, sample_prop, cluster,
@@ -539,7 +549,6 @@ dist_cn_loss <- bootstrap_cn_loss %>%
 
 ## Plot Heatmap to compare conditions in a condensed way
 bootstrap_auc <- bind_rows(bootstrap_chr_gain, bootstrap_chr_loss, bootstrap_cn_gain, bootstrap_cn_loss)
-max_roc_auc <- round(max(bootstrap_auc$DosageCompensation.Factor.ROC.AUC), digits = 1)
 
 rank_tests <- list(
   comparisons = list(c("Chromosome Arm Gain", "Chromosome Arm Loss"),
@@ -554,29 +563,8 @@ rank_tests <- list(
 )
 
 roc_auc_heatmap <- function(df, rank_tests) {
-  theme_settings <- theme(legend.key.size = unit(16, "points"),
-                        legend.key.width = unit(24, "points"),
-                        legend.title = element_text(size = 12),
-                        legend.text = element_text(size = 10),
-                        legend.position = "top",
-                        legend.direction = "horizontal",
-                        axis.text.x = element_text(angle = 45, hjust = 1),
-                        axis.title.x = element_blank(),
-                        axis.title.y = element_blank())
-
   heatmap_boot_auc <- df %>%
-    group_by(DosageCompensation.Factor, Condition) %>%
-    summarize(`Median ROC AUC` = median(DosageCompensation.Factor.ROC.AUC), .groups = "drop") %>%
-    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, `Median ROC AUC`, .desc = TRUE)) %>%
-    ggplot() +
-    aes(x = DosageCompensation.Factor, y = Condition,
-        fill = `Median ROC AUC`, label = format(round(`Median ROC AUC`, 2), nsmall = 2, scientific = FALSE)) +
-    geom_raster() +
-    geom_text(color = "white") +
-    scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9,
-                         limits = c(0.5, max_roc_auc), oob = scales::squish) +
-    cowplot::theme_minimal_grid() +
-    theme_settings
+    unidirectional_heatmap(DosageCompensation.Factor, Condition, DosageCompensation.Factor.ROC.AUC, order_desc = TRUE)
 
   signif_bars <- data.frame(Condition = unique(df$Condition), y = c(2, 2, 2, 2)) %>%
     ggplot() +
@@ -587,14 +575,45 @@ roc_auc_heatmap <- function(df, rank_tests) {
                 size = 1, textsize = 4, vjust = -0.5
     ) +
     cowplot::theme_nothing() +
-    coord_flip(ylim = c(1, 2.2))
+    coord_flip(ylim = c(1, 2.5))
 
   cowplot::plot_grid(
     heatmap_boot_auc, signif_bars,
     labels = NULL, nrow = 1, align = "h", axis = "tb",
-    rel_widths = c(10, 1)
+    rel_widths = c(15, 1)
   )
 }
 
-roc_auc_heatmap(bootstrap_auc, rank_tests) %>%
+bootstrap_heatmap <- bootstrap_auc %>%
+  roc_auc_heatmap(rank_tests) %>%
   save_plot("roc-auc_comparison_heatmap.png", dir = procan_comparison_plots_dir, width = 400)
+
+# === Combine Plots for publishing ===
+# ToDo: Integrate corr plots
+rank_gain <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain.parquet"))
+rank_loss <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss.parquet"))
+rank_loss_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_WGD.parquet"))
+rank_loss_no_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.parquet"))
+
+rank_univariate <- bind_rows(rank_gain %>% mutate(Condition = "Gain"),
+                             rank_loss %>% mutate(Condition = "Loss"))
+rank_wgd <- bind_rows(rank_loss_wgd %>% mutate(Condition = "Loss, WGD"),
+                      rank_loss_no_wgd %>% mutate(Condition = "Loss, Non-WGD"))
+
+rank_heatmap <- rank_univariate %>%
+  unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
+  theme(legend.position = "right", legend.direction = "vertical")
+rank_wgd_heatmap <- rank_wgd %>%
+  unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
+  theme(legend.position = "right", , legend.direction = "vertical")
+
+rank_plots <- cowplot::plot_grid(rank_heatmap + coord_flip(),
+                                 rank_wgd_heatmap + coord_flip(),
+                                 ncol = 2, labels = c("A", "B"))
+
+plot_publish <- cowplot::plot_grid(rank_plots, bootstrap_heatmap,
+                                   nrow = 2, rel_heights = c(2, 1.25), labels = c("", "C"))
+
+cairo_pdf(here(plots_dir, "univariate_publish.pdf"), height = 13, width = 13)
+plot_publish
+dev.off()
