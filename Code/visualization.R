@@ -193,9 +193,9 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
     geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
     geom_line(aes(y = upr), color = "red", linetype = "dashed") +
     ggplot2::annotate("text", x = label_coords[1], y = label_coords[2], color = "blue",
-                      label = paste("y =", signif(slope, 2),
-                                    "* x +", signif(intercept, 2),
-                                    ", R^2 = ", signif(regression_summary$r.squared, 2)
+                      label = paste0("y = ", signif(slope, 2),
+                                    "x+", signif(intercept, 2),
+                                    ", R2 =", signif(regression_summary$r.squared, 2)
                       )) +
     {
       if (quo_is_null(enquo(color_col))) scale_colour_viridis_c(option = "D", direction = 1)
@@ -282,7 +282,7 @@ plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10) {
     scale_x_reverse(limits = c(1, 0)) +
     labs(x = "Specificity", y = "Sensitivity", color = "Model") +
     theme(legend.position = legend_position,
-          legend.text = element_text(size = 8)) +
+          legend.text = element_text(size = 10)) +
     guides(color = guide_legend(nrow = legend_rows))
 
   return(plot)
@@ -319,7 +319,7 @@ map_signif <- function (p, thresholds = c(0.01, 0.001, 0.0001)) {
 }
 
 plot_corr_bracket <- function(corr, estimate_symbol = utf8_rho, signif = TRUE, digits = 3, map_p = FALSE,
-                              margin = 2, shift = 0) {
+                              margin = 2, shift = 0, size = default_theme$text$size / 2) {
   x_range <- c(0,10)
   y_range <- c(0,3)
   x_range_adj <- c(x_range[1] + margin + shift, x_range[2] - margin)
@@ -329,7 +329,7 @@ plot_corr_bracket <- function(corr, estimate_symbol = utf8_rho, signif = TRUE, d
     aes(x = x_range[1], y = y_range[1], label = Label) +
     geom_segment(aes(x = x_range_adj[1], y = 1,
                      xend = x_range_adj[2], yend = 1)) +
-    geom_text(x = mean(x_range_adj), color = "black", y = 2) +
+    geom_text(x = mean(x_range_adj), color = "black", y = 2, size = size) +
     lims(x = x_range, y = y_range) +
     cowplot::theme_nothing()
 }
@@ -651,12 +651,13 @@ shap_corr_importance_plot <- function(df_explanation, bar_label_shift = 0.02, sh
     coord_flip(ylim = c(0, max(abs(df_explanation$SHAP.Factor.Corr))))
 }
 
-shap_plot_arrows <- function(df_shap, show_legend = TRUE,
+shap_plot_arrows <- function(df_shap, show_legend = TRUE, title = NULL,
                              category_lab = "Feature", value_lab = "SHAP-Value", color_lab = "Feature Value") {
   arrow_element <- arrow(length = unit(0.30, "cm"), ends = "last", type = "closed")
   max_abs_shap <- round(max(abs(df_shap$SHAP.Value)), digits = 2)
 
   plot_arrows <- df_shap %>%
+    slice_sample(n = 1) %>%
     ggplot() +
     aes(x = SHAP.Value) +
     geom_segment(aes(x = -max_abs_shap * 0.05, y = 2, xend = -max_abs_shap, yend = 2),
@@ -671,7 +672,7 @@ shap_plot_arrows <- function(df_shap, show_legend = TRUE,
     xlim(c(-max_abs_shap, max_abs_shap)) +
     cowplot::theme_nothing()
 
-  plot_shap <- shap_plot(df_shap, show_legend = show_legend,
+  plot_shap <- shap_plot(df_shap, show_legend = show_legend, title = title,
                          category_lab = category_lab, value_lab = value_lab, color_lab = color_lab)
 
   cowplot::plot_grid(plot_shap, plot_arrows,

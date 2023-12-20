@@ -31,7 +31,8 @@ tables_base_dir <- here("Output", "Tables")
 reports_base_dir <- here("Output", "Reports")
 
 # === Theme Defaults ===
-theme_set(theme_light())
+default_theme <- theme_light(base_size = 14)
+theme_set(default_theme)
 default_color <- "darkgrey"
 highlight_color <- "#66CCB4"
 unidirectional_color_pal <- brewer.pal(5, "Greens")

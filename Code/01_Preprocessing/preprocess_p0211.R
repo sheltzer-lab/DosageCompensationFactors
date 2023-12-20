@@ -244,6 +244,6 @@ plot_publish <- cowplot::plot_grid(sample_dist_norm + theme(legend.position = "n
                                    nrow = 1, ncol = 2,
                                    rel_widths = c(1, 2), labels = c("A", ""))
 
-cairo_pdf(here(plots_dir, "preprocessing_publish.pdf"), width = 12)
+cairo_pdf(here(plots_dir, "preprocessing_publish.pdf"), width = 13)
 plot_publish
 dev.off()

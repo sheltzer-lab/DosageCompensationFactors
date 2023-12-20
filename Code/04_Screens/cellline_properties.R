@@ -372,28 +372,25 @@ cancer_type_comparison <- df_depmap %>%
 
 bottom <- theme(legend.position = "bottom")
 legend <- theme(legend.key.size = unit(14, "points"),
-                legend.title = element_text(size = 10),
-                legend.text = element_text(size = 8))
+                legend.title = element_text(size = 12),
+                legend.text = element_text(size = 10))
 
-plot1 <- cowplot::plot_grid(aneuploidy_reg_plot + legend + bottom + labs(x = "Aneuploidy Score"),
+plot1 <- cowplot::plot_grid(aneuploidy_reg_plot + legend + labs(x = "Aneuploidy Score") + theme(legend.title = element_blank()),
                             aneuploidy_comparison_wgd + labs(y = NULL),
-                            wgd_comparison + legend + bottom + labs(color = as_legend_label, y = NULL, x = NULL),
-                            wgd_comparison_low + legend + bottom + labs(color = as_legend_label, y = NULL, x = NULL),
-                            rel_widths = c(1, 1, 0.75, 0.75), nrow = 1, ncol = 4, labels = c("A", "B", "C", ""))
+                            wgd_comparison + legend + labs(color = as_legend_label, y = NULL, x = NULL),
+                            wgd_comparison_low + legend + labs(color = as_legend_label, y = NULL, x = NULL),
+                            nrow = 2, ncol = 2, labels = c("A", "B", "C", ""))
 
-plot_msi <- cowplot::plot_grid(msi_comparison + legend + bottom + labs(color = as_legend_label, x = NULL),
-                               msi_comparison_low + legend + bottom + labs(y = NULL, x = NULL, color = as_legend_label),
-                               ncol = 2, align = "vh", axis = "tblr")
-
-plot3 <- cowplot::plot_grid(plot_msi,
-                            mutational_burden_reg_plot + legend + bottom + labs(y = NULL, x = "Mutational Burden"),
-                            mutational_burden_comparison + legend + bottom + labs(y = NULL, color = as_legend_label),
-                            rel_widths = c(1.75, 1, 0.75), nrow = 1, ncol = 3, labels = c("E", "F", ""))
+plot3 <- cowplot::plot_grid(msi_comparison + legend + labs(color = as_legend_label, x = NULL),
+                            msi_comparison_low + legend + labs(y = NULL, x = NULL, color = as_legend_label),
+                            mutational_burden_reg_plot + legend + labs(y = NULL, x = "Mutational Burden"),
+                            mutational_burden_comparison + legend + labs(y = NULL, color = as_legend_label),
+                            nrow = 2, ncol = 2, labels = c("E", "", "F", ""))
 
 plot_publish <- cowplot::plot_grid(plot1, NULL, cancer_type_comparison + legend, NULL, plot3,
                                    ncol = 1, nrow = 5, labels = c("", "", "D", "", ""),
-                                   rel_heights = c(1, 0.05, 1, 0.05, 1))
+                                   rel_heights = c(2, 0, 1.25, 0, 2))
 
-cairo_pdf(here(plots_dir, "cellline_properties_publish.pdf"), height = 11, width = 12)
+cairo_pdf(here(plots_dir, "cellline_properties_publish.pdf"), height = 16, width = 9)
 plot_publish
 dev.off()

@@ -83,7 +83,7 @@ plot_buffering_ratio_expr <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
     labs(x = "Expression Difference", y = "Buffering Ratio")
 }
 
-plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1),
+plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1), tick_distance = 0.1,
                                     buffered_threshold = 0.3349625, anti_scaling_threshold = 0.6849625) {
   cn_diff <- seq(cn_lim[1], cn_lim[2], by = 0.01)
   cn_base <- rep(2, length(cn_diff))
@@ -97,7 +97,7 @@ plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1),
     geom_line() +
     geom_hline(yintercept = buffered_threshold, color = "orange", linetype = "dashed") +
     geom_hline(yintercept = anti_scaling_threshold, color = "red", linetype = "dashed") +
-    scale_x_continuous(limits = cn_lim, breaks = seq(cn_lim[1], cn_lim[2], 0.1)) +
+    scale_x_continuous(limits = cn_lim, breaks = seq(cn_lim[1], cn_lim[2], tick_distance)) +
     labs(x = "Copy Number Difference", y = "Buffering Ratio")
 }
 

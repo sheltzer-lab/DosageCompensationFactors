@@ -85,7 +85,10 @@ cn_dist <- expr_buf_procan %>%
 save_plot(cn_dist, "copy_number_distribution_procan.png", height = 100)
 
 # === Plot categorical distribution of buffering classes by analysis type ===
+# ToDo: Requires separate filtering for chromosome and gene cn gain/loss and then summarizing results
 stacked_buf_class <- expr_buf_procan %>%
+  filter_arm_gain() %>%
+  filter_cn_gain() %>%
   select(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
          Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
   pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
@@ -116,3 +119,37 @@ stacked_buf_class <- expr_buf_depmap %>%
 
 stacked_buf_class %>%
   save_plot("buffering_class_distribution_depmap.png")
+
+## Chromosome Arm only
+df_chr_gain <- expr_buf_depmap %>%
+  filter_arm_gain() %>%
+  select(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
+  pivot_longer(c(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
+               names_to = "Analysis Variant", values_to = "Buffering Class") %>%
+  drop_na() %>%
+  count(`Analysis Variant`, `Buffering Class`) %>%
+  mutate(`Chr Arm` = "Chr Arm Gain",
+         `Analysis Variant` = if_else(`Analysis Variant` == "Buffering.ChrArmLevel.Average.Class",
+                                   "Averaged", "Unaveraged"))
+
+df_chr_loss <- expr_buf_depmap %>%
+  filter_arm_loss() %>%
+  select(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
+  pivot_longer(c(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
+               names_to = "Analysis Variant", values_to = "Buffering Class") %>%
+  drop_na() %>%
+  count(`Analysis Variant`, `Buffering Class`) %>%
+  mutate(`Chr Arm` = "Chr Arm Loss",
+         `Analysis Variant` = if_else(`Analysis Variant` == "Buffering.ChrArmLevel.Average.Class",
+                                   "Averaged", "Unaveraged"))
+
+stacked_buf_chr <- bind_rows(df_chr_gain, df_chr_loss) %>%
+  group_by(`Analysis Variant`, `Chr Arm`) %>%
+  mutate(`Percentage of Genes` = (n / sum(n)) * 100) %>%
+  ggplot() +
+  aes(fill = `Buffering Class`, y = `Percentage of Genes`, x = `Analysis Variant`) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~`Chr Arm`)
+
+stacked_buf_chr %>%
+  save_plot("buffering_class_chromosome_depmap.png")

@@ -679,8 +679,8 @@ shap_gain <- shap_results %>%
 shap_loss <- shap_results %>%
   filter(Model.Variant == "ProCan_ChromosomeArm-Level_Loss_Log2FC")
 
-shap_arrows_plot_gain <- shap_plot_arrows(shap_gain, show_legend = FALSE)
-shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL)
+shap_arrows_plot_gain <- shap_plot_arrows(shap_gain, show_legend = FALSE, title = "Chromosome Gain")
+shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL, title = "Chromosome Loss")
 
 shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
@@ -691,6 +691,10 @@ shap_imp_plots <- cowplot::plot_grid(shap_corr_importance_plot(shap_gain, show_l
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
                                      rel_widths = c(0.75, 1), labels = c("B", ""))
 
+shap_gain_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
+                                     nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                     rel_widths = c(0.79, 1), labels = c("A", ""))
+
 plot_publish_shap <- cowplot::plot_grid(shap_raw_plots, shap_imp_plots,
                                    nrow = 2, ncol = 1, rel_heights = c(1, 1))
 
@@ -700,15 +704,17 @@ dev.off()
 
 shap_heatmap <- bind_rows(shap_gain, shap_loss) %>%
   mutate(Model.Variant = str_remove(Model.Variant, "ProCan_")) %>%
+  mutate(Model.Variant = str_remove(Model.Variant, "-Level")) %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
+  distinct(DosageCompensation.Factor, Model.Variant, SHAP.Factor.Corr, Label) %>%
   simple_heatmap(DosageCompensation.Factor, Model.Variant, SHAP.Factor.Corr, Label,
                  x_lab = "Feature", y_lab = "Model", legend_lab = "SHAP-Value-Feature-Correlation")
 
 plot_publish_shap_alt <- cowplot::plot_grid(shap_raw_plots, shap_heatmap,
-                                   nrow = 2, ncol = 1, rel_heights = c(1, 0.45), labels = c("", "B"))
+                                   nrow = 2, ncol = 1, rel_heights = c(1, 0.4), labels = c("", "B"))
 
-cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 11, width = 12)
+cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 12, width = 11)
 plot_publish_shap_alt
 dev.off()
 
@@ -716,6 +722,7 @@ model_rocs <- shap_results %>%
   distinct(Model.Filename, Model.Variant) %>%
   filter(grepl("ProCan", Model.Filename)) %>%
   mutate(Model.Variant = str_remove(Model.Variant, "ProCan_")) %>%
+  mutate(Model.Variant = str_remove(Model.Variant, "-Level")) %>%
   group_by(Model.Variant) %>%
   group_map(\(entry, group) {
     result <- list()
@@ -725,13 +732,14 @@ model_rocs <- shap_results %>%
   })
 
 rocs_summary_xgbLinear <- rocs_to_df(flatten(model_rocs)) %>%
+  mutate(Name = str_remove(Name, "-Level")) %>%
   plot_rocs(legend_position = "bottom", legend_rows = 5)
 
 rf_gain_importance <- readRDS(here(models_base_dir, "model_rf_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds")) %>%
   explain_model(plots_dir)
 
 plot_model <- cowplot::plot_grid(rocs_summary_xgbLinear, rf_gain_importance,
-                                 nrow = 1, ncol = 2, labels = c("A", "B"))
+                                 nrow = 1, ncol = 2, labels = c("A", "B"), rel_widths = c(1, 0.98))
 
 cairo_pdf(here(plots_dir, "multivariate_model_publish.pdf"), width = 12)
 plot_model

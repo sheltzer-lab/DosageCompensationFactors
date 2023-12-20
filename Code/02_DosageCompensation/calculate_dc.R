@@ -350,12 +350,21 @@ write_list(dc_report, report_file)
 #   * Gene:   mean = 0.537, median = 0.548, sd = 0.122
 
 # === Combine Plots for publishing ===
-br_cn_gain <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = 1)
-br_cn_loss <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = -1)
+br_cn_gain <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = 1) + xlab("Expression Difference (CN Gain)")
+br_cn_loss <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = -1) +
+  xlab("Expression Difference (CN Loss)") + ylab(NULL) + theme(axis.text.y = element_blank())
+br_cn_diff <- plot_buffering_ratio_cn(buffering_ratio, tick_distance = 0.2) + ylab(NULL)
 
-plot_publish <- cowplot::plot_grid(br_cn_gain, br_cn_loss, cn_baseline_plot, dc_dataset_corr_plot,
-                                   rel_heights = c(1,1,0.8,0.8),
-                                   nrow = 2, ncol = 2, labels = c("A", "B", "C", "D"))
+cn_baseline_plot_modified <- cn_baseline_plot +
+  theme(legend.position = "bottom") +
+    guides(color = guide_legend(nrow = 2))
+
+plot_br <- cowplot::plot_grid(br_cn_gain, br_cn_loss, br_cn_diff,
+                              ncol = 3, labels = c("A", "", "B"), align = "h", axis = "tb", rel_widths = c(1.2, 1, 1.1))
+
+plot_eval <- cowplot::plot_grid(cn_baseline_plot_modified, dc_dataset_corr_plot, ncol = 2, labels = c("C", "D"))
+
+plot_publish <- cowplot::plot_grid(plot_br, plot_eval, rel_heights = c(1,0.8), nrow = 2)
 
 cairo_pdf(here(plots_dir, "dc-method_evaluation_publish.pdf"), width = 11)
 plot_publish
