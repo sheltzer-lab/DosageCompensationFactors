@@ -288,7 +288,7 @@ plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10) {
   return(plot)
 }
 
-print_signif <- function(p, digits = 4) {
+print_signif <- function(p, digits = 3) {
   paste0("p ", if_else(p < 10^(-digits),
                       paste0("< ", format(10^(-digits), nsmall = digits, scientific = FALSE)),
                       paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE))))

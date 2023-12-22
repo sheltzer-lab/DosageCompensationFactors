@@ -48,7 +48,8 @@ df_procan <- df_model_procan %>%
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"),
          `Near-Tetraploid` = if_else(ploidy_wes > 3.5, TRUE, FALSE),
-         Aneuploidy = case_when(
+         Aneuploidy = if_else(CellLine.AneuploidyScore > aneuploidy_quant["50%"], "High", "Low"),
+         `Aneuploidy Quantiles` = case_when(
            CellLine.AneuploidyScore > aneuploidy_quant["75%"] ~ "Very High",
            CellLine.AneuploidyScore > aneuploidy_quant["50%"] ~ "High",
            CellLine.AneuploidyScore > aneuploidy_quant["25%"] ~ "Low",
@@ -63,7 +64,8 @@ df_depmap <- df_model_depmap %>%
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"),
          `Near-Tetraploid` = if_else(CellLine.Ploidy > 3.5, TRUE, FALSE),
-         Aneuploidy = case_when(
+         Aneuploidy = if_else(CellLine.AneuploidyScore > aneuploidy_quant["50%"], "High", "Low"),
+         `Aneuploidy Quantiles` = case_when(
            CellLine.AneuploidyScore > aneuploidy_quant["75%"] ~ "Very High",
            CellLine.AneuploidyScore > aneuploidy_quant["50%"] ~ "High",
            CellLine.AneuploidyScore > aneuploidy_quant["25%"] ~ "Low",
@@ -91,10 +93,10 @@ cancers_depmap <- df_depmap %>%
 # Plot distributions for categorical variables
 cols_procan <- c("tissue_status", "cancer_type", "msi_status",
                  "smoking_status", "gender", "ethnicity",
-                 "WGD", "Near-Tetraploid", "Aneuploidy")
+                 "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
 
 cols_depmap <- c("PrimaryOrMetastasis", "OncotreeSubtype", "Sex",
-                 "WGD", "Near-Tetraploid", "Aneuploidy")
+                 "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
 
 violoin_plots_procan <- df_procan %>%
   plot_categorical_properties(cols_procan)
@@ -122,12 +124,12 @@ df_depmap %>%
 
 ### Control for low aneuploidy score when plotting buffering per cancer type
 df_procan %>%
-  filter(Aneuploidy %in% c("Low", "Very Low")) %>%
+  filter(Aneuploidy == "Low") %>%
   sorted_beeswarm_plot("cancer_type", Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_low-aneuploidy_procan.png", width = 300)
 df_depmap %>%
-  filter(Aneuploidy %in% c("Low", "Very Low")) %>%
+  filter(Aneuploidy == "Low") %>%
   sorted_beeswarm_plot("OncotreeSubtype", Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_low-aneuploidy_depmap.png", width = 300)
@@ -292,24 +294,20 @@ df_depmap %>%
 
 ## High vs. Low Aneuploidy Score
 df_procan %>%
-  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
                      test = wilcox.test) %>%
   save_plot("cellline_aneuploidy-class_procan.png")
 df_depmap %>%
-  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio,
                      test = wilcox.test) %>%
   save_plot("cellline_aneuploidy-class_depmap.png")
 
 ### Control for Whole Genome Doubling
 df_procan %>%
-  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio, WGD,
                      test = wilcox.test) %>%
   save_plot("cellline_aneuploidy-class_by-wgd_procan.png")
 aneuploidy_comparison_wgd <- df_depmap %>%
-  filter(Aneuploidy == "High" | Aneuploidy == "Low") %>%
   signif_violin_plot(Aneuploidy, Buffering.CellLine.Ratio, WGD,
                      test = wilcox.test) %>%
   save_plot("cellline_aneuploidy-class_by-wgd_depmap.png")

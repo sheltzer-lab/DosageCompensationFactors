@@ -42,7 +42,7 @@ cat(capture.output(dc_growth_cor), file = here(reports_dir, "dosage_compensation
 dc_growth_reg <- df_prolif %>%
   scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
                           point_size = 1.5, label_coords = c(0, 0),
-                          title_prefix = "ProCan, Correlation: ") %>%
+                          title_prefix = "ProCan") %>%
   save_plot("dosage_compensation_proliferation_procan.png")
 
 # Exclude whole-genome doubling
@@ -60,7 +60,7 @@ cat(capture.output(dc_growth_cor_nowgd),
 dc_growth_reg_nowgd <- df_prolif_nowgd %>%
   scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
                           point_size = 1.5, label_coords = c(0, 0),
-                          title_prefix = "ProCan, Correlation: ") %>%
+                          title_prefix = "ProCan, No-WGD") %>%
   save_plot("dosage_compensation_proliferation_procan_nowgd.png")
 
 # === Combine Plots for publishing ===
