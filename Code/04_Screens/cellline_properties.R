@@ -375,23 +375,19 @@ legend <- theme(legend.key.size = unit(14, "points"),
 
 plot1 <- cowplot::plot_grid(aneuploidy_reg_plot + legend + labs(x = "Aneuploidy Score") + theme(legend.title = element_blank()),
                             aneuploidy_comparison_wgd + labs(y = NULL),
-                            wgd_comparison + legend + labs(color = as_legend_label, y = NULL, x = NULL),
-                            wgd_comparison_low + legend + labs(color = as_legend_label, y = NULL, x = NULL),
+                            wgd_comparison + legend + labs(color = as_legend_label, x = NULL),
+                            wgd_comparison_low + legend + labs(color = as_legend_label, x = NULL),
                             nrow = 2, ncol = 2, labels = c("A", "B", "C", ""))
 
 plot3 <- cowplot::plot_grid(msi_comparison + legend + labs(color = as_legend_label, x = NULL),
-                            msi_comparison_low + legend + labs(y = NULL, x = NULL, color = as_legend_label),
-                            mutational_burden_reg_plot + legend + labs(y = NULL, x = "Mutational Burden"),
-                            mutational_burden_comparison + legend + labs(y = NULL, color = as_legend_label),
+                            msi_comparison_low + legend + labs(x = NULL, color = as_legend_label),
+                            mutational_burden_reg_plot + legend + labs(x = "Mutational Burden"),
+                            mutational_burden_comparison + legend + labs(color = as_legend_label),
                             nrow = 2, ncol = 2, labels = c("E", "", "F", ""))
 
 plot_publish <- cowplot::plot_grid(plot1, NULL, cancer_type_comparison + legend, NULL, plot3,
                                    ncol = 1, nrow = 5, labels = c("", "", "D", "", ""),
                                    rel_heights = c(2, 0, 1.25, 0, 2))
-
-cairo_pdf(here(plots_dir, "cellline_properties_publish.pdf"), width = 9)
-plot_publish
-dev.off()
 
 cairo_pdf(here(plots_dir, "cellline_properties_publish1.pdf"), height = 6, width = 9)
 plot1
