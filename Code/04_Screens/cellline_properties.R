@@ -374,7 +374,7 @@ legend <- theme(legend.key.size = unit(14, "points"),
                 legend.text = element_text(size = 10))
 
 plot1 <- cowplot::plot_grid(aneuploidy_reg_plot + legend + labs(x = "Aneuploidy Score") + theme(legend.title = element_blank()),
-                            aneuploidy_comparison_wgd + labs(y = NULL),
+                            aneuploidy_comparison_wgd,
                             wgd_comparison + legend + labs(color = as_legend_label, x = NULL),
                             wgd_comparison_low + legend + labs(color = as_legend_label, x = NULL),
                             nrow = 2, ncol = 2, labels = c("A", "B", "C", ""))
