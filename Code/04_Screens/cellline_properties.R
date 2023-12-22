@@ -391,6 +391,18 @@ plot_publish <- cowplot::plot_grid(plot1, NULL, cancer_type_comparison + legend,
                                    ncol = 1, nrow = 5, labels = c("", "", "D", "", ""),
                                    rel_heights = c(2, 0, 1.25, 0, 2))
 
-cairo_pdf(here(plots_dir, "cellline_properties_publish.pdf"), height = 16, width = 9)
+cairo_pdf(here(plots_dir, "cellline_properties_publish.pdf"), width = 9)
 plot_publish
+dev.off()
+
+cairo_pdf(here(plots_dir, "cellline_properties_publish1.pdf"), height = 6, width = 9)
+plot1
+dev.off()
+
+cairo_pdf(here(plots_dir, "cellline_properties_publish2.pdf"), height = 5, width = 9)
+cancer_type_comparison
+dev.off()
+
+cairo_pdf(here(plots_dir, "cellline_properties_publish3.pdf"), height = 6, width = 9)
+plot3
 dev.off()
