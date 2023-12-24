@@ -45,7 +45,8 @@ human_rates <- read_excel(here(factor_data_dir, "humanRates.xlsx"), sheet = "H. 
 # URL: http://cbdm-01.zdv.uni-mainz.de/~mschaefer/hippie/download.php, version: v2.3
 hippie <- read_excel(here(factor_data_dir, "HIPPIE-v2.3.xlsx"))
 # URL: https://genome.ucsc.edu/cgi-bin/hgTables, genome: Human, assembly: Dec. 2013 (GRCh38/hg38), track: NCBI RefSeq
-ref_seq <- read_excel(here(factor_data_dir, "NCBI.Human.RefSeq.chr1.xlsx"))
+ref_seq_1q <- read_excel(here(factor_data_dir, "NCBI.Human.RefSeq.chr1.xlsx"))
+ref_seq <- read_table(here(factor_data_dir, "NCBI.Human.RefSeq.GRCH38.tsv"))
 # DOI: https://doi.org/10.1038/s41467-018-03106-1, Supplementary Table 2
 half_life <- read_excel(here(factor_data_dir, "41467_2018_3106_MOESM5_ESM.xlsx"))
 # CORUM, version 210512, DOI: 10.1093/nar/gkm936
