@@ -20,7 +20,7 @@ noisefloor_percentile_threshold <- 0.0001   # Percentile threshold to determine 
 
 # === Bootstrap Settings ===
 bootstrap_n <- 10000
-bootstrap_sample_prop <- 0.8
+bootstrap_sample_prop <- 1.0
 
 # === Define Directories ===
 input_data_dir <- here("Data")
