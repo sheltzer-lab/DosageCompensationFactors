@@ -176,20 +176,28 @@ ggvenn(celllines, columns = c("ProCan", "DepMap"), fill_alpha = 2/3,
 
 # === Determine Correlation between Datasets ===
 cellline_dist <- cellline_buf_merged %>%
-  violin_plot(Dataset, Buffering.CellLine.Ratio.ZScore) %>%
+  violin_plot(Dataset, Buffering.CellLine.Ratio) %>%
   save_plot("cellline_buffering_distribution.png")
 
+# TODO: QQ-Plot (geom_qq) & shapiro.test()
 
-cellline_kendall <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                             y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+## Full datasets
+cellline_buf_full <- bind_rows(
+  cellline_buf_procan %>% select(CellLine.Name, Buffering.CellLine.Ratio) %>% mutate(Dataset = "ProCan"),
+  cellline_buf_depmap %>% select(CellLine.Name, Buffering.CellLine.Ratio) %>% mutate(Dataset = "DepMap")
+) %>%
+  pivot_wider(names_from = "Dataset", values_from = "Buffering.CellLine.Ratio", id_cols = "CellLine.Name")
+
+cellline_kendall <- cor.test(x = cellline_buf_full$ProCan,
+                             y = cellline_buf_full$DepMap,
                              method = "kendall")
 
-cellline_pearson <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                             y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+cellline_pearson <- cor.test(x = cellline_buf_full$ProCan,
+                             y = cellline_buf_full$DepMap,
                              method = "pearson")
 
-cellline_spearman <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                              y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+cellline_spearman <- cor.test(x = cellline_buf_full$ProCan,
+                             y = cellline_buf_full$DepMap,
                               method = "spearman")
 
 cat(capture.output(cellline_kendall), file = here(reports_dir, "cellline_buffering_correlation.txt"),
@@ -197,6 +205,26 @@ cat(capture.output(cellline_kendall), file = here(reports_dir, "cellline_bufferi
 cat(capture.output(cellline_pearson), file = here(reports_dir, "cellline_buffering_correlation.txt"),
     append = TRUE, sep = "\n")
 cat(capture.output(cellline_spearman), file = here(reports_dir, "cellline_buffering_correlation.txt"),
+    append = TRUE, sep = "\n")
+
+## Datasets filtered by common genes and cell lines
+cellline_kendall_filtered <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
+                                      y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+                                      method = "kendall")
+
+cellline_pearson_filtered <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
+                                      y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+                                      method = "pearson")
+
+cellline_spearman_filtered <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
+                                       y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+                                       method = "spearman")
+
+cat(capture.output(cellline_kendall_filtered), file = here(reports_dir, "cellline_buffering_correlation_filtered.txt"),
+    append = FALSE, sep = "\n")
+cat(capture.output(cellline_pearson_filtered), file = here(reports_dir, "cellline_buffering_correlation_filtered.txt"),
+    append = TRUE, sep = "\n")
+cat(capture.output(cellline_spearman_filtered), file = here(reports_dir, "cellline_buffering_correlation_filtered.txt"),
     append = TRUE, sep = "\n")
 
 ## Datasets filtered by common genes only
