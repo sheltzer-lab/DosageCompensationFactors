@@ -243,11 +243,14 @@ waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) 
   ylim2 <- c((df %>% filter({ { rank_col } } == xlim[2] - label_nudge_x))[[value_col_name]],
              max(df[[value_col_name]] + y_range * y_margin))
 
+  value_mean <- mean(df[[value_col_name]], na.rm = TRUE)
+
   df %>%
     ggplot() +
     aes(x = { { rank_col } }, y = { { value_col } }, label = { { label_col } }) +
-    geom_hline(yintercept = 0, color = "red") +
+    geom_hline(yintercept = 0, color = "darkgrey") +
     geom_point(size = 0.3) +
+    geom_hline(yintercept = value_mean, color = "red") +
     geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = 5),
                     xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
                     seed = 42, force = 2.2, color = "darkblue") +
