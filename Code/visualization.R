@@ -245,6 +245,10 @@ waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) 
 
   value_mean <- mean(df[[value_col_name]], na.rm = TRUE)
 
+  # TODO: parametrize
+  color_low <- tail(bidirectional_color_pal, n = 1)
+  color_high <- head(bidirectional_color_pal, n = 1)
+
   df %>%
     ggplot() +
     aes(x = { { rank_col } }, y = { { value_col } }, label = { { label_col } }) +
@@ -253,10 +257,10 @@ waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) 
     geom_hline(yintercept = value_mean, color = "red") +
     geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = 5),
                     xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
-                    seed = 42, force = 2.2, color = "darkblue") +
+                    seed = 42, force = 2.2, color = color_low) +
     geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = 5),
                     xlim = xlim, ylim = ylim2, direction = "y", nudge_x = -label_nudge_x,
-                    seed = 42, force = 2.2, color = "darkred") +
+                    seed = 42, force = 2.2, color = color_high) +
     lims(y = c(ylim1[1], ylim2[2]))
 }
 

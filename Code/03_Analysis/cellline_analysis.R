@@ -292,14 +292,16 @@ cat(capture.output(agg_corr_spearman), file = here(reports_dir, "cellline_buffer
 plot_agg_top <- cellline_buf_agg %>%
   slice_max(Buffering.CellLine.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
-                     default_fill_color = "darkgrey", text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     default_fill_color = head(bidirectional_color_pal, n = 1),
+                     text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
   save_plot("cellline_buffering_aggregated_top.png")
 
 plot_agg_bot <- cellline_buf_agg %>%
   slice_min(Buffering.CellLine.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
-                     default_fill_color = "darkgrey", text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     default_fill_color = tail(bidirectional_color_pal, n = 1),
+                     text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
   save_plot("cellline_buffering_aggregated_bot.png")
 
