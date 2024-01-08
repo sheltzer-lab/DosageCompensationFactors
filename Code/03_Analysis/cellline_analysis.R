@@ -268,27 +268,60 @@ cellline_buf_agg <- cellline_buf_rank %>%
 write.xlsx(cellline_buf_agg, here(tables_base_dir, "cellline_buffering_agg.xlsx"),
            colNames = TRUE)
 
-cellline_buf_agg %>%
-  slice_max(Buffering.CellLine.MeanNormRank, n = 20) %>%
+## Compare aggregated ranks
+agg_corr_kendall <- cor.test(x = cellline_buf_agg$Buffering.CellLine.MeanNormRank,
+                             y = cellline_buf_agg$Buffering.CellLine.StandardizedMean,
+                             method = "kendall")
+
+agg_corr_pearson <- cor.test(x = cellline_buf_agg$Buffering.CellLine.MeanNormRank,
+                             y = cellline_buf_agg$Buffering.CellLine.StandardizedMean,
+                             method = "pearson")
+
+agg_corr_spearman <- cor.test(x = cellline_buf_agg$Buffering.CellLine.MeanNormRank,
+                             y = cellline_buf_agg$Buffering.CellLine.StandardizedMean,
+                              method = "spearman")
+
+cat(capture.output(agg_corr_kendall), file = here(reports_dir, "cellline_buffering_correlation_agg.txt"),
+    append = FALSE, sep = "\n")
+cat(capture.output(agg_corr_pearson), file = here(reports_dir, "cellline_buffering_correlation_agg.txt"),
+    append = TRUE, sep = "\n")
+cat(capture.output(agg_corr_spearman), file = here(reports_dir, "cellline_buffering_correlation_agg.txt"),
+    append = TRUE, sep = "\n")
+
+## Plot aggregated ranks
+plot_agg_top <- cellline_buf_agg %>%
+  slice_max(Buffering.CellLine.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
-                     value_range = c(0.5,1), line_intercept = 0.5, value_lab = "Aggregated Rank") %>%
+                     default_fill_color = "darkgrey", text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
   save_plot("cellline_buffering_aggregated_top.png")
 
-cellline_buf_agg %>%
-  slice_min(Buffering.CellLine.MeanNormRank, n = 20) %>%
+plot_agg_bot <- cellline_buf_agg %>%
+  slice_min(Buffering.CellLine.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
-                     value_range = c(0,0.5), line_intercept = 0.5, value_lab = "Aggregated Rank") %>%
+                     default_fill_color = "darkgrey", text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
   save_plot("cellline_buffering_aggregated_bot.png")
 
 # === Combine Plots for publishing ===
-plot_bracket <- plot_corr_bracket(cellline_pearson)
-plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_filtered_procan, cellline_buf_waterfall_filtered_depmap,
-                                  nrow = 1, ncol = 2, align = "h", axis = "lr", labels = c("ProCan", "DepMap"),
-                                  label_y = 0.98, label_x = 0.075, rel_widths = c(1, 1))
+plot_bracket <- plot_corr_bracket(cellline_pearson_filtered)
+plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_filtered_procan,
+                                  cellline_buf_waterfall_filtered_depmap + ylab(NULL),
+                                  nrow = 1, ncol = 2, align = "v", axis = "lr", labels = c("ProCan", "DepMap"),
+                                  label_y = 0.98, label_x = 0.1, rel_widths = c(1, 1))
 plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
                                   nrow = 2, ncol = 1,
                                   rel_heights = c(0.1, 1))
 
-cairo_pdf(here(plots_dir, "cellline_buffering_filtered_comparison.pdf"), width = 11)
-plot_stack2
+plot_agg <- cowplot::plot_grid(plot_agg_top + ylab(NULL) + cowplot::theme_minimal_vgrid()
+                                 + theme(axis.text.x = element_blank()),
+                               plot_agg_bot + cowplot::theme_minimal_vgrid(),
+                               nrow = 2, ncol = 1, align = "v", axis = "lr")
+
+plot_publish <- cowplot::plot_grid(plot_stack2, plot_agg,
+                                  nrow = 1, ncol = 2, labels = c("A", "B"),
+                                  rel_widths = c(1.618, 1))
+
+cairo_pdf(here(plots_dir, "cellline_buffering_filtered_comparison.pdf"), width = 12)
+plot_publish
 dev.off()

@@ -13,7 +13,7 @@ library(forcats)
 here::i_am("DosageCompensationFactors.Rproj")
 
 vertical_bar_chart <- function(df, category_col, value_col,
-                               color_col = NULL,
+                               color_col = NULL, text_color = "white", default_fill_color = "dimgrey",
                                error_low_col = NULL, error_high_col = NULL,
                                value_range = c(0.45, 0.65), break_steps = 0.05,
                                line_intercept = 0.5, bar_label_shift = 0.002,
@@ -23,13 +23,13 @@ vertical_bar_chart <- function(df, category_col, value_col,
     aes(x = { { category_col } }, y = { { value_col } },
         label = format(round({ { value_col } }, 3), nsmall = 3)) +
     { if (!quo_is_null(enquo(color_col))) geom_bar(aes(fill = {{ color_col }}), stat = "identity")
-      else geom_bar(stat = "identity") } +
+      else geom_bar(stat = "identity", fill = default_fill_color) } +
     geom_hline(yintercept = line_intercept) +
     { if (!quo_is_null(enquo(error_low_col)) & !quo_is_null(enquo(error_high_col)))
       geom_pointrange(aes(x = { { category_col } }, y = { { value_col } },
                           ymin = { { error_low_col } }, ymax = { { error_high_col } }),
                       colour = "orange", fatten = 1) } +
-    geom_text(color = "white", y = value_range[1] + bar_label_shift, hjust = 0) +
+    geom_text(color = text_color, y = value_range[1] + bar_label_shift, hjust = 0) +
     scale_y_continuous(breaks = seq(value_range[1], value_range[2], break_steps)) +
     scale_fill_viridis_c(option = "G", direction = -1, begin = 0.2, end = 0.8) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
