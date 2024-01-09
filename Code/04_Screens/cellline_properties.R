@@ -264,6 +264,16 @@ df_depmap %>%
                        test = t.test) %>%
   save_plot("cellline_wgd_levels_depmap.png")
 
+### Check aneuploidy score
+df_procan %>%
+  signif_beeswarm_plot(WGD, CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
+  save_plot("cellline_wgd-aneuploidy_procan.png")
+df_depmap %>%
+  signif_beeswarm_plot(WGD, CellLine.AneuploidyScore,
+                       test = wilcox.test) %>%
+  save_plot("cellline_wgd-aneuploidy_depmap.png")
+
 ### Control for low aneuploidy score
 max_aneuploidy_nowgd <- round(quantile((df_procan %>% filter(WGD == "Non-WGD"))$CellLine.AneuploidyScore,
                                        probs = 0.9))
@@ -325,10 +335,12 @@ mutational_burden_comparison <- df_procan %>%
 # Regression analysis
 ## Age
 df_procan %>%
-  scatter_plot_reg_corr(age_at_sampling, Buffering.CellLine.Ratio, point_size = 2) %>%
+  scatter_plot_reg_corr(age_at_sampling, Buffering.CellLine.Ratio,
+                        point_size = 2, cor_method = "pearson") %>%
   save_plot("cellline_age_procan.png")
 df_depmap %>%
-  scatter_plot_reg_corr(Age, Buffering.CellLine.Ratio, point_size = 2) %>%
+  scatter_plot_reg_corr(Age, Buffering.CellLine.Ratio,
+                        point_size = 2, cor_method = "pearson") %>%
   save_plot("cellline_age_depmap.png")
 
 ## Ploidy
@@ -383,11 +395,7 @@ plot3 <- cowplot::plot_grid(msi_comparison + legend + labs(color = as_legend_lab
                             msi_comparison_low + legend + labs(x = NULL, color = as_legend_label),
                             mutational_burden_reg_plot + legend + labs(x = "Mutational Burden"),
                             mutational_burden_comparison + legend + labs(color = as_legend_label),
-                            nrow = 2, ncol = 2, labels = c("E", "", "F", ""))
-
-plot_publish <- cowplot::plot_grid(plot1, NULL, cancer_type_comparison + legend, NULL, plot3,
-                                   ncol = 1, nrow = 5, labels = c("", "", "D", "", ""),
-                                   rel_heights = c(2, 0, 1.25, 0, 2))
+                            nrow = 2, ncol = 2, labels = c("A", "B", "C", "D"))
 
 cairo_pdf(here(plots_dir, "cellline_properties_publish1.pdf"), height = 6, width = 9)
 plot1
