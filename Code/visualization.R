@@ -579,12 +579,10 @@ simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
                           legend.text = element_text(size = 10),
                           legend.position = "top",
                           legend.direction = "horizontal",
-                          axis.text.x = element_text(angle = 45, hjust = 1),
-                          axis.title.x = element_blank(),
-                          axis.title.y = element_blank())
+                          axis.text.x = element_text(angle = 45, hjust = 1))
 
   df %>%
-    group_by({ { x_col } }, { { y_col } }) %>%
+    distinct({ { x_col } }, { { y_col } }, { { color_col } }, { { label_col } }) %>%
     ggplot() +
     aes(x = { { x_col } }, y = { { y_col } }, fill = { { color_col } }, label = { { label_col } }) +
     geom_raster() +
