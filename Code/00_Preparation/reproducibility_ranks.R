@@ -28,9 +28,10 @@ df_rep <- read_excel(here(external_data_dir, "1-s2.0-S2667237522001709-mmc3.xlsx
   arrange(desc(ReproducibilityRank.Aggregated)) %>%
   write_parquet(here(output_data_dir, 'reproducibility_ranks.parquet'), version = "2.6")
 
+# Remove 10% of proteins with lowest reproducibility
 rep_quant <- quantile(df_rep$ReproducibilityRank.Aggregated,
                       probs = seq(0, 1, 0.1))
-filter_cutoff <- rep_quant["10%"]
+filter_cutoff <- rep_quant["20%"]
 
 df_rep_filtered <- df_rep %>%
   filter(ReproducibilityRank.Aggregated > filter_cutoff) %>%

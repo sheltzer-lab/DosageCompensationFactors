@@ -31,6 +31,8 @@ p0211_raw <- read.table(here(expression_data_dir, "proteinGroups.txt"), sep="\t"
                         header=TRUE, stringsAsFactors=FALSE)
 p0211_meta <- read_excel(here(expression_data_dir, "metadata.xlsx"))
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
+df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
+
 
 # === Tidy Dataset ===
 state_cols <- c("Identified.In.All", "Identified.In.Some", "Potential.Contaminant", "Reverse",
@@ -102,7 +104,9 @@ p0211_expr_annotated <- p0211_expr_processed %>%
   inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
              na_matches = "never", relationship = "many-to-one") %>%
   unite("UniqueId", c("Sample.ID", "Protein.Uniprot.Accession"),
-        sep = '_', remove = FALSE)
+        sep = '_', remove = FALSE) %>%
+  # TODO: Executed before normalization in CCLE and ProCan
+  semi_join(df_rep_filtered, by = "Gene.Symbol") # Remove proteins with low reproducibilty across datasets
 
 ## Add Copy Number Metadata required for DC analysis
 id_cols <- c("Sample.ID", "Gene.Symbol")
@@ -158,23 +162,23 @@ plot_sample_expr <- function (df, value_col) {
 prot_states <- plot_protein_states(p0211_expr_tidy) %>%
   save_plot("p0211_protein_states.png")
 
-expr_dist <- plot_expr_dist(p0211_expr_processed) %>%
+expr_dist <- plot_expr_dist(p0211_expr_annotated) %>%
   save_plot("p0211_expression_distribution.png")
 
-sample_dist_pre <- p0211_expr_processed %>%
+sample_dist_pre <- p0211_expr_annotated %>%
   plot_sample_expr(Protein.Expression.Log2) %>%
   save_plot("p0211_sample_distribution_non-norm.png")
 
-sample_dist_norm <- p0211_expr_processed %>%
+sample_dist_norm <- p0211_expr_annotated %>%
   plot_sample_expr(Protein.Expression.Normalized) %>%
   save_plot("p0211_sample_distribution_norm.png")
 
-pca_pre <- p0211_expr_processed %>%
+pca_pre <- p0211_expr_annotated %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
   plot_pca() %>%
   save_plot("p0211_pca_non-norm.png")
 
-pca_norm <- p0211_expr_processed %>%
+pca_norm <- p0211_expr_annotated %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
   plot_pca() %>%
   save_plot("p0211_pca_norm.png")

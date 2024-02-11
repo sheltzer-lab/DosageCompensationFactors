@@ -32,7 +32,7 @@ depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics
 
 df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
-
+df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
 
 # === Tidy Datasets ===
 
@@ -83,6 +83,7 @@ depmap_expr_tidy <- depmap_expr %>%
 procan_expr_processed <- procan_expr_tidy %>%
   filter(str_detect(Protein.Uniprot.Id, "HUMAN")) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
+  semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
   # ToDo: Reconsider standardization
   # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
   normalize_samples(CellLine.SangerModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
@@ -90,6 +91,7 @@ procan_expr_processed <- procan_expr_tidy %>%
 
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
+  semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
   group_by(CellLine.CustomId, CellLine.SangerModelId, CellLine.DepMapModelId, CellLine.Name, Dataset,
            UniqueId, Gene.Symbol, Protein.Uniprot.Accession) %>%
   summarize(Protein.Expression.Log2 = mean(Protein.Expression.Log2, na.rm = TRUE)) %>%
