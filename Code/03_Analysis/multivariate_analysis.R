@@ -775,20 +775,20 @@ shap_results_selected_wgd <- shap_results %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE))
 
-shap_results_selected %>%
+heatmap_shap_selected <- shap_results_selected %>%
   distinct(DosageCompensation.Factor, Model.Variant, Model.Control,
            Model.Level, Model.Condition, SHAP.Factor.Corr, Label) %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
   geom_raster() +
   geom_text(color = "black") +
-  ggh4x::facet_nested(Model.Control + Model.Level + Model.Condition ~ .) +
+  ggh4x::facet_nested(Model.Control + Model.Level + Model.Condition ~ ., switch = "y") +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-1, 1), oob = scales::squish) +
   labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
   cowplot::theme_minimal_grid() +
   theme(panel.spacing = unit(0, "lines"),
-        strip.background = element_rect(color = "lightgrey", fill = "white"),
+        strip.background = element_rect(color = "lightgrey"),
         axis.ticks.y = element_blank(),
         legend.key.size = unit(16, "points"),
         legend.key.width = unit(24, "points"),
@@ -800,20 +800,63 @@ shap_results_selected %>%
         axis.title.x = element_blank(),
         axis.title.y = element_blank())
 
-shap_results_selected_wgd %>%
+heatmap_shap_selected %>%
+  save_plot("shap_heatmap_selected.png", width = 300)
+
+heatmap_shap_selected_wgd <- shap_results_selected_wgd %>%
   distinct(DosageCompensation.Factor, Model.Variant, Model.Control,
            Model.Level, Model.Condition, SHAP.Factor.Corr, Label) %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
   geom_raster() +
   geom_text(color = "black") +
-  ggh4x::facet_nested(Model.Control + Model.Level + Model.Condition ~ .) +
+  ggh4x::facet_nested(Model.Control + Model.Level + Model.Condition ~ ., switch = "y") +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-1, 1), oob = scales::squish) +
   labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
   cowplot::theme_minimal_grid() +
   theme(panel.spacing = unit(0, "lines"),
-        strip.background = element_rect(color = "lightgrey", fill = "white"),
+        strip.background = element_rect(color = "lightgrey"),
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(16, "points"),
+        legend.key.width = unit(24, "points"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+heatmap_shap_selected_wgd %>%
+  save_plot("shap_heatmap_selected_wgd.png", width = 300, height = 150)
+
+# TODO: Visualize change between WGD and Non-WGD
+## Difference SHAP, t-test, normalize SHAP
+## Difference Correlation,
+## Correlation of Correlation across methods
+# TODO: Add Observation IDs to SHAP data (Gene Symbol, Cell Line ID, etc.)
+# TODO: Random choice of SHAP observations could be confounded by Gene and Cell Line -> sample for each cell line
+
+shap_cor_wgd_diff <- shap_results_selected_wgd %>%
+  distinct(DosageCompensation.Factor, Model.Variant, Model.Control,
+           Model.Level, Model.Condition, SHAP.Factor.Corr) %>%
+  group_by(DosageCompensation.Factor, Model.Level, Model.Condition, Model.Control) %>%
+  summarize(SHAP.Factor.Corr = first(SHAP.Factor.Corr), .groups = "drop") %>%
+  pivot_wider(names_from = Model.Control, values_from = SHAP.Factor.Corr) %>%
+  mutate(SHAP.Factor.Corr.Diff = `WGD` - `Non-WGD`)
+
+shap_cor_wgd_diff %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr.Diff) +
+  geom_raster() +
+  ggh4x::facet_nested(Model.Level + Model.Condition ~ ., switch = "y") +
+  scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                       limits = c(-1, 1), oob = scales::squish) +
+  labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation-Difference") +
+  cowplot::theme_minimal_grid() +
+  theme(panel.spacing = unit(0, "lines"),
+        strip.background = element_rect(color = "lightgrey"),
         axis.ticks.y = element_blank(),
         legend.key.size = unit(16, "points"),
         legend.key.width = unit(24, "points"),

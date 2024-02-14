@@ -275,8 +275,10 @@ ptm_factor_datasets <- list(
   count_sites(kinase_substrates, colname = "Kinase Interactions")
 )
 
-other_factor_datasets <- list(df_rates, hippie_filtered, half_life_avg, df_utr,
-                           df_complexes, df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr)
+ppi_factor_datasets <- list(df_complexes, hippie_filtered)
+
+other_factor_datasets <- list(df_complexes, hippie_filtered, df_rates, half_life_avg, df_utr,
+                              df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = "Protein.Uniprot.Accession",
@@ -285,7 +287,10 @@ df_dc_factors_ptm <- ptm_factor_datasets %>%
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
   drop_na(Gene.Symbol, Protein.Uniprot.Accession) %>%
-  updateGeneSymbols()
+  updateGeneSymbols() %>%
+  mutate_at(c("Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
+              "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Interactions"),
+            ~replace_na(., 0))
 
 df_dc_factors_other <- other_factor_datasets %>%
   reduce(full_join, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
@@ -298,10 +303,7 @@ df_dc_factors_other <- other_factor_datasets %>%
 df_dc_factors <- df_dc_factors_ptm %>%
   full_join(y = df_dc_factors_other, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
             relationship = "many-to-one") %>%
-  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)",
-              "Phosphorylation Sites", "Ubiquitination Sites", "Sumoylation Sites",
-              "Methylation Sites", "Acetylation Sites", "Regulatory Sites", "Kinase Interactions"),
-            ~replace_na(., 0))
+  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)"), ~replace_na(., 0))
 
 # === Quality Control ===
 # Check for unmatched and ambiguous rows
