@@ -39,7 +39,7 @@ analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_co
     mutate(CellLine.Value.Median = median({ { cellline_value_col } }, na.rm = TRUE),
            CellLine.Group = if_else({ { cellline_value_col } } > CellLine.Value.Median, "High", "Low")) %>%
     group_by(Drug.ID, CellLine.Group) %>%
-    mutate(Group.Mean = mean({{drug_value_col}}, na.rm = TRUE)) %>%
+    mutate(Group.Median = median({{drug_value_col}}, na.rm = TRUE)) %>%
     group_by(Drug.ID, Drug.Name) %>%
     # https://stackoverflow.com/questions/48041504/calculate-pairwise-correlation-in-r-using-dplyrmutate
     summarize(
@@ -50,8 +50,7 @@ analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_co
       Corr.p = cor.test({ { cellline_value_col } }, { { drug_value_col } },
                         method = "spearman")$p.value,
       # Statistical test sensitivity low vs. high buffering
-      BufferingGroup.Sensitivity.Diff = if_else(Group.Mean[CellLine.Group == "High"][1] < Group.Mean[CellLine.Group == "Low"][1],
-                                    "Higher", "Lower"),
+      BufferingGroup.Sensitivity.Diff = Group.Median[CellLine.Group == "High"][1] - Group.Median[CellLine.Group == "Low"][1],
       BufferingGroup.Diff.Test.p = wilcox.test({{drug_value_col}}[CellLine.Group == "High"],
                                                {{drug_value_col}}[CellLine.Group == "Low"])$p.value,
     ) %>%
@@ -104,11 +103,11 @@ write.xlsx(drug_dc_corr_agg_mean, here(tables_base_dir, "sensitivity_correlation
 # === Visualize results for rank aggregated sensitivities ===
 top_sensitivity <- drug_dc_corr_agg_rank %>%
   filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
-  filter(BufferingGroup.Sensitivity.Diff == "Higher") %>%
+  filter(BufferingGroup.Sensitivity.Diff < 0) %>%
   slice_min(Corr.Sensitivity_Buffering, n = 12)
 bot_sensitivity <- drug_dc_corr_agg_rank %>%
   filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
-  filter(BufferingGroup.Sensitivity.Diff == "Lower") %>%
+  filter(BufferingGroup.Sensitivity.Diff >= 0) %>%
   slice_max(Corr.Sensitivity_Buffering, n = 12)
 
 df_sensitivity_agg <- cellline_buf_agg %>%
@@ -326,4 +325,48 @@ cellline_buf_agg %>%
   save_plot("drug_confounder_heatmap_bot.png")
 
 
+# Compare MOA & Target between high and low sensitivity groups
+lower_diff <- drug_dc_corr_agg_rank %>%
+  filter(BufferingGroup.Sensitivity.Diff < -0.2) %>%
+  filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
+  left_join(y = drug_meta, by = "Drug.ID")
+
+higher_diff <- drug_dc_corr_agg_rank %>%
+  filter(BufferingGroup.Sensitivity.Diff > 0.2) %>%
+  filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
+  left_join(y = drug_meta, by = "Drug.ID")
+
+lower_diff_moa <- lower_diff %>%
+  separate_longer_delim(Drug.MOA, delim = ", ") %>%
+  mutate(Drug.MOA = trimws(Drug.MOA)) %>%
+  group_by(Drug.MOA) %>%
+  add_count() %>%
+  summarize(BufferingGroup.Diff.MOA.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+            MOA.Count = first(n))
+
+higher_diff_moa <- higher_diff %>%
+  separate_longer_delim(Drug.MOA, delim = ", ") %>%
+  mutate(Drug.MOA = trimws(Drug.MOA)) %>%
+  group_by(Drug.MOA) %>%
+  add_count() %>%
+  summarize(BufferingGroup.Diff.MOA.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+            MOA.Count = first(n))
+
+lower_diff_target <- lower_diff %>%
+  separate_longer_delim(Drug.Target, delim = ", ") %>%
+  mutate(Drug.Target = trimws(Drug.Target)) %>%
+  group_by(Drug.Target) %>%
+  add_count() %>%
+  summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+            Target.Count = first(n))
+
+higher_diff_target <- higher_diff %>%
+  separate_longer_delim(Drug.Target, delim = ", ") %>%
+  mutate(Drug.Target = trimws(Drug.Target)) %>%
+  group_by(Drug.Target) %>%
+  add_count() %>%
+  summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+            Target.Count = first(n))
+
+# ToDo: Create visualizations (Diff, MOA, Target)
 # ToDo: Cleanup Code
