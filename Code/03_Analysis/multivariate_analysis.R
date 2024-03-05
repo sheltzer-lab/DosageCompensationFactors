@@ -112,6 +112,19 @@ evaluate_model <- function(model, test_set, dir, filename = NULL, cv_eval = FALS
     # Use separate test set for evaluation
     test_predicted_prob <- predict(model, test_set, type = "prob")
     model_roc <- roc(response = test_set$buffered, predictor = as.numeric(test_predicted_prob[, "Buffered"]), na.rm = TRUE)
+
+    # Add model perfomance metrics
+    lvl <- c("Buffered", "Scaling")
+    test_predicted_reponse <- test_predicted_prob %>%
+      mutate(
+        Prediction = factor(if_else(Buffered > 0.5, "Buffered", "Scaling"), levels = lvl),
+        Response = factor(test_set$buffered, levels = lvl)
+      )
+    model_roc["performanceMetrics"] <- list(
+      precision = precision(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response),
+      recall = recall(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response),
+      F1 = F_meas(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response)
+    )
   }
 
   if (is.null(filename))
@@ -672,6 +685,7 @@ shap_results %>%
 
 
 # === Combine Plots for publishing ===
+## SHAP Results
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
 
 shap_gain <- shap_results %>%
@@ -717,6 +731,7 @@ cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 12, wid
 plot_publish_shap_alt
 dev.off()
 
+## Model Performance
 model_rocs <- shap_results %>%
   distinct(Model.Filename, Model.Variant) %>%
   filter(grepl("ProCan", Model.Filename)) %>%
@@ -730,8 +745,9 @@ model_rocs <- shap_results %>%
     return(result)
   })
 
-rocs_summary_xgbLinear <- rocs_to_df(flatten(model_rocs)) %>%
-  mutate(Name = str_remove(Name, "-Level")) %>%
+rocs_summary_xgbLinear <- model_rocs %>%
+  flatten() %>%
+  rocs_to_df() %>%
   plot_rocs(legend_position = "bottom", legend_rows = 5)
 
 rf_gain_importance <- readRDS(here(models_base_dir, "model_rf_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds")) %>%
@@ -742,6 +758,50 @@ plot_model <- cowplot::plot_grid(rocs_summary_xgbLinear, rf_gain_importance,
 
 cairo_pdf(here(plots_dir, "multivariate_model_publish.pdf"), width = 12)
 plot_model
+dev.off()
+
+## Model Performance (Poster)
+### Selected Analysis Variants
+selected_models <- c("ChromosomeArm_Gain_Log2FC", "ChromosomeArm_Loss_Log2FC",
+                     "ChromosomeArm_Gain_Average", "ChromosomeArm_Loss_Average",
+                     "Gene_Filtered_Gain", "Gene_Filtered_Loss")
+
+df_model_rocs_selected <- model_rocs %>%
+  flatten() %>%
+  rocs_to_df() %>%
+  filter(Name %in% selected_models)
+
+rocs_summary_xgbLinear_selected <- df_model_rocs_selected %>%
+  plot_rocs(legend_position = "bottom", legend_rows = 3, label_padding = 0.1)
+
+### Model Architectures
+df_gain_models <- data.frame(
+  Model.Filename = c("model_rf_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds",
+                     "model_pcaNNet_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds",
+                     "model_xgbLinear_ProCan_ChromosomeArm-Level_Gain_Log2FC.rds"),
+  Model.Variant = c("Random Forests", "pcaNNet", "XGBLinear")
+)
+
+model_rocs_gain <- df_gain_models %>%
+  group_by(Model.Variant) %>%
+  group_map(\(entry, group) {
+    result <- list()
+    model <- readRDS(here(models_base_dir, entry$Model.Filename))
+    result[[group$Model.Variant]] <- evaluate_model(model, model$datasets$test, plots_dir)
+    return(result)
+  }) %>%
+  flatten() %>%
+  rocs_to_df()
+
+rocs_summary_gain <- model_rocs_gain %>%
+  plot_rocs(legend_position = "bottom", legend_rows = 1, label_padding = 0.1)
+
+### Export
+plot_model_poster <- cowplot::plot_grid(rocs_summary_xgbLinear_selected, rocs_summary_gain,
+                                        nrow = 1, ncol = 2, align = "hv", axis = "tblr")
+
+cairo_pdf(here(plots_dir, "multivariate_model_publish_poster.pdf"), width = 10, height = 6)
+plot_model_poster
 dev.off()
 
 # === Draft Area ===

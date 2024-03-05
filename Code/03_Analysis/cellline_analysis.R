@@ -311,7 +311,7 @@ plot_agg_bot <- cellline_buf_agg %>%
 plot_bracket <- plot_corr_bracket(cellline_pearson_filtered)
 plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_filtered_procan,
                                   cellline_buf_waterfall_filtered_depmap + ylab(NULL),
-                                  nrow = 1, ncol = 2, align = "v", axis = "lr", labels = c("ProCan", "DepMap"),
+                                  nrow = 1, ncol = 2, align = "hv", axis = "tblr", labels = c("ProCan", "DepMap"),
                                   label_y = 0.98, label_x = 0.1, rel_widths = c(1, 1))
 plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
                                   nrow = 2, ncol = 1,
@@ -328,4 +328,13 @@ plot_publish <- cowplot::plot_grid(plot_stack2, plot_agg,
 
 cairo_pdf(here(plots_dir, "cellline_buffering_filtered_comparison.pdf"), width = 12)
 plot_publish
+dev.off()
+
+## Poster
+cairo_pdf(here(plots_dir, "cellline_buffering_filtered_procan_poster.pdf"))
+cellline_buf_waterfall_filtered_procan <- cellline_buf_filtered_procan %>%
+  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name, font_size = 6)
+cellline_buf_waterfall_filtered_procan +
+  ylab("Mean Cell Line Buffering Ratio (z-score)") +
+  theme_light(base_size = 20)
 dev.off()

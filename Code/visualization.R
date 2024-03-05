@@ -230,12 +230,13 @@ scatter_plot_reg_corr <- function(df, x_col, y_col, color_col = NULL, cor_method
                             label_coords = label_coords, title = plot_title, point_size = point_size)
 }
 
-waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) {
+waterfall_plot <- function(df, value_col, rank_col, label_col, n = 5,
+                           y_margin = 0.02, font_size = theme_get()$text$size / 4) {
   rank_col_name <- quo_name(enquo(rank_col))
   value_col_name <- quo_name(enquo(value_col))
 
   xlim <- c(0, max(df[[rank_col_name]]))
-  label_nudge_x <- floor(xlim[2] / 5)
+  label_nudge_x <- floor(xlim[2] / 4)
 
   y_range <- max(df[[value_col_name]]) - min(df[[value_col_name]])
   ylim1 <- c(min(df[[value_col_name]] - y_range * y_margin),
@@ -255,12 +256,12 @@ waterfall_plot <- function(df, value_col, rank_col, label_col, y_margin = 0.02) 
     geom_hline(yintercept = 0, color = "darkgrey") +
     geom_point(size = 0.3) +
     geom_hline(yintercept = value_mean, color = "red") +
-    geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = 5),
+    geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = n),
                     xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
-                    seed = 42, force = 2.2, color = color_low) +
-    geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = 5),
+                    seed = 42, force = 2.2, color = color_low, size = font_size) +
+    geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = n),
                     xlim = xlim, ylim = ylim2, direction = "y", nudge_x = -label_nudge_x,
-                    seed = 42, force = 2.2, color = color_high) +
+                    seed = 42, force = 2.2, color = color_high, size = font_size) +
     lims(y = c(ylim1[1], ylim2[2]))
 }
 
@@ -271,12 +272,12 @@ save_plot <- function(plot, filename, dir = plots_dir,
   return(plot)
 }
 
-plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10) {
+plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10, label_padding = 0.05) {
   df_label <- df_rocs %>%
     distinct(Name, AUC) %>%
     arrange(desc(Name)) %>%
     mutate(x = 0.1,
-           y = seq(0.05, 0.75, 0.05)[seq_along(unique(df_rocs$Name))],
+           y = seq(0.05, 0.75, label_padding)[seq_along(unique(df_rocs$Name))],
            AUC = paste0("AUC = ", format(round(AUC, 3), nsmall = 3)))
 
   plot <- df_rocs %>%
@@ -638,7 +639,7 @@ shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, show_leg
     ggplot() +
     aes(x = DosageCompensation.Factor, y = SHAP.Value) +
     geom_hline(yintercept = 0) +
-    geom_boxplot(outlier.shape = NA, color = "black") +
+    # geom_boxplot(outlier.shape = NA, color = "black") +
     geom_quasirandom(aes(color = Factor.Value.Relative),
                      show.legend = show_legend, alpha = alpha, width = jitter_width) +
     scale_colour_viridis_c(option = "C", direction = 1, end = 0.95,
