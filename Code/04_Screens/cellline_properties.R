@@ -145,7 +145,7 @@ df_procan %>%
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
   save_plot("cellline_leukemia_procan.png")
-df_depmap %>%
+leuk_plot_depmap <- df_depmap %>%
   mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
@@ -155,17 +155,17 @@ df_depmap %>%
 ### Control for low aneuploidy score
 df_leuk_procan <- df_procan %>%
   filter(cancer_type %in% leuk_procan)
-aneuploidy_leuk_max <- round(quantile(df_leuk_procan$CellLine.AneuploidyScore, probs = 0.9))
+max_aneuploidy_leuk <- round(quantile(df_leuk_procan$CellLine.AneuploidyScore, probs = 0.9))
 
 df_procan %>%
-  filter(CellLine.AneuploidyScore <= aneuploidy_leuk_max) %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
   mutate(Leukemia_Lymphoma = cancer_type %in% leuk_procan) %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
   save_plot("cellline_leukemia_low-aneuploidy_procan.png")
-df_depmap %>%
-  filter(CellLine.AneuploidyScore <= aneuploidy_leuk_max) %>%
+leuk_plot_depmap_low <- df_depmap %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
   mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Buffering.CellLine.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
@@ -407,4 +407,57 @@ dev.off()
 
 cairo_pdf(here(plots_dir, "cellline_properties_publish3.pdf"), height = 6, width = 9)
 plot3
+dev.off()
+
+## Poster
+### Confounders
+plot_conf <- cowplot::plot_grid(aneuploidy_reg_plot +
+                                  legend +
+                                  theme_light(base_size = 20) +
+                                  labs(x = "Aneuploidy Score", y = "Mean Buffering Ratio") +
+                                  scale_color_manual(values = two_class_color_pal) +
+                                  theme(legend.position = c(.95, .95),
+                                        legend.justification = c("right", "top"),
+                                        legend.box.just = "right",
+                                        legend.margin = margin(6, 6, 6, 6),
+                                        legend.title = element_blank(),
+                                        legend.background = element_blank()),
+                                aneuploidy_comparison_wgd +
+                                  labs(y = "Mean Buffering Ratio") +
+                                  theme_light(base_size = 20) +
+                                  theme(strip.background = element_rect(fill = "grey90"),
+                                        strip.text = element_text(color = "black")),
+                                nrow = 2, ncol = 1)
+
+cairo_pdf(here(plots_dir, "cellline_properties_poster_confounders.pdf"), height = 9)
+plot_conf
+dev.off()
+
+### Leukemia
+min_aneuploidy <- min(df_depmap$CellLine.AneuploidyScore)
+max_aneuploidy <- max(df_depmap$CellLine.AneuploidyScore)
+
+leuk_poster <- leuk_plot_depmap +
+  theme_light(base_size = 20) +
+  theme(legend.position = "top") +
+  labs(color = NULL, y = "Mean Buffering Ratio") +
+  scale_colour_viridis_c(option = "D", direction = 1,
+                         limits = c(min_aneuploidy, max_aneuploidy),
+                         breaks = c(min_aneuploidy, max_aneuploidy))
+
+leuk_poster_low <- leuk_plot_depmap_low +
+  theme_light(base_size = 20) +
+  theme(legend.position = "top") +
+  labs(color = NULL, y = NULL) +
+  scale_colour_viridis_c(option = "D", direction = 1,
+                         limits = c(min_aneuploidy, max_aneuploidy),
+                         breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),
+                         labels = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy))
+
+plot_leuk <- cowplot::plot_grid(leuk_poster,
+                                leuk_poster_low,
+                                nrow = 1, ncol = 2)
+
+cairo_pdf(here(plots_dir, "cellline_properties_poster_leukemia.pdf"), width = 8)
+plot_leuk
 dev.off()

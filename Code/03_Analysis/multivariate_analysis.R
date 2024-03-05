@@ -769,7 +769,8 @@ selected_models <- c("ChromosomeArm_Gain_Log2FC", "ChromosomeArm_Loss_Log2FC",
 df_model_rocs_selected <- model_rocs %>%
   flatten() %>%
   rocs_to_df() %>%
-  filter(Name %in% selected_models)
+  filter(Name %in% selected_models) %>%
+  mutate(Name = factor(Name, levels = selected_models))
 
 rocs_summary_xgbLinear_selected <- df_model_rocs_selected %>%
   plot_rocs(legend_position = "bottom", legend_rows = 3, label_padding = 0.1)
@@ -791,13 +792,17 @@ model_rocs_gain <- df_gain_models %>%
     return(result)
   }) %>%
   flatten() %>%
-  rocs_to_df()
+  rocs_to_df() %>%
+  mutate(Name = fct_reorder(Name, AUC, .desc = TRUE))
 
 rocs_summary_gain <- model_rocs_gain %>%
   plot_rocs(legend_position = "bottom", legend_rows = 1, label_padding = 0.1)
 
 ### Export
-plot_model_poster <- cowplot::plot_grid(rocs_summary_xgbLinear_selected, rocs_summary_gain,
+plot_model_poster <- cowplot::plot_grid(rocs_summary_xgbLinear_selected +
+                                          scale_color_manual(values = rev(categorical_color_pal[1:6])),
+                                        rocs_summary_gain +
+                                          scale_color_brewer(palette = "Dark2"),
                                         nrow = 1, ncol = 2, align = "hv", axis = "tblr")
 
 cairo_pdf(here(plots_dir, "multivariate_model_publish_poster.pdf"), width = 10, height = 6)

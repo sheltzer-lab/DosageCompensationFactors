@@ -335,6 +335,6 @@ cairo_pdf(here(plots_dir, "cellline_buffering_filtered_procan_poster.pdf"))
 cellline_buf_waterfall_filtered_procan <- cellline_buf_filtered_procan %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name, font_size = 6)
 cellline_buf_waterfall_filtered_procan +
-  ylab("Mean Cell Line Buffering Ratio (z-score)") +
+  ylab("Mean Buffering Ratio (z-score)") +
   theme_light(base_size = 20)
 dev.off()

@@ -97,3 +97,37 @@ plot_publish <- cowplot::plot_grid(dc_growth_reg, dc_growth_reg_nowgd,
 cairo_pdf(here(plots_dir, "proliferation_publish.pdf"), height = 10, width = 12)
 plot_publish
 dev.off()
+
+## Poster
+growth_poster <- (df_prolif %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
+                          point_size = 2, label_coords = c(0, 0), color_col = WGD,
+                          title_prefix = "ProCan")) +
+  theme_light(base_size = 20) +
+  labs(x = "Mean Buffering Ratio", y = "Cell Line Growth Rate") +
+  scale_color_manual(values = two_class_color_pal) +
+  theme(legend.position = c(.95, .95),
+        legend.justification = c("right", "top"),
+        legend.box.just = "right",
+        legend.margin = margin(6, 6, 6, 6),
+        legend.title = element_blank(),
+        legend.background = element_blank())
+
+growth_poster_nowgd <- (df_prolif_nowgd %>%
+  mutate(WGD = "Non-WGD") %>%
+  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
+                          point_size = 2, label_coords = c(0, 0), color_col = WGD,
+                          title_prefix = "ProCan, No-WGD")) +
+  theme_light(base_size = 20) +
+  labs(x = "Mean Buffering Ratio", y = "Cell Line Growth Rate") +
+  scale_color_manual(values = two_class_color_pal) +
+  theme(legend.position = "none")
+
+
+plot_poster <- cowplot::plot_grid(growth_poster, growth_poster_nowgd,
+                                   ncol = 1, nrow = 2, align = "h", axis = "tblr")
+
+cairo_pdf(here(plots_dir, "proliferation_poster.pdf"), height = 12)
+plot_poster
+dev.off()
