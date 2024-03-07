@@ -688,13 +688,21 @@ shap_results %>%
 ## SHAP Results
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
 
+### Create mapping for cleaned names
+# TODO: Move code
+dc_factor_cols_mapping <- dc_factor_cols
+names(dc_factor_cols_mapping) <- janitor::make_clean_names(dc_factor_cols)
+shap_results <- shap_results %>%
+  mutate(DosageCompensation.Factor = sapply(DosageCompensation.Factor, \(x) dc_factor_cols_mapping[[x]]))
+
+### Select models for visualization
 shap_gain <- shap_results %>%
   filter(Model.Variant == "ProCan_ChromosomeArm-Level_Gain_Log2FC")
 shap_loss <- shap_results %>%
   filter(Model.Variant == "ProCan_ChromosomeArm-Level_Loss_Log2FC")
 
-shap_arrows_plot_gain <- shap_plot_arrows(shap_gain, show_legend = FALSE, title = "Chromosome Gain")
-shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL, title = "Chromosome Loss")
+shap_arrows_plot_gain <- shap_plot_arrows(shap_gain, category_lab = "Factor", show_legend = FALSE, title = "Chromosome Gain")
+shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL, color_lab = "Factor Value", title = "Chromosome Loss")
 
 shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
@@ -729,6 +737,14 @@ plot_publish_shap_alt <- cowplot::plot_grid(shap_raw_plots, shap_heatmap + labs(
 
 cairo_pdf(here(plots_dir, "multivariate_shap_publish_alt.pdf"), height = 12, width = 11)
 plot_publish_shap_alt
+dev.off()
+
+### Poster
+cairo_pdf(here(plots_dir, "multivariate_shap_raw_poster.pdf"), height = 7, width = 11)
+shap_raw_plots
+dev.off()
+cairo_pdf(here(plots_dir, "multivariate_shap_heatmap_poster.pdf"), height = 3.3, width = 12)
+shap_heatmap + labs(x = NULL, y = NULL)
 dev.off()
 
 ## Model Performance
