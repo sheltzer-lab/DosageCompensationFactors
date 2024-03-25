@@ -628,7 +628,7 @@ unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FAL
 
 # === SHAP-Plots ===
 
-shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.2, show_legend = TRUE, title = NULL,
+shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.25, show_legend = TRUE, title = NULL,
                       category_lab = "Feature", value_lab = "SHAP-Value", color_lab = "Feature Value") {
   max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
 
