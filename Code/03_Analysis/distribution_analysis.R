@@ -59,6 +59,7 @@ summary_tbl_merged %>%
   gt::gtsave(filename = here(tables_dir, "summary_table.html"))
 
 # === Plot Copy Number Distribution and Filter Thresholds ===
+# TODO: This has been previously defined for relative copy numbers, not absolute copy numbers
 cn_diff_quantiles <- quantile(expr_buf_procan$Gene.CopyNumber - expr_buf_procan$Gene.CopyNumber.Baseline,
                               probs = seq(0, 1, 0.01))
 

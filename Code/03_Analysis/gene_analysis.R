@@ -75,7 +75,7 @@ plot_loss <- test_loss %>%
   save_plot("volcano_buffering_cn-loss.png")
 
 test_filtered <- expr_buf_procan %>%
-  filter_cn_diff_quantiles() %>%
+  filter_cn_diff() %>%
   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
 
 plot_filtered <- test_filtered %>%

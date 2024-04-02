@@ -19,11 +19,12 @@ add_factors <- function(df, df_factors, factor_cols = dc_factor_cols) {
 filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {
   cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01), na.rm = TRUE)
   df %>%
+    filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0) %>%
     filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[1]] |
              Gene.CopyNumber > Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_between[2]])
 }
 
-filter_cn_diff <- function(df, remove_between = c(-0.01, 0.01)) {
+filter_cn_diff <- function(df, remove_between = c(-0.02, 0.02)) {
   df %>%
     filter(Gene.CopyNumber - Gene.CopyNumber.Baseline < remove_between[1] |
              Gene.CopyNumber - Gene.CopyNumber.Baseline > remove_between[2])

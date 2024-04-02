@@ -174,7 +174,14 @@ expr_buf_p0211 <- expr_p0211 %>%
   write_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'), version = "2.6")
 
 # === Evaluation ===
-## Copy Number
+## Buffering Ratio
+(ggplot() +
+  geom_density(aes(x = expr_buf_depmap$Buffering.GeneLevel.Ratio, color = "DepMap")) +
+  geom_density(aes(x = expr_buf_procan$Buffering.GeneLevel.Ratio, color = "ProCan")) +
+  labs(x = "Gene Level Buffering Ratio", color = "Dataset")) %>%
+  save_plot("buffering_ratio_distribution.png")
+
+## Copy Number Baseline
 df_cn_eval <- expr_depmap %>%
   select(Gene.Symbol, CellLine.CustomId) %>%
   inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
@@ -196,8 +203,8 @@ df_cn_eval <- expr_depmap %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral, MedianNeutral)
 
-dc_report$corr_CNmethod_weightedAS_MedianAll <- cor.test(df_cn_eval$WeightedNeutral.AneuploidyScore,
-                                                         df_cn_eval$MedianAll, method = "spearman")
+dc_report$corr_CN_BaseLine_weightedAS_MedianAll <- cor.test(df_cn_eval$WeightedNeutral.AneuploidyScore,
+                                                            df_cn_eval$MedianAll, method = "spearman")
 
 cn_baseline_plot <- df_cn_eval %>%
   pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance",
@@ -211,7 +218,7 @@ cn_baseline_plot <- df_cn_eval %>%
 cn_baseline_plot %>%
   save_plot("copynumber_baseline_methods.png")
 
-## Expression
+## Expression Baseline
 df_expr_eval <- expr_depmap %>%
   select(Gene.Symbol, CellLine.CustomId, Protein.Expression.Normalized) %>%
   inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
@@ -233,8 +240,8 @@ df_expr_eval <- expr_depmap %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral, MedianNeutral)
 
-dc_report$corr_ExprMethod_weightedAS_MeanNeutral <- cor.test(df_expr_eval$WeightedNeutral.AneuploidyScore,
-                                                             df_expr_eval$MeanNeutral, method = "spearman")
+dc_report$corr_Expr_Baseline_weightedAS_MeanNeutral <- cor.test(df_expr_eval$WeightedNeutral.AneuploidyScore,
+                                                                df_expr_eval$MeanNeutral, method = "spearman")
 
 expr_baseline_plot <- df_expr_eval %>%
   pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "MeanNeutral", "MedianNeutral"),
@@ -318,7 +325,7 @@ dc_report$corr_procan_depmap_summary <- corr_summary
 
 # === Write Report ===
 report_file <- here(reports_dir, "dc_report.txt")
-write_list(dc_report, report_file)
+write_report(dc_report, report_file)
 
 # Median CN, Weighted Mean Expr:
 #   * Chr:    mean = 0.587, median = 0.599, sd = 0.129

@@ -1,19 +1,24 @@
-write_list <- function(report, report_file) {
+report_list2lines <- function(report) {
+  lines <- NULL
   for (item in names(report)) {
     if (is.list(report[[item]])) {
-      cat(sprintf("\n--- %s ---\n", item), file = report_file, append = TRUE)
-      write_list(report[[item]], report_file)
-      cat("------\n", file = report_file, append = TRUE)
+      lines <- c(lines,
+                 sprintf("\n--- %s ---\n", item),
+                 report_list2lines(report[[item]]),
+                 "------\n")
     }
     else {
-      cat(sprintf("%s: %s\n", item, report[[item]]), file = report_file, append = TRUE)
+      lines <- c(lines, sprintf("%s: %s\n", item, report[[item]]))
     }
   }
+  return(lines)
 }
 
 write_report <- function(report, report_file) {
-  cat("===== Report =====\n", file = report_file)
-  cat(format(Sys.time(), "%a %b %d %X %Y"), file = report_file, append = TRUE)
-  cat("\n\n", file = report_file, append = TRUE)
-  write_list(report, report_file)
+  file.remove(report_file)
+  lines <- c("===== Report =====\n",
+             format(Sys.time(), "%a %b %d %X %Y"),
+             "\n\n",
+             report_list2lines(report))
+  writeLines(lines, con = report_file, sep = "")
 }
