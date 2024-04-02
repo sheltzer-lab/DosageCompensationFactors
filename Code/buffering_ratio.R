@@ -2,22 +2,36 @@ library(dplyr)
 library(plotly)
 library(ggplot2)
 
-buffering_ratio <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
-  br <- log2(cn_var / cn_base) - log2(expr_var / expr_base)
-  br <- ifelse(cn_var > cn_base, br, -br)
+# Dosage Compensation Measures
+
+buffering_ratio <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
+  br <- log2(cn_obs / cn_base) - log2(expr_obs / expr_base)
+  br <- ifelse(cn_obs > cn_base, br, -br)
   ifelse(is.finite(br), br, NA)
 }
 
-buffering_ratio_old <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
-  br <- 1 - (expr_var / expr_base) * (cn_base / cn_var)
-  br <- ifelse(cn_var > cn_base, br, -br)
-  ifelse(is.finite(br), br, NA)
-}
-
-scaling_factor <- function(expr_base, expr_var, cn_base = 2, cn_var = 3) {
-  sf <- ((expr_var / expr_base) - 1) / ((cn_var / cn_base) - 1)
+# TODO: explain why (ratio - 1) is necessary
+scaling_factor <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
+  sf <- ((expr_obs / expr_base) - 1) / ((cn_obs / cn_base) - 1)
   ifelse(is.finite(sf), sf, NA)
 }
+
+# Expr Log2FC and CN Log2FC are zero if there is no change in expression / copy number
+scaling_ratio <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3, f = log2) {
+  sr <- f(expr_obs / expr_base) / f(cn_obs / cn_base)
+  ifelse(is.finite(sr), sr, NA)
+}
+
+# Only quantifies buffering against scaling - anti-scaling not quantified, as log2 of negative numbers is undefined
+log_buffering_score <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
+  lbs <- log2(log2(cn_obs / cn_base) / log2(expr_obs / expr_base))
+  ifelse(is.finite(lbs), lbs, NA)
+}
+
+# Define thresholds on dosage compensation measures for classification
+## Scaling:       Change in protein expression is equal or more than the change in DNA copy number
+## Buffered:      Change in protein expression is less than the change in DNA copy number
+## Anti-Scaling:  Change in protein expression is opposite to the change in DNA copy number
 
 buffering_class <- function(buffering_ratio) {
   ifelse(buffering_ratio > 0.6849625, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
@@ -25,16 +39,20 @@ buffering_class <- function(buffering_ratio) {
                 "Scaling"))                                  # Expression level as expected or higher
 }
 
-buffering_class_old <- function(buffering_ratio) {
-    ifelse(buffering_ratio > 0.377978, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
-         ifelse(buffering_ratio > 0.2071953, "Buffered",    # Less expression in trisomy than expected
-                "Scaling"))                                  # Expression level as expected or higher
-}
-
 buffering_class_sf <- function(scaling_factor) {
-    ifelse(scaling_factor > 0.3784142, "Scaling",
+  ifelse(scaling_factor > 0.3784142, "Scaling",
          ifelse(scaling_factor > -0.133934, "Buffered",
                 "Anti-Scaling"))
+}
+
+buffering_class_sr <- function(scaling_ratio) {
+  ifelse(scaling_ratio > 0.8, "Scaling",
+         ifelse(scaling_ratio > -0.2, "Buffered",
+                "Anti-Scaling"))
+}
+
+buffering_class_lbs <- function (log_buffering_score) {
+  ifelse(log_buffering_score > 0.3, "Buffered", "Scaling")
 }
 
 # Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) on chromosome arm gain (inverted for arm loss):
@@ -60,7 +78,7 @@ plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-0.99, 0.99), expr_lim 
   expr_base <- rep(2, length(expr_diff))
 
   br <- outer(expr_diff + expr_base, cn_diff + cn_base,
-              FUN = \(x,y) br_func(expr_var = x, cn_var = y,
+              FUN = \(x,y) br_func(expr_obs = x, cn_obs = y,
                                    expr_base = expr_base, cn_base = cn_base))
   plot_ly(y = ~expr_diff, x = ~cn_diff, z = ~br, type = 'surface')
 }
@@ -71,7 +89,7 @@ plot_buffering_ratio_expr <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
   expr_base <- rep(2, length(expr_diff))
   cn_base <- rep(2, length(expr_diff))
   cn_diff <- rep(cn_diff, length(expr_diff))
-  br_values <- br_func(expr_var = expr_diff + expr_base, cn_var = cn_diff + cn_base,
+  br_values <- br_func(expr_obs = expr_diff + expr_base, cn_obs = cn_diff + cn_base,
                        expr_base = expr_base, cn_base = cn_base)
 
   ggplot() +
@@ -89,7 +107,7 @@ plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1), t
   cn_base <- rep(2, length(cn_diff))
   expr_diff <- rep(expr_diff, length(cn_diff))
   expr_base <- rep(2, length(expr_diff))
-  br_values <- br_func(expr_var = expr_diff + expr_base, cn_var = cn_diff + cn_base,
+  br_values <- br_func(expr_obs = expr_diff + expr_base, cn_obs = cn_diff + cn_base,
                        expr_base = expr_base, cn_base = cn_base)
 
   ggplot() +
@@ -102,6 +120,8 @@ plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1), t
 }
 
 buffering_example <- function() {
+  eps <- 1e-8
+
   df1 <- data.frame(ExprBase = c(10, 10, 10, 10), ExprVar = c(10, 15, 20, 30),
                     CNBase = c(2, 2, 2, 2), CNVar = c(3, 3, 3, 3))
   df2 <- data.frame(ExprBase = c(10, 15, 20, 30), ExprVar = c(10, 10, 10, 10),
@@ -113,14 +133,37 @@ buffering_example <- function() {
 
   for (df in list(df1, df2, df3, df4)) {
     df %>%
+      mutate(ExprVar = ExprVar + runif(length(ExprVar), min = -eps, max = eps)
+      ) %>%
       mutate(Log2FC = log2(ExprVar) - log2(ExprBase),
              BR = buffering_ratio(ExprBase, ExprVar, CNBase, CNVar),
-             BR_old = buffering_ratio_old(ExprBase, ExprVar, CNBase, CNVar),
-             SF = scaling_factor(ExprBase, ExprVar, CNBase, CNVar)) %>%
-      mutate(Log2FC_BC = buffering_class_log2fc(Log2FC, CNBase, CNVar),
-             BC = buffering_class(BR),
-             BC_old = buffering_class_old(BR_old),
-             BC_sf = buffering_class_sf(SF)) %>%
-      print()
+             SF = scaling_factor(ExprBase, ExprVar, CNBase, CNVar),
+             SR = scaling_ratio(ExprBase, ExprVar, CNBase, CNVar),
+             LBS = log_buffering_score(ExprBase, ExprVar, CNBase, CNVar)
+      ) %>%
+      mutate(BC_log2fc = buffering_class_log2fc(Log2FC, CNBase, CNVar),
+             BC_br = buffering_class(BR),
+             BC_sf = buffering_class_sf(SF),
+             BC_sr = buffering_class_sr(SR),
+             BC_lbs = buffering_class_lbs(LBS)
+      ) %>%
+      mutate_if(is.numeric, ~round(., digits = 5)) %>%
+      print(digits = 5)
   }
 }
+
+# scaling_ratio(expr_base = 2, expr_obs = 1.149, cn_base = 2, cn_obs = 1) = 0.7996212
+# scaling_ratio(expr_base = 1, expr_obs = 1.741, cn_base = 1, cn_obs = 2) = 0.7999162
+
+# Strange bahaviour for scaling ratio & scaling factor
+# Measure should show stronger Anti-Scaling if expression change is positive and the loss of copy number is stronger
+# Example: Positive expression change (2->3), copy number loss (2->1 vs. 2->0.2)
+## scaling_ratio(expr_base = 2, expr_obs = 3, cn_base = 2, cn_obs = 1) = -1
+## scaling_ratio(expr_base = 2, expr_obs = 3, cn_base = 2, cn_obs = 0.2) = -0.5555556
+### SR = -0.555 > -1, indicating less buffering/anti-scaling)
+# Buffering Ratio works as expected
+## buffering_ratio(expr_base = 2, expr_obs = 3, cn_base = 2, cn_obs = 1) = 1.584963
+## buffering_ratio(expr_base = 2, expr_obs = 3, cn_base = 2, cn_obs = 0.2) = 3.906891
+### BR = 3.9 > 1.6 indicating more buffering/anti-scaling
+
+# Conclusion: SR & SF not adequate for quantifying anti-scaling
