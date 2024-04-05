@@ -32,7 +32,7 @@ df_prolif <- cellline_buf_procan %>%
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
-  mutate(Buffering.CellLine.Group = if_else(Buffering.CellLine.Ratio > 0, "High", "Low"))
+  mutate(Buffering.CellLine.Group = if_else(Buffering.CellLine.Ratio > median(Buffering.CellLine.Ratio), "High", "Low"))
 
 dc_growth_cor <- cor.test(x = df_prolif$Buffering.CellLine.Ratio,
                           y = df_prolif$CellLine.GrowthRatio,
@@ -88,6 +88,36 @@ df_prolif_median_nowgd <- df_prolif_nowgd %>%
   pivot_wider(names_from = Buffering.CellLine.Group, values_from = MedianGrowthRatio)
 
 growth_change_nowgd <- df_prolif_median_nowgd$High / df_prolif_median_nowgd$Low
+
+# Only whole-genome doubling
+df_prolif_wgd <- df_prolif %>%
+  filter(CellLine.WGD > 0)
+
+dc_growth_cor_wgd <- cor.test(x = df_prolif_wgd$Buffering.CellLine.Ratio,
+                              y = df_prolif_wgd$CellLine.GrowthRatio,
+                              method = "spearman")
+
+cat(capture.output(df_prolif_wgd),
+    file = here(reports_dir, "dosage_compensation_proliferation_correlation_wgd.txt"),
+    append = FALSE, sep = "\n")
+
+dc_growth_reg_wgd <- df_prolif_wgd %>%
+  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
+                        point_size = 1.5, label_coords = c(0, 0),
+                        title_prefix = "ProCan, WGD") %>%
+  save_plot("dosage_compensation_proliferation_procan_wgd.png")
+
+dc_growth_violin_wgd <- df_prolif_wgd %>%
+  signif_violin_plot(Buffering.CellLine.Group, CellLine.GrowthRatio,
+                     test = wilcox.test, title = "ProCan, WGD") %>%
+  save_plot("dosage_compensation_proliferation_procan_test_wgd.png")
+
+df_prolif_median_wgd <- df_prolif_wgd %>%
+  group_by(Buffering.CellLine.Group) %>%
+  summarize(MedianGrowthRatio = median(CellLine.GrowthRatio, na.rm = TRUE)) %>%
+  pivot_wider(names_from = Buffering.CellLine.Group, values_from = MedianGrowthRatio)
+
+growth_change_wgd <- df_prolif_median_wgd$High / df_prolif_median_wgd$Low
 
 # === Combine Plots for publishing ===
 plot_publish <- cowplot::plot_grid(dc_growth_reg, dc_growth_reg_nowgd,
