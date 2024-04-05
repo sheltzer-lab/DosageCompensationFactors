@@ -41,7 +41,7 @@ analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = C
     summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
               SD = sd({ { buffering_ratio_col } }, na.rm = TRUE)) %>%
-    mutate(Buffering.CellLine.Ratio.ZScore = (Buffering.CellLine.Ratio - mean(Buffering.CellLine.Ratio)) / sd(Buffering.CellLine.Ratio),
+    mutate(Buffering.CellLine.Ratio.ZScore = z_score(Buffering.CellLine.Ratio),
            Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore))) %>%
     arrange(Rank)
 }

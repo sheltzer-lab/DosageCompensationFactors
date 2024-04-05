@@ -15,7 +15,23 @@ add_factors <- function(df, df_factors, factor_cols = dc_factor_cols) {
               na_matches = "never", relationship = "many-to-one")
 }
 
-# Dataset Filter Functions
+# === Filtering ===
+## Quantile Filtering
+remove_outer_quantiles <- function(df, col, keep_between = c("5%", "95%")) {
+  quantiles <- quantile(df[[quo_name(enquo(col))]], probs = seq(0, 1, 0.01), na.rm = TRUE)
+  df %>%
+    filter({ { col } } > quantiles[keep_between[1]] & { { col } } < quantiles[keep_between[2]])
+}
+
+split_by_quantiles <- function(df, col, quantile_low = "20%", quantile_high = "80%",
+                               target_group_col = "SplitGroup") {
+  quantiles <- quantile(df[[quo_name(enquo(col))]], probs = seq(0, 1, 0.01), na.rm = TRUE)
+  df %>%
+    filter({ { col } } < quantiles[quantile_low] | { { col } } > quantiles[quantile_high]) %>%
+    mutate(!!target_group_col := if_else({ { col } } < quantiles[quantile_low], "Low", "High"))
+}
+
+## Gene / Chromosome Copy Number Filtering
 filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {
   cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01), na.rm = TRUE)
   df %>%
@@ -175,12 +191,19 @@ equalize_distributions <- function(df_reference, df_target, value_col,
   return(df_equal)
 }
 
+# TODO: Move to evaluation
 data_density <- function(df) {
   df %>%
     summarize_all(~sum(!is.na(.x)) / nrow(df)) %>%
     pivot_longer(everything(), names_to = "Column", values_to = "Density") %>%
     arrange(desc(Density))
 }
+
+z_score <- function(values) {
+  return(values - mean(values, na.rm = TRUE) / sd(values, na.rm = TRUE))
+}
+
+
 
 # === (Parallelized) Bootstrapping Methods ===
 

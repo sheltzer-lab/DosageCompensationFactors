@@ -13,8 +13,8 @@ utf8_tau <- enc2utf8("\u03C4")    # τ
 utf8_delta <- enc2utf8("\u0394")  # Δ
 
 # === Define Thresholds ===
-log2fc_threshold <- 1     # Log2FC threshold, Default: 1 (= 2-fold change)
-p_threshold <- 0.05       # p-value threshold, Default: 0.05
+log2fc_threshold <- 0.5     # Log2FC threshold, Default: 1 (= 2-fold change)
+p_threshold <- 0.05         # p-value threshold, Default: 0.05
 
 noisefloor_percentile_threshold <- 0.0001   # Percentile threshold to determine value of noise floor, Default: 0.0001 (0.01%)
 
