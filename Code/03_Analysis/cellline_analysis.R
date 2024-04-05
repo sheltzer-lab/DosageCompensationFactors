@@ -35,20 +35,15 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 # === Analyze Dosage Compensation on Cell Line level ===
 
 analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = CellLine.Name) {
-  mean_pop <- mean(df[[quo_name(enquo(buffering_ratio_col))]], na.rm = TRUE)
-  sd_pop <- sd(df[[quo_name(enquo(buffering_ratio_col))]], na.rm = TRUE)
-
   cellline_buf_avg <- df %>%
     select({ { cellline_col } }, { { buffering_ratio_col } }) %>%
     group_by({ { cellline_col } }) %>%
     summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
               SD = sd({ { buffering_ratio_col } }, na.rm = TRUE)) %>%
-    mutate(Buffering.CellLine.Ratio.ZScore = (Buffering.CellLine.Ratio - mean_pop) / sd_pop,
+    mutate(Buffering.CellLine.Ratio.ZScore = (Buffering.CellLine.Ratio - mean(Buffering.CellLine.Ratio)) / sd(Buffering.CellLine.Ratio),
            Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore))) %>%
     arrange(Rank)
-
-  return(cellline_buf_avg)
 }
 
 # Note: Not required when merging datasets to match genes and cell lines
