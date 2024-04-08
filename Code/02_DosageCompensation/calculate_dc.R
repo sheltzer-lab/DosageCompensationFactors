@@ -190,6 +190,9 @@ expr_buf_p0211 <- expr_p0211 %>%
   write_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'), version = "2.6")
 
 # === Evaluation ===
+expr_buf_procan <- read_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'))
+expr_buf_depmap <- read_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'))
+
 ## Buffering Ratio
 (ggplot() +
   geom_density(aes(x = expr_buf_depmap$Buffering.GeneLevel.Ratio, color = "DepMap")) +
@@ -209,11 +212,94 @@ expr_buf_procan %>%
   aes(x = Buffering.GeneLevel.Ratio, color = as.factor(Debug.ScalingDirection.Gene)) +
   geom_density()
 
+### Distribution of Confidence Score
 # TODO: Facet by Gene vs. ChrArm Level
 ggplot() +
   geom_density(aes(x = expr_buf_depmap$Buffering.GeneLevel.Ratio.Confidence, color = "DepMap")) +
   geom_density(aes(x = expr_buf_procan$Buffering.GeneLevel.Ratio.Confidence, color = "ProCan")) +
   labs(x = "Gene Level Buffering Ratio (Confidence Score)", color = "Dataset")
+
+## Buffering Classes
+### Similarity between Chromosome-Level Avg Log2FC classes and Gene-Level BR classes
+classes_chr_log2fc_avg <- expr_buf_depmap %>%
+  filter(abs(ChromosomeArm.CNA) > 0) %>%
+  mutate(Event = if_else(ChromosomeArm.CNA > 0, "Gain", "Loss")) %>%
+  select(Event, Gene.Symbol, Buffering.ChrArmLevel.Average.Class) %>%
+  drop_na() %>%
+  group_by(Event, Gene.Symbol) %>%
+  summarize(BufferingClass = first(Buffering.ChrArmLevel.Average.Class), .groups = "drop")
+
+classes_gene_br <- expr_buf_depmap %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  select(Event, Gene.Symbol, Buffering.GeneLevel.Class) %>%
+  rename(BufferingClass = Buffering.GeneLevel.Class) %>%
+  drop_na() %>%
+  group_by(Event, Gene.Symbol) %>%
+  count(BufferingClass, name = "Count") %>%
+  slice_max(Count, n = 1) %>%
+  ungroup()
+
+classes_chr_br <- expr_buf_depmap %>%
+  filter(abs(ChromosomeArm.CNA) > 0) %>%
+  mutate(Event = if_else(ChromosomeArm.CNA > 0, "Gain", "Loss")) %>%
+  select(Event, Gene.Symbol, Buffering.ChrArmLevel.Class) %>%
+  rename(BufferingClass = Buffering.ChrArmLevel.Class) %>%
+  drop_na() %>%
+  group_by(Event, Gene.Symbol) %>%
+  count(BufferingClass, name = "Count") %>%
+  slice_max(Count, n = 1) %>%
+  ungroup()
+
+jaccard_index <- function(a, b) {
+    intersection <- length(intersect(a, b))
+    union <- length(a) + length(b) - intersection
+    return(intersection/union)
+}
+
+genes_chr_log2fc_avg <- classes_chr_avg %>%
+  group_by(Event, BufferingClass) %>%
+  summarize(Genes.Chr.Log2FC.Avg = list(Gene.Symbol), .groups = "drop")
+
+genes_chr_br <- classes_chr_br %>%
+  group_by(Event, BufferingClass) %>%
+  summarize(Genes.Chr.BR = list(Gene.Symbol), .groups = "drop")
+
+genes_gene_br <- classes_gene_br %>%
+  group_by(Event, BufferingClass) %>%
+  summarize(Genes.BR = list(Gene.Symbol), .groups = "drop")
+
+genes_chr_log2fc_avg %>%
+  inner_join(genes_gene_br, by = c("Event", "BufferingClass")) %>%
+  group_by(Event, BufferingClass) %>%
+  mutate(JaccardIndex = jaccard_index(unlist(Genes.Chr.Log2FC.Avg), unlist(Genes.BR)))
+
+genes_chr_log2fc_avg %>%
+  inner_join(genes_chr_br, by = c("Event", "BufferingClass")) %>%
+  group_by(Event, BufferingClass) %>%
+  mutate(JaccardIndex = jaccard_index(unlist(Genes.Chr.Log2FC.Avg), unlist(Genes.Chr.BR)))
+
+genes_gene_br %>%
+  inner_join(genes_chr_br, by = c("Event", "BufferingClass")) %>%
+  group_by(Event, BufferingClass) %>%
+  mutate(JaccardIndex = jaccard_index(unlist(Genes.BR), unlist(Genes.Chr.BR)))
+
+### Alternative: Match Frequency of buffering classes per gene, class, and event
+gene_class_match_chr <- expr_buf_depmap %>%
+  filter(abs(ChromosomeArm.CNA) > 0) %>%
+  mutate(Event = if_else(ChromosomeArm.CNA > 0, "Gain", "Loss")) %>%
+  select(Event, Gene.Symbol, Buffering.ChrArmLevel.Average.Class, Buffering.ChrArmLevel.Class) %>%
+  mutate(Match = Buffering.ChrArmLevel.Average.Class == Buffering.ChrArmLevel.Class) %>%
+  group_by(Event, Buffering.ChrArmLevel.Average.Class) %>%
+  add_count(Gene.Symbol, name = "Total") %>%
+  ungroup() %>%
+  group_by(Event, Gene.Symbol, Buffering.ChrArmLevel.Average.Class) %>%
+  summarize(MatchFrequency = sum(Match) / first(Total), .groups = "drop") %>%
+  drop_na()
+
+class_summary <- gene_class_match_chr %>%
+  group_by(Event, Buffering.ChrArmLevel.Average.Class) %>%
+  summarize(AverageMatchFrequency = mean(MatchFrequency), .groups = "drop")
 
 ## Copy Number Baseline
 df_cn_eval <- expr_depmap %>%
