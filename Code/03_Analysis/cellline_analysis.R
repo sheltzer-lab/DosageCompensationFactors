@@ -135,8 +135,6 @@ write.xlsx(cellline_buf_filtered_procan, here(tables_base_dir, "cellline_bufferi
            colNames = TRUE)
 write.xlsx(cellline_buf_filtered_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
            colNames = TRUE)
-write.xlsx(cellline_buf_merged, here(tables_base_dir, "cellline_buffering_z-scores_merged.xlsx"),
-           colNames = TRUE)
 
 write_parquet(cellline_buf_procan, here(output_data_dir, "cellline_buffering_procan.parquet"),
               version = "2.6")
@@ -166,6 +164,13 @@ cellline_buf_waterfall_filtered_procan <- cellline_buf_filtered_procan %>%
 cellline_buf_waterfall_filtered_depmap <- cellline_buf_filtered_depmap %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_depmap.png")
+
+cellline_buf_waterfall_gene_filtered_procan <- cellline_buf_gene_filtered_procan %>%
+  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  save_plot("cellline_buffering_waterfall_gene_filtered_procan.png")
+cellline_buf_waterfall_gene_filtered_depmap <- cellline_buf_gene_filtered_depmap %>%
+  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  save_plot("cellline_buffering_waterfall_gene_filtered_depmap.png")
 
 ### Show cell line intersection betwen datasets in Venn diagram
 celllines <- list(ProCan = (expr_buf_procan_filtered %>% distinct(CellLine.Name))$CellLine.Name,
@@ -250,12 +255,12 @@ cat(capture.output(cellline_spearman_gene), file = here(reports_dir, "cellline_b
 
 # === Create aggregated Cell Line Ranking ===
 
-cellline_buf_rank <- cellline_buf_filtered_procan %>%
-  bind_rows(cellline_buf_filtered_depmap) %>%
-  mean_norm_rank(Rank, Dataset, CellLine.Name)
+cellline_buf_rank <- cellline_buf_gene_filtered_procan %>%
+  bind_rows(cellline_buf_gene_filtered_depmap) %>%
+  mean_norm_rank(Buffering.CellLine.Ratio, Dataset, CellLine.Name)
 
-cellline_buf_mean <- cellline_buf_filtered_procan %>%
-  bind_rows(cellline_buf_filtered_depmap) %>%
+cellline_buf_mean <- cellline_buf_gene_filtered_procan %>%
+  bind_rows(cellline_buf_gene_filtered_depmap) %>%
   standardized_mean(Buffering.CellLine.Ratio, Dataset, CellLine.Name)
 
 cellline_buf_agg <- cellline_buf_rank %>%
@@ -307,9 +312,9 @@ plot_agg_bot <- cellline_buf_agg %>%
   save_plot("cellline_buffering_aggregated_bot.png")
 
 # === Combine Plots for publishing ===
-plot_bracket <- plot_corr_bracket(cellline_pearson_filtered)
-plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_filtered_procan,
-                                  cellline_buf_waterfall_filtered_depmap + ylab(NULL),
+plot_bracket <- plot_corr_bracket(cellline_pearson_gene)
+plot_stack1 <- cowplot::plot_grid(cellline_buf_waterfall_gene_filtered_procan,
+                                  cellline_buf_waterfall_gene_filtered_depmap + ylab(NULL),
                                   nrow = 1, ncol = 2, align = "hv", axis = "tblr", labels = c("ProCan", "DepMap"),
                                   label_y = 0.98, label_x = 0.1, rel_widths = c(1, 1))
 plot_stack2 <- cowplot::plot_grid(plot_bracket, plot_stack1,
@@ -325,15 +330,15 @@ plot_publish <- cowplot::plot_grid(plot_stack2, plot_agg,
                                   nrow = 1, ncol = 2, labels = c("A", "B"),
                                   rel_widths = c(1.618, 1))
 
-cairo_pdf(here(plots_dir, "cellline_buffering_filtered_comparison.pdf"), width = 12)
+cairo_pdf(here(plots_dir, "cellline_buffering_gene_filtered_comparison.pdf"), width = 12)
 plot_publish
 dev.off()
 
 ## Poster
-cairo_pdf(here(plots_dir, "cellline_buffering_filtered_procan_poster.pdf"))
-cellline_buf_waterfall_filtered_procan <- cellline_buf_filtered_procan %>%
+cairo_pdf(here(plots_dir, "cellline_buffering_gene_filtered_procan_poster.pdf"))
+cellline_buf_waterfall_gene_filtered_procan <- cellline_buf_gene_filtered_procan %>%
   waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name, font_size = 6)
-cellline_buf_waterfall_filtered_procan +
+cellline_buf_waterfall_gene_filtered_procan +
   ylab("Mean Buffering Ratio (z-score)") +
   theme_light(base_size = 20)
 dev.off()

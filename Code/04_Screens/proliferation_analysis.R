@@ -21,7 +21,7 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet"))
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
+cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)

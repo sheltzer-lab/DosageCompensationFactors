@@ -20,8 +20,8 @@ reports_dir <- reports_base_dir
 dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 
-cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
-cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
+cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)

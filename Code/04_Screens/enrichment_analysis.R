@@ -29,7 +29,7 @@ dir.create(reports_dir, recursive = TRUE)
 # === Load Datasets ===
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
+cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 
 # === Identify proteins with significant expression differemces between cell lines with high and low buffering ===
 

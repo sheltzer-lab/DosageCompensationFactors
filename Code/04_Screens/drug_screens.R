@@ -25,8 +25,8 @@ dir.create(reports_dir, recursive = TRUE)
 # === Load Datasets ===
 drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet"))
 drug_meta <- read_parquet(here(output_data_dir, "drug_metadata.parquet"))
-cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
-cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
+cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
