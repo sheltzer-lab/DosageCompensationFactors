@@ -75,6 +75,7 @@ calculate_median_baseline <- function(df, gene_col, value_col, target_colname = 
     ungroup()
 }
 
+# TODO: Rewrite to return vector and allow usage within dplyr::mutate()
 calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col) {
   variance <- df %>%
     select({ { gene_col } }, { { chr_arm_cna_col } }, { { expr_col } }) %>%
@@ -132,16 +133,31 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
            Buffering.ChrArmLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
                                                          ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Ratio = buffering_ratio(2^Protein.Expression.Baseline.Unweighted, 2^Protein.Expression.Average,
-                                                                 2L, 2L + ChromosomeArm.CNA)) %>%
-    mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio),
+                                                                 2L, 2L + ChromosomeArm.CNA),
+           Buffering.GeneLevel.Ratio.Confidence = buffering_ratio_confidence(Gene.CopyNumber.Baseline, Gene.CopyNumber,
+                                                                             `Protein Neutral CV`),
+           Buffering.ChrArmLevel.Ratio.Confidence = buffering_ratio_confidence(ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber,
+                                                                               `Protein Neutral CV`)) %>%
+    mutate(Buffering.GeneLevel.Class = buffering_class(Buffering.GeneLevel.Ratio,
+                                                       2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
+                                                       Gene.CopyNumber.Baseline, Gene.CopyNumber),
            Buffering.GeneLevel.SF.Class = buffering_class_sf(Buffering.GeneLevel.SF),
-           Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio),
+           Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio,
+                                                         2^Protein.Expression.Baseline, 2^Protein.Expression.Normalized,
+                                                         ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Log2FC.Class = buffering_class_log2fc(Log2FC,
                                                                        cn_base = ChromosomeArm.CopyNumber.Baseline,
                                                                        cn_var = ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
                                                                         cn_base = 2L,
-                                                                        cn_var = 2L + ChromosomeArm.CNA))
+                                                                        cn_var = 2L + ChromosomeArm.CNA)) %>%
+    # TODO: Move to evaluation part
+    mutate(Debug.ScalingDirection.Gene = sign(2^Protein.Expression.Normalized - 2^Protein.Expression.Baseline) *
+             sign(Gene.CopyNumber - Gene.CopyNumber.Baseline),
+           Debug.ScalingDirection.Chromosome = sign(2^Protein.Expression.Normalized - 2^Protein.Expression.Baseline) *
+             sign(ChromosomeArm.CopyNumber - ChromosomeArm.CopyNumber.Baseline),
+           Log2FC.CopyNumber.Gene = log2(Gene.CopyNumber) - log2(Gene.CopyNumber.Baseline),
+           Log2FC.CopyNumber.Chromosome = log2(ChromosomeArm.CopyNumber) - log2(ChromosomeArm.CopyNumber.Baseline))
 }
 
 # === Process & Write datasets to disk ===
@@ -180,6 +196,24 @@ expr_buf_p0211 <- expr_p0211 %>%
   geom_density(aes(x = expr_buf_procan$Buffering.GeneLevel.Ratio, color = "ProCan")) +
   labs(x = "Gene Level Buffering Ratio", color = "Dataset")) %>%
   save_plot("buffering_ratio_distribution.png")
+
+# TODO: Visualize for DepMap
+expr_buf_procan %>%
+  mutate(AntiScaling = Debug.ScalingDirection.Gene < 0) %>%
+  ggplot() +
+  aes(x = Buffering.GeneLevel.Ratio, color = AntiScaling) +
+  geom_density()
+
+expr_buf_procan %>%
+  ggplot() +
+  aes(x = Buffering.GeneLevel.Ratio, color = as.factor(Debug.ScalingDirection.Gene)) +
+  geom_density()
+
+# TODO: Facet by Gene vs. ChrArm Level
+ggplot() +
+  geom_density(aes(x = expr_buf_depmap$Buffering.GeneLevel.Ratio.Confidence, color = "DepMap")) +
+  geom_density(aes(x = expr_buf_procan$Buffering.GeneLevel.Ratio.Confidence, color = "ProCan")) +
+  labs(x = "Gene Level Buffering Ratio (Confidence Score)", color = "Dataset")
 
 ## Copy Number Baseline
 df_cn_eval <- expr_depmap %>%

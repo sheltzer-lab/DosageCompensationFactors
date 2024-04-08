@@ -7,6 +7,7 @@ library(ggplot2)
 buffering_ratio <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
   br <- log2(cn_obs / cn_base) - log2(expr_obs / expr_base)
   br <- ifelse(cn_obs > cn_base, br, -br)
+  br <- ifelse(cn_obs == cn_base, NA, br)
   ifelse(is.finite(br), br, NA)
 }
 
@@ -19,7 +20,7 @@ scaling_factor <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
 # Expr Log2FC and CN Log2FC are zero if there is no change in expression / copy number
 scaling_ratio <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3, f = log2) {
   sr <- f(expr_obs / expr_base) / f(cn_obs / cn_base)
-  ifelse(is.finite(sr), sr, NA)
+  ifelse(is.finite(sr) && sr >= 0, sr, NA)
 }
 
 # Only quantifies buffering against scaling - anti-scaling not quantified, as log2 of negative numbers is undefined
@@ -33,10 +34,14 @@ log_buffering_score <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
 ## Buffered:      Change in protein expression is less than the change in DNA copy number
 ## Anti-Scaling:  Change in protein expression is opposite to the change in DNA copy number
 
-buffering_class <- function(buffering_ratio) {
-  ifelse(buffering_ratio > 0.6849625, "Anti-Scaling",        # Buffering of trisomy expression below disomy level
-         ifelse(buffering_ratio > 0.3349625, "Buffered",    # Less expression in trisomy than expected
-                "Scaling"))                                  # Expression level as expected or higher
+buffering_class <- function(buffering_ratio, expr_base, expr_obs, cn_base, cn_obs) {
+  buffering_cutoff <- 0.3349625
+  scaling_direction <- sign(expr_obs - expr_base) * sign(cn_obs - cn_base)
+
+  ifelse(buffering_ratio > buffering_cutoff,
+         ifelse(scaling_direction < 0, "Anti-Scaling",
+                "Buffered"),
+         "Scaling")
 }
 
 buffering_class_sf <- function(scaling_factor) {
@@ -55,18 +60,25 @@ buffering_class_lbs <- function (log_buffering_score) {
   ifelse(log_buffering_score > 0.3, "Buffered", "Scaling")
 }
 
-# Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) on chromosome arm gain (inverted for arm loss):
+# Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) for chromosome arm gain (inverted for arm loss):
 # Scaling:        0.25 < Log2FC
 # Buffered:      -0.1  < Log2FC <  0.25
 # Anti-Scaling:          Log2FC < -0.1
 buffering_class_log2fc <- function (log2fc, cn_base = 2, cn_var = 3) {
   ifelse(cn_var > cn_base,
-         ifelse(log2fc > 0.25, "Scaling",
-                ifelse(log2fc > -0.1, "Buffered",
-                       "Anti-Scaling")),
+         ifelse(log2fc > 0.25, "Scaling",             # Expression level as expected or higher
+                ifelse(log2fc > -0.1, "Buffered",     # Less expression in trisomy than expected
+                       "Anti-Scaling")),               # Buffering of trisomy expression below disomy level
          ifelse(log2fc < -0.25, "Scaling",
                 ifelse(log2fc < 0.1, "Buffered",
                        "Anti-Scaling")))
+}
+
+# Confidence Scores
+buffering_ratio_confidence <- function(cn_base, cn_obs, expr_neutral_cv) {
+  conf <- abs(log2(cn_obs / cn_base)) * (1 / (1 + expr_neutral_cv))
+  conf <- ifelse(cn_obs == cn_base, NA, conf)
+  ifelse(is.finite(conf), conf, NA)
 }
 
 # === Example Code ===
