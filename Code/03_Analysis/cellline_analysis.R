@@ -34,6 +34,7 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 
 # === Analyze Dosage Compensation on Cell Line level ===
 
+# TODO: Calculate confidence score based on SD, Observations & Gene-Level Confidence
 analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = CellLine.Name) {
   cellline_buf_avg <- df %>%
     select({ { cellline_col } }, { { buffering_ratio_col } }) %>%
@@ -41,6 +42,7 @@ analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = C
     summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
               SD = sd({ { buffering_ratio_col } }, na.rm = TRUE)) %>%
+    filter(Observations > 10) %>%
     mutate(Buffering.CellLine.Ratio.ZScore = z_score(Buffering.CellLine.Ratio),
            Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore))) %>%
     arrange(Rank)
@@ -68,12 +70,14 @@ remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
 expr_buf_procan_filtered <- expr_buf_procan %>%
   filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
+  filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(ProCan = "Buffering.GeneLevel.Ratio")
 expr_buf_depmap_filtered <- expr_buf_depmap %>%
   filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
+  filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(DepMap = "Buffering.GeneLevel.Ratio")
@@ -86,10 +90,10 @@ common_genes <- intersect(unique(expr_buf_procan$Gene.Symbol),
                           unique(expr_buf_depmap$Gene.Symbol))
 
 ## Calculate Cell Line level Dosage Compensation
-cellline_buf_procan <- expr_buf_procan %>%
-  analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
-cellline_buf_depmap <- expr_buf_depmap %>%
-  analyze_cellline_buffering(Buffering.GeneLevel.Ratio)
+cellline_buf_procan <- expr_buf_procan_filtered %>%
+  analyze_cellline_buffering(ProCan)
+cellline_buf_depmap <- expr_buf_depmap_filtered %>%
+  analyze_cellline_buffering(DepMap)
 
 cellline_buf_gene_filtered_procan <- expr_buf_procan_filtered %>%
   filter(Gene.Symbol %in% common_genes) %>%

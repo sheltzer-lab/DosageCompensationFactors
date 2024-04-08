@@ -200,7 +200,7 @@ data_density <- function(df) {
 }
 
 z_score <- function(values) {
-  return(values - mean(values, na.rm = TRUE) / sd(values, na.rm = TRUE))
+  return((values - mean(values, na.rm = TRUE)) / sd(values, na.rm = TRUE))
 }
 
 
