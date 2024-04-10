@@ -34,30 +34,33 @@ log_buffering_score <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
 ## Buffered:      Change in protein expression is less than the change in DNA copy number
 ## Anti-Scaling:  Change in protein expression is opposite to the change in DNA copy number
 
+br_cutoffs <- list(Buffered = 0.3349625, AntiScaling = 0.3349625)
 buffering_class <- function(buffering_ratio, expr_base, expr_obs, cn_base, cn_obs) {
-  buffering_cutoff <- 0.3349625
   scaling_direction <- sign(expr_obs - expr_base) * sign(cn_obs - cn_base)
 
-  ifelse(buffering_ratio > buffering_cutoff,
+  ifelse(buffering_ratio > br_cutoffs$Buffered,
          ifelse(scaling_direction < 0, "Anti-Scaling",
                 "Buffered"),
          "Scaling")
 }
 
+sf_cutoffs <- list(Scaling = 0.3784142, Buffered = -0.133934)
 buffering_class_sf <- function(scaling_factor) {
-  ifelse(scaling_factor > 0.3784142, "Scaling",
-         ifelse(scaling_factor > -0.133934, "Buffered",
+  ifelse(scaling_factor > sf_cutoffs$Scaling, "Scaling",
+         ifelse(scaling_factor > sf_cutoffs$Buffered, "Buffered",
                 "Anti-Scaling"))
 }
 
+sr_cutoffs <- list(Scaling = 0.8, Buffered = -0.2)
 buffering_class_sr <- function(scaling_ratio) {
-  ifelse(scaling_ratio > 0.8, "Scaling",
-         ifelse(scaling_ratio > -0.2, "Buffered",
+  ifelse(scaling_ratio > sr_cutoffs$Scaling, "Scaling",
+         ifelse(scaling_ratio > sr_cutoffs$Buffered, "Buffered",
                 "Anti-Scaling"))
 }
 
+lbs_cutoffs <- list(Buffered = 0.3)
 buffering_class_lbs <- function (log_buffering_score) {
-  ifelse(log_buffering_score > 0.3, "Buffered", "Scaling")
+  ifelse(log_buffering_score > lbs_cutoffs$Buffered, "Buffered", "Scaling")
 }
 
 # Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) for chromosome arm gain (inverted for arm loss):

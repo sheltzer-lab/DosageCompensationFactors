@@ -122,7 +122,9 @@ dataset_correlation <- function(df, dataset_col, value_col, comparison_name, met
            DatasetB = 5) %>%
     group_by(CellLine.CustomId) %>%
     summarize(Correlation = cor(DatasetA, DatasetB,
-                                method = method, use = "na.or.complete")) %>%
+                                method = method, use = "na.or.complete"),
+              Observations = min(c(sum(!is.na(DatasetA)), sum(!is.na(DatasetB))))
+    ) %>%
     mutate(Comparison = comparison_name)
 }
 
