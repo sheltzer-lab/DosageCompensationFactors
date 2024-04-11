@@ -22,3 +22,13 @@ write_report <- function(report, report_file) {
              report_list2lines(report))
   writeLines(lines, con = report_file, sep = "")
 }
+
+df2reportlist <- function(df, collapse_cols = "\t\t") {
+  result <- df %>%
+    as.list() %>%
+    transpose() %>%
+    lapply(\(lst) paste(lst, collapse = collapse_cols))
+  result <- append(result, paste(colnames(df), collapse = collapse_cols), after = 0)
+  names(result) <- c(0, rownames(df))   # Using "Columns" as label of first row may cause row to shift
+  return(result)
+}

@@ -7,6 +7,7 @@ library(readxl)
 library(assertr)
 library(ggplot2)
 library(limma)
+library(purrr)
 
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -158,20 +159,17 @@ genes_gene_br <- classes_gene_br %>%
   group_by(Event, BufferingClass) %>%
   summarize(Genes.BR = list(Gene.Symbol), .groups = "drop")
 
-genes_chr_log2fc_avg %>%
-  inner_join(genes_gene_br, by = c("Event", "BufferingClass")) %>%
+genes_per_class <- list(genes_chr_log2fc_avg, genes_chr_br, genes_gene_br) %>%
+  purrr::reduce(inner_join, by = c("Event", "BufferingClass"), relationship = "one-to-one") %>%
   group_by(Event, BufferingClass) %>%
-  mutate(JaccardIndex = jaccard_index(unlist(Genes.Chr.Log2FC.Avg), unlist(Genes.BR)))
+  mutate(JaccardSimilarity.ChrAvgLog2FC.GeneBR = jaccard_index(unlist(Genes.Chr.Log2FC.Avg), unlist(Genes.BR)),
+         JaccardSimilarity.ChrLog2FC.ChrBR = jaccard_index(unlist(Genes.Chr.Log2FC.Avg), unlist(Genes.Chr.BR)),
+         JaccardSimilarity.ChrBR.GeneBR = jaccard_index(unlist(Genes.Chr.BR), unlist(Genes.BR))) %>%
+  ungroup()
 
-genes_chr_log2fc_avg %>%
-  inner_join(genes_chr_br, by = c("Event", "BufferingClass")) %>%
-  group_by(Event, BufferingClass) %>%
-  mutate(JaccardIndex = jaccard_index(unlist(Genes.Chr.Log2FC.Avg), unlist(Genes.Chr.BR)))
-
-genes_gene_br %>%
-  inner_join(genes_chr_br, by = c("Event", "BufferingClass")) %>%
-  group_by(Event, BufferingClass) %>%
-  mutate(JaccardIndex = jaccard_index(unlist(Genes.BR), unlist(Genes.Chr.BR)))
+dc_report$ClassSimilarities <- genes_per_class %>%
+  select(Event, BufferingClass, starts_with("Jaccard")) %>%
+  df2reportlist()
 
 ## Alternative: Match Frequency of buffering classes per gene, class, and event
 gene_class_match_chr <- expr_buf_depmap %>%
@@ -190,6 +188,62 @@ class_summary <- gene_class_match_chr %>%
   group_by(Event, Buffering.ChrArmLevel.Average.Class) %>%
   summarize(AverageMatchFrequency = mean(MatchFrequency), .groups = "drop")
 
+dc_report$ClassMatchFrequency <- df2reportlist(class_summary)
+
+# Check if buffered proteins are significantly downregulated (upon CN gain) in comparison to their scaling counterparts
+# Idea: Sets of genes classified as buffered should have lower expression (if CN gained) and should be close to
+# baseline expression (-> Anti-Scaling genes classified as buffering may drag expression down artificially)
+# Goal: Evaluate thresholds
+
+buffered_expression_chr_gain <- expr_buf_depmap %>%
+  select(Gene.Symbol, ChromosomeArm.CNA, Buffering.ChrArmLevel.Class, Protein.Expression.Normalized) %>%
+  filter(Buffering.ChrArmLevel.Class != "Anti-Scaling") %>%
+  filter(ChromosomeArm.CNA > 0) %>%
+  differential_expression(Gene.Symbol, Buffering.ChrArmLevel.Class,
+                          Protein.Expression.Normalized, groups = c("Scaling", "Buffered"))
+
+signif_buffered_chr_gain <- buffered_expression_chr_gain %>%
+  filter(Log2FC < 0) %>%
+  filter(TTest.p.adj < p_threshold) %>%
+  nrow() %>%
+  (\(x) x/nrow(buffered_expression_chr_gain))
+
+buffered_expression_chr_loss <- expr_buf_depmap %>%
+  select(Gene.Symbol, ChromosomeArm.CNA, Buffering.ChrArmLevel.Class, Protein.Expression.Normalized) %>%
+  filter(Buffering.ChrArmLevel.Class != "Anti-Scaling") %>%
+  filter(ChromosomeArm.CNA < 0) %>%
+  differential_expression(Gene.Symbol, Buffering.ChrArmLevel.Class,
+                          Protein.Expression.Normalized, groups = c("Scaling", "Buffered"))
+
+signif_buffered_chr_loss <- buffered_expression_chr_loss %>%
+  filter(Log2FC > 0) %>%
+  filter(TTest.p.adj < p_threshold) %>%
+  nrow() %>%
+  (\(x) x/nrow(buffered_expression_chr_loss))
+
+dc_report$SignifBufferingShare <- list(ChrGain = signif_buffered_chr_gain,
+                                       ChrLoss = signif_buffered_chr_loss)
+
+## Expression Distance to Baseline (set of genes classified as buffered should minimize this distance)
+expr_baseline_dist <- expr_buf_depmap %>%
+  select(Gene.Symbol, ChromosomeArm.CNA, Buffering.ChrArmLevel.Class,
+         Protein.Expression.Normalized, Protein.Expression.Baseline) %>%
+  filter(Buffering.ChrArmLevel.Class == "Buffered") %>%
+  filter(ChromosomeArm.CNA != 0) %>%
+  group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
+  summarize(Log2FC = mean(Protein.Expression.Normalized, na.rm = TRUE) -
+    mean(Protein.Expression.Baseline, na.rm = TRUE), .groups = "drop")
+
+exp_baseline_dist_avg <- expr_baseline_dist %>%
+  group_by(ChromosomeArm.CNA) %>%
+  summarize(AvgLog2FC = mean(Log2FC))
+
+antiscaling_as_buffered <- expr_baseline_dist %>%
+  filter(sign(ChromosomeArm.CNA) != sign(Log2FC))
+
+dc_report$Buffered_Expression2Baseline_AverageDistance <- df2reportlist(exp_baseline_dist_avg)
+dc_report$Buffered_Expression2Baseline_AntiScaling <- df2reportlist(antiscaling_as_buffered)
+
 # Baseline Calculation
 num_baseline_samples <- expr_buf_procan %>%
   mutate(RoundedPloidy = round(CellLine.Ploidy)) %>%
@@ -199,7 +253,7 @@ num_baseline_samples <- expr_buf_procan %>%
   summarize(Observations = sum(is.na(Protein.Expression.Normalized)))
 
 # TODO: Check if min number of observations is ensured by filter_genes()
-fivenum(num_baseline_samples$Observations)
+dc_report$AvailableBaselineObservations <- quantile(num_baseline_samples$Observations)
 
 # Copy Number Baseline
 df_cn_eval <- expr_depmap %>%
@@ -208,26 +262,32 @@ df_cn_eval <- expr_depmap %>%
              na_matches = "never", relationship = "many-to-one") %>%
   select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber, CellLine.Ploidy,
          ChromosomeArm.CNA, CellLine.AneuploidyScore) %>%
+  mutate(PloidyDistance = abs(2 - CellLine.Ploidy),
+         CombinedDistance = 0.3 * PloidyDistance / max(PloidyDistance, na.rm = TRUE) +
+           0.7 * CellLine.AneuploidyScore / max(CellLine.AneuploidyScore, na.rm = TRUE)) %>%
   calculate_median_baseline(Gene.Symbol, Gene.CopyNumber, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
                      distance_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral.AneuploidyScore",
                      weighted = TRUE) %>%
-  mutate(PloidyDistance = abs(2 - CellLine.Ploidy)) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
                      distance_col = PloidyDistance, target_colname = "WeightedNeutral.PloidyDistance",
+                     weighted = TRUE) %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
+                     distance_col = CombinedDistance, target_colname = "WeightedNeutral.CombinedDistance",
                      weighted = TRUE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
                      distance_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber, summ_func = median,
                      distance_col = CellLine.AneuploidyScore, target_colname = "MedianNeutral", weighted = FALSE) %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral, MedianNeutral)
+  select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, WeightedNeutral.CombinedDistance,
+         MeanNeutral, MedianNeutral)
 
 dc_report$corr_CN_BaseLine_weightedAS_MedianAll <- cor.test(df_cn_eval$WeightedNeutral.AneuploidyScore,
                                                             df_cn_eval$MedianAll, method = "spearman")
 
 cn_baseline_plot <- df_cn_eval %>%
-  pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance",
+  pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "WeightedNeutral.CombinedDistance",
                  "MeanNeutral", "MedianNeutral"),
                names_to = "Methods",
                values_to = "Gene.CopyNumber.Baseline") %>%
@@ -245,26 +305,33 @@ df_expr_eval <- expr_depmap %>%
              na_matches = "never", relationship = "many-to-one") %>%
   select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA, CellLine.Ploidy,
          CellLine.AneuploidyScore, Protein.Expression.Normalized) %>%
+  mutate(PloidyDistance = abs(2 - CellLine.Ploidy),
+         CombinedDistance = 0.3 * PloidyDistance / max(PloidyDistance, na.rm = TRUE) +
+           0.7 * CellLine.AneuploidyScore / max(CellLine.AneuploidyScore, na.rm = TRUE)) %>%
   calculate_median_baseline(Gene.Symbol, Protein.Expression.Normalized, target_colname = "MedianAll") %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                      distance_col = CellLine.AneuploidyScore, target_colname = "WeightedNeutral.AneuploidyScore",
                      weighted = TRUE) %>%
-  mutate(PloidyDistance = abs(2 - CellLine.Ploidy)) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                      distance_col = PloidyDistance, target_colname = "WeightedNeutral.PloidyDistance",
+                     weighted = TRUE) %>%
+  calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
+                     distance_col = CombinedDistance, target_colname = "WeightedNeutral.CombinedDistance",
                      weighted = TRUE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                      distance_col = CellLine.AneuploidyScore, target_colname = "MeanNeutral", weighted = FALSE) %>%
   calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, summ_func = median,
                      distance_col = CellLine.AneuploidyScore, target_colname = "MedianNeutral", weighted = FALSE) %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
-  select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, MeanNeutral, MedianNeutral)
+  select(Gene.Symbol, MedianAll, WeightedNeutral.AneuploidyScore, WeightedNeutral.PloidyDistance, WeightedNeutral.CombinedDistance,
+         MeanNeutral, MedianNeutral)
 
 dc_report$corr_Expr_Baseline_weightedAS_MeanNeutral <- cor.test(df_expr_eval$WeightedNeutral.AneuploidyScore,
                                                                 df_expr_eval$MeanNeutral, method = "spearman")
 
 expr_baseline_plot <- df_expr_eval %>%
-  pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "MeanNeutral", "MedianNeutral"),
+  pivot_longer(c("MedianAll", "WeightedNeutral.AneuploidyScore", "WeightedNeutral.PloidyDistance", "WeightedNeutral.CombinedDistance",
+                 "MeanNeutral", "MedianNeutral"),
                names_to = "Methods",
                values_to = "Protein.Expression.Baseline") %>%
   ggplot() +

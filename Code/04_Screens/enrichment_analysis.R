@@ -33,26 +33,6 @@ cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_ge
 
 # === Identify proteins with significant expression differemces between cell lines with high and low buffering ===
 
-differential_expression <- function(df, id_col, group_col, expr_col, paired = FALSE, p.adj.method = "BH") {
-  df %>%
-    drop_na() %>%
-    group_by({ { id_col } }) %>%
-    add_count({ { group_col } }) %>%                    # Count observations per group and protein
-    filter(n > 2) %>%                                   # Remove proteins with insufficient observations
-    filter(length(unique({ { group_col } })) > 1) %>%   # Remove leftover groups
-    summarise(
-      GroupA = unique({ { group_col } })[1],
-      GroupB = unique({ { group_col } })[2],
-      Mean_GroupA = mean({ { expr_col } }[{ { group_col } } == unique({ { group_col } })[1]]),
-      Mean_GroupB = mean({ { expr_col } }[{ { group_col } } == unique({ { group_col } })[2]]),
-      Log2FC = Mean_GroupB - Mean_GroupA,
-      TTest.p = t.test(as.formula(paste(quo_name(enquo(expr_col)), "~", quo_name(enquo(group_col)))),
-                       paired = paired)$p.value,
-      .groups = 'drop'
-    ) %>%
-    mutate(TTest.p.adj = p.adjust(TTest.p, method = p.adj.method))
-}
-
 diff_exp <- cellline_buf_procan %>%
   split_by_quantiles(Buffering.CellLine.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
   inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
