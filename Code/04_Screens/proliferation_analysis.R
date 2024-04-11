@@ -15,14 +15,15 @@ depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")
 plots_dir <- here(plots_base_dir, "Screens", "Proliferation")
 output_data_dir <- output_data_base_dir
-reports_dir <- reports_base_dir
+reports_dir <- here(reports_base_dir, "Proliferation")
 
 dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
+dir.create(reports_dir, recursive = TRUE)
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet"))
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
-cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
+cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 # Load copy number dataset to obtain metadata
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
@@ -58,7 +59,7 @@ create_plots <- function (df_prolif, color_col = NULL, dataset_name = NULL, cond
     save_plot(paste0("dosage_compensation_proliferation_", filename_suffix, ".png"))
 
   ## Correlation Report
-  report_file <- here(reports_dir, paste0("dosage_compensation_proliferation_correlation", filename_suffix, ".txt"))
+  report_file <- here(reports_dir, paste0("dosage_compensation_proliferation_correlation_", filename_suffix, ".txt"))
   dc_prolif_corr <- cor.test(x = df_prolif$Buffering.CellLine.Ratio, y = df_prolif$CellLine.GrowthRatio,
                              method = "spearman")
   dc_prolif_corr %>%
@@ -124,9 +125,10 @@ plot_publish
 dev.off()
 
 ## Poster
-df_prolif <- merge_datasets(cellline_buf_procan, copy_number, df_growth)
+df_prolif <- merge_datasets(cellline_buf_procan, copy_number, df_growth) %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
+
 growth_poster <- (df_prolif %>%
-  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
   scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
                           point_size = 2, label_coords = c(0, 0), color_col = WGD,
                           title_prefix = "ProCan")) +
@@ -140,8 +142,8 @@ growth_poster <- (df_prolif %>%
         legend.title = element_blank(),
         legend.background = element_blank())
 
-growth_poster_nowgd <- (df_prolif_nowgd %>%
-  mutate(WGD = "Non-WGD") %>%
+growth_poster_nowgd <- (df_prolif %>%
+  filter(WGD == "Non-WGD") %>%
   scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
                           point_size = 2, label_coords = c(0, 0), color_col = WGD,
                           title_prefix = "ProCan, Non-WGD")) +

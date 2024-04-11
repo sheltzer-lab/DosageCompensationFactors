@@ -38,6 +38,20 @@ copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
 dc_factors_ids <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet")) %>%
   select(Protein.Uniprot.Accession, Gene.Symbol)
 
+
+add_debug_data <- function(df_dc) {
+    df_dc %>%
+      mutate(Debug.ScalingDirection.Gene = sign(2^Protein.Expression.Normalized - 2^Protein.Expression.Baseline) *
+        sign(Gene.CopyNumber - Gene.CopyNumber.Baseline),
+             Debug.ScalingDirection.Chromosome = sign(2^Protein.Expression.Normalized - 2^Protein.Expression.Baseline) *
+               sign(ChromosomeArm.CopyNumber - ChromosomeArm.CopyNumber.Baseline),
+             Log2FC.CopyNumber.Gene = log2(Gene.CopyNumber) - log2(Gene.CopyNumber.Baseline),
+             Log2FC.CopyNumber.Chromosome = log2(ChromosomeArm.CopyNumber) - log2(ChromosomeArm.CopyNumber.Baseline))
+}
+
+expr_buf_procan <- add_debug_data(expr_buf_procan)
+expr_buf_depmap <- add_debug_data(expr_buf_depmap)
+
 # Buffering Ratio
 (ggplot() +
   geom_density(aes(x = expr_buf_depmap$Buffering.GeneLevel.Ratio, color = "DepMap")) +

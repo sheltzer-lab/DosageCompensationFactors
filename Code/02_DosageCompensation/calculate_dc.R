@@ -61,7 +61,7 @@ filter_genes <- function(df, gene_col, chr_arm_cna_col, expr_col, min_samples = 
     group_by({ { gene_col } }, { { chr_arm_cna_col } }) %>%
     mutate(Samples = sum(!is.na({ { expr_col } }))) %>%
     group_by({ { gene_col } }) %>%
-    filter(all(Samples >= min_samples)) %>%
+    filter(all(Samples >= min_samples)) %>% # TODO: verify that this works (see diff exp code)
     select(-Samples) %>%
     ungroup()
 
@@ -77,14 +77,18 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
     # Note: Chromosome arm CNA based on basal (rounded) ploidy of cell line
     mutate(ChromosomeArm.CopyNumber.Baseline = round(CellLine.Ploidy),
            ChromosomeArm.CopyNumber = round(CellLine.Ploidy) + ChromosomeArm.CNA) %>%
+    mutate(PloidyDistance = abs(2 - CellLine.Ploidy),
+           CombinedDistance = 0.3 * PloidyDistance / max(PloidyDistance, na.rm = TRUE) +
+             0.7 * CellLine.AneuploidyScore / max(CellLine.AneuploidyScore, na.rm = TRUE)) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Gene.CopyNumber,
-                       distance_col = CellLine.AneuploidyScore, target_colname = "Gene.CopyNumber.Baseline",
+                       distance_col = CombinedDistance, target_colname = "Gene.CopyNumber.Baseline",
                        weighted = FALSE, summ_func = median) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                       distance_col = CellLine.AneuploidyScore, target_colname = "Protein.Expression.Baseline",
-                       weighted = FALSE, summ_func = median) %>%
+                       distance_col = CombinedDistance, target_colname = "Protein.Expression.Baseline",
+                       weighted = TRUE, summ_func = mean) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
-                       target_colname = "Protein.Expression.Baseline.Unweighted", weighted = FALSE) %>%
+                       distance_col = CombinedDistance, target_colname = "Protein.Expression.Baseline.Unweighted",
+                       weighted = FALSE, summ_func = mean) %>%
     calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
     group_by(Gene.Symbol, ChromosomeArm.CNA) %>%
     mutate(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
@@ -116,14 +120,7 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
                                                                        cn_var = ChromosomeArm.CopyNumber),
            Buffering.ChrArmLevel.Average.Class = buffering_class_log2fc(Log2FC.Average,
                                                                         cn_base = 2L,
-                                                                        cn_var = 2L + ChromosomeArm.CNA)) %>%
-    # TODO: Move to evaluation part
-    mutate(Debug.ScalingDirection.Gene = sign(2^Protein.Expression.Normalized - 2^Protein.Expression.Baseline) *
-             sign(Gene.CopyNumber - Gene.CopyNumber.Baseline),
-           Debug.ScalingDirection.Chromosome = sign(2^Protein.Expression.Normalized - 2^Protein.Expression.Baseline) *
-             sign(ChromosomeArm.CopyNumber - ChromosomeArm.CopyNumber.Baseline),
-           Log2FC.CopyNumber.Gene = log2(Gene.CopyNumber) - log2(Gene.CopyNumber.Baseline),
-           Log2FC.CopyNumber.Chromosome = log2(ChromosomeArm.CopyNumber) - log2(ChromosomeArm.CopyNumber.Baseline))
+                                                                        cn_var = 2L + ChromosomeArm.CNA))
 }
 
 # === Process & Write datasets to disk ===

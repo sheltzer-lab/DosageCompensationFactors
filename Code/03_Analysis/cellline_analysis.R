@@ -71,6 +71,7 @@ expr_buf_procan_filtered <- expr_buf_procan %>%
   filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
   filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(ProCan = "Buffering.GeneLevel.Ratio")
@@ -78,6 +79,7 @@ expr_buf_depmap_filtered <- expr_buf_depmap %>%
   filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
   filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(DepMap = "Buffering.GeneLevel.Ratio")
