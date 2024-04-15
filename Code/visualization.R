@@ -572,6 +572,56 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
   return(plot)
 }
 
+inverse_distance_weighting <- function(distances, values, p = 1) {
+  if (any(distances == 0)) {
+    return(values[distances == 0][1])
+  }
+  else {
+    weights <- 1 / distances^p
+    return(sum(weights * values, na.rm = TRUE) / sum(weights, na.rm = TRUE))
+  }
+}
+
+# https://stackoverflow.com/questions/41087157/gradient-fill-violin-plots-using-ggplot2/78316904#78316904
+gradient_violin_plot <- function(df, group_col, value_col, color_col, p = 2) {
+  require(ggplot2)
+  require(dplyr)
+
+  df_input <- df %>%
+    select({ { group_col } }, { { color_col } }, { { value_col } }) %>%
+    rename(group = { { group_col } },
+           color = { { color_col } },
+           value = { { value_col } })
+
+  scale_violin_width <- .45
+
+  p <- ggplot(df_input, aes(x = group, y = value)) + geom_violin()
+
+  breaks <- unique(as.integer(df_input$group))
+  labels <- unique(df_input$group)
+
+  vl_fill <- data.frame(ggplot_build(p)$data) %>%
+    mutate(xnew = x - scale_violin_width * violinwidth, xend = x + scale_violin_width * violinwidth) %>%
+    group_by(group) %>%
+    mutate(color = sapply(y, \(y_item) inverse_distance_weighting(
+      abs(df_input$value - y_item) * if_else(as.integer(df_input$group) == first(group), 1, Inf),
+      df_input$color, p = 2))
+    )
+
+  ggplot() +
+    geom_segment(data = vl_fill, aes(x = xnew, xend = xend, y = y, yend = y,
+                                     color = color)) +
+    geom_violin(data = df_input, aes(x = as.integer(group), y = value, fill = group),
+                color = "grey", alpha = 0, draw_quantiles = c(0.25, 0.5, 0.75),
+                show.legend = FALSE) +
+    scale_x_continuous(breaks = breaks, labels = labels) +
+    scale_color_viridis_c() +
+    labs(x = quo_name(enquo(group_col)),
+         y = quo_name(enquo(value_col)),
+         color = quo_name(enquo(color_col))) +
+    theme(legend.position = "bottom")
+}
+
 simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
                            x_lab = NULL, y_lab = NULL, legend_lab = NULL) {
   theme_settings <- theme(legend.key.size = unit(16, "points"),
