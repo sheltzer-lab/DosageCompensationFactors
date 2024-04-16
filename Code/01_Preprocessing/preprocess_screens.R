@@ -45,9 +45,8 @@ df_prism_meta <- read_csv_arrow(here(screens_data_dir, "Repurposing_Public_23Q2_
 
 # Sanger Model Growth / Proliferation data
 df_growth <- read_csv_arrow(here(screens_data_dir, "growth_rate_20220907.csv")) %>%
-  select(model_name, model_id, seeding_density, day4_day1_ratio, replicates) %>%
+  select(model_id, seeding_density, day4_day1_ratio, replicates) %>%
   rename(CellLine.SangerModelId = "model_id",
-         CellLine.Name = "model_name",
          CellLine.SeedingDensity = "seeding_density",
          CellLine.GrowthRatio = "day4_day1_ratio",
          CellLine.Replicates = "replicates") %>%
@@ -55,10 +54,20 @@ df_growth <- read_csv_arrow(here(screens_data_dir, "growth_rate_20220907.csv")) 
   group_by(CellLine.SangerModelId) %>%
   slice_max(CellLine.Replicates, n = 1) %>%
   ungroup() %>%
-  select(-CellLine.Name) %>%
-  left_join(y = df_celllines, by = "CellLine.SangerModelId",
+  inner_join(y = df_celllines, by = "CellLine.SangerModelId",
             relationship = "many-to-one", na_matches = "never") %>%
   write_parquet(here(output_data_dir, 'cellline_growth.parquet'),
+                version = "2.6")
+
+# DepMap CHRONOS Inferred Model Growth
+# https://depmap.org/portal/download/all/?releasename=DepMap+Public+23Q4&filename=CRISPRInferredModelGrowthRate.csv
+df_growth_chronos <- read_csv_arrow(here(screens_data_dir, "CRISPRInferredModelGrowthRate.csv")) %>%
+  select(ModelID, `Achilles-Avana-2D`) %>%
+  rename(CellLine.DepMapModelId = "ModelID",
+         CellLine.GrowthRatio = "Achilles-Avana-2D") %>%
+  inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
+            relationship = "many-to-one", na_matches = "never") %>%
+  write_parquet(here(output_data_dir, 'cellline_growth_chronos.parquet'),
                 version = "2.6")
 
 # DepMap CRISPR Screens

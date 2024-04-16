@@ -9,6 +9,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
+source(here("Code", "analysis.R"))
 
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
@@ -22,8 +23,12 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet"))
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
-cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
+df_growth_chronos <- read_parquet(here(output_data_dir, "cellline_growth_chronos.parquet")) %>%
+  add_count(CellLine.Name) %>%
+  filter(n == 1) %>%
+  select(-n)
+cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 # Load copy number dataset to obtain metadata
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
@@ -39,10 +44,7 @@ merge_datasets <- function(cellline_dc_dataset, copy_number_dataset, prolif_data
                relationship = "one-to-one", na_matches = "never") %>%
     inner_join(y = cellline_cn_metadata, by = "CellLine.Name",
                relationship = "one-to-one", na_matches = "never") %>%
-    # TODO: Use split_by_quantiles()
-    mutate(Buffering.CellLine.Group = if_else(Buffering.CellLine.Ratio > median(Buffering.CellLine.Ratio),
-                                              "High", "Low"),
-           WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
+    mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
 
   return(df_prolif)
 }
@@ -68,12 +70,14 @@ create_plots <- function (df_prolif, color_col = NULL, dataset_name = NULL, cond
 
   # Statistical comparison between cell line groups
   dc_growth_violin <- df_prolif %>%
+    split_by_quantiles(Buffering.CellLine.Ratio, target_group_col = "Buffering.CellLine.Group") %>%
     signif_violin_plot(Buffering.CellLine.Group, CellLine.GrowthRatio,
                        test = wilcox.test, title = title) %>%
     save_plot(paste0("dosage_compensation_proliferation_test_", filename_suffix, ".png"))
 
   ## Ratio between cell line groups
   df_median <- df_prolif %>%
+    split_by_quantiles(Buffering.CellLine.Ratio, target_group_col = "Buffering.CellLine.Group") %>%
     group_by(Buffering.CellLine.Group) %>%
     summarize(MedianGrowthRatio = median(CellLine.GrowthRatio, na.rm = TRUE)) %>%
     pivot_wider(names_from = Buffering.CellLine.Group, values_from = MedianGrowthRatio)
@@ -94,12 +98,12 @@ proliferation_analysis <- function (cellline_dc_dataset, copy_number_dataset, pr
   # WGD-only cells
   results_wgd <- df_prolif %>%
     filter(CellLine.WGD > 0) %>%
-    create_plots(dataset_name, color_col = CellLine.Ploidy, condition_name = "WGD")
+    create_plots(dataset_name, color_col = CellLine.AneuploidyScore, condition_name = "WGD")
 
   # Non-WGD cells
   results_nonwgd <- df_prolif %>%
     filter(CellLine.WGD == 0) %>%
-    create_plots(dataset_name, color_col = CellLine.Ploidy, condition_name = "Non-WGD")
+    create_plots(dataset_name, color_col = CellLine.AneuploidyScore, condition_name = "Non-WGD")
 
   return(list(All = results_all, WGD = results_wgd, NonWGD = results_nonwgd))
 }
@@ -130,7 +134,7 @@ df_prolif <- merge_datasets(cellline_buf_procan, copy_number, df_growth) %>%
 
 growth_poster <- (df_prolif %>%
   scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
-                          point_size = 2, label_coords = c(0, 0), color_col = WGD,
+                          point_size = 2, color_col = WGD,
                           title_prefix = "ProCan")) +
   theme_light(base_size = 20) +
   labs(x = "Mean Buffering Ratio", y = "Cell Line Growth Rate") +
@@ -145,7 +149,7 @@ growth_poster <- (df_prolif %>%
 growth_poster_nowgd <- (df_prolif %>%
   filter(WGD == "Non-WGD") %>%
   scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
-                          point_size = 2, label_coords = c(0, 0), color_col = WGD,
+                          point_size = 2, color_col = WGD,
                           title_prefix = "ProCan, Non-WGD")) +
   theme_light(base_size = 20) +
   labs(x = "Mean Buffering Ratio", y = "Cell Line Growth Rate") +

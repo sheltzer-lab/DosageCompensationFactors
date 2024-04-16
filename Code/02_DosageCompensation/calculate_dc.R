@@ -85,7 +85,7 @@ build_dataset <- function(df, df_copy_number, cellline_col = "CellLine.CustomId"
                        weighted = FALSE, summ_func = median) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                        distance_col = CombinedDistance, target_colname = "Protein.Expression.Baseline",
-                       weighted = TRUE, summ_func = mean) %>%
+                       weighted = FALSE, summ_func = median) %>%
     calculate_baseline(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized,
                        distance_col = CombinedDistance, target_colname = "Protein.Expression.Baseline.Unweighted",
                        weighted = FALSE, summ_func = mean) %>%

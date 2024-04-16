@@ -20,8 +20,8 @@ reports_dir <- reports_base_dir
 dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 
-cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_procan.parquet"))
-cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"))
+cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
@@ -42,7 +42,7 @@ aneuploidy_quant <- quantile(copy_number$CellLine.AneuploidyScore, probs = c(0.2
 
 # ToDo: Use Cell Line ID instead of cell line name
 df_procan <- df_model_procan %>%
-  inner_join(y = cellline_buf_filtered_procan, by = "CellLine.Name",
+  inner_join(y = cellline_buf_procan, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
@@ -58,7 +58,7 @@ df_procan <- df_model_procan %>%
 
 
 df_depmap <- df_model_depmap %>%
-  inner_join(y = cellline_buf_filtered_depmap, by = "CellLine.Name",
+  inner_join(y = cellline_buf_depmap, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
