@@ -42,7 +42,7 @@ analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = C
     summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
               SD = sd({ { buffering_ratio_col } }, na.rm = TRUE)) %>%
-    filter(Observations > 10) %>%
+    filter(Observations > 50) %>%
     mutate(Buffering.CellLine.Ratio.ZScore = z_score(Buffering.CellLine.Ratio),
            Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore))) %>%
     arrange(Rank)
@@ -71,7 +71,7 @@ expr_buf_procan_filtered <- expr_buf_procan %>%
   filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
   filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
-  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+#  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(ProCan = "Buffering.GeneLevel.Ratio")
@@ -79,7 +79,7 @@ expr_buf_depmap_filtered <- expr_buf_depmap %>%
   filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
   filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
-  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+#  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
   select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
   drop_na() %>%
   rename(DepMap = "Buffering.GeneLevel.Ratio")
@@ -312,6 +312,38 @@ plot_agg_bot <- cellline_buf_agg %>%
                      text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
   save_plot("cellline_buffering_aggregated_bot.png")
+
+# === Evaluation ===
+
+## Plot protein expression against copy number ratio for high and low buffering cell lines
+
+eval_buf_expr_procan <- cellline_buf_procan %>%
+  filter(Observations >= 500) %>%
+  split_by_quantiles(Buffering.CellLine.Ratio, quantile_low = "10%", quantile_high = "90%",
+                     target_group_col = "Bufffering.CellLine.Group") %>%
+  inner_join(y = expr_buf_procan, by = "CellLine.Name") %>%
+  mutate(CopyNumberRatio = Gene.CopyNumber / Gene.CopyNumber.Baseline)
+
+eval_buf_high <- eval_buf_expr_procan %>%
+  filter(Bufffering.CellLine.Group == "High") %>%
+  scatter_plot_reg_corr(CopyNumberRatio, Protein.Expression.Normalized) %>%
+  save_plot("eval_cellline_buffering_high.png")
+
+eval_buf_low <- eval_buf_expr_procan %>%
+  filter(Bufffering.CellLine.Group == "Low") %>%
+  scatter_plot_reg_corr(CopyNumberRatio, Protein.Expression.Normalized) %>%
+  save_plot("eval_cellline_buffering_low.png")
+
+eval_buf_diff_expr <- eval_buf_expr_procan %>%
+  signif_violin_plot(Bufffering.CellLine.Group, Protein.Expression.Normalized,
+                     facet_col = CopyNumberRatio, test = t.test) %>%
+  save_plot("eval_cellline_buffering_diff_expression.png")
+
+eval_buf_diff_cn <- eval_buf_expr_procan %>%
+  signif_violin_plot(Bufffering.CellLine.Group, CopyNumberRatio)  %>%
+  save_plot("eval_cellline_buffering_diff_cn.png")
+
+### Conclusion: Highly buffered cell lines show protein expression closer to baseline
 
 # === Combine Plots for publishing ===
 plot_bracket <- plot_corr_bracket(cellline_pearson_gene)

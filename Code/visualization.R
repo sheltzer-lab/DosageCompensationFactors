@@ -157,11 +157,17 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
   x_col_name <- quo_name(enquo(x_col))
   y_col_name <- quo_name(enquo(y_col))
 
+  eps <- 1e-8
+
   df <- df %>%
     select({ { x_col } }, { { y_col } }, { { color_col } }) %>%
     drop_na() %>%
     filter_all(all_vars(!is.infinite(.))) %>%
-    mutate(Density = get_density({ { x_col } }, { { y_col } }, n = 100))
+    mutate(Density = get_density({ { x_col } }, { { y_col } },
+                                 # Ensure that bandwidth is stricly positive
+                                 h = c(MASS::bandwidth.nrd({ { x_col } }) + eps,
+                                       MASS::bandwidth.nrd({ { y_col } }) + eps),
+                                 n = 100))
 
   suppressWarnings({
     regression <- lm(formula, df)
