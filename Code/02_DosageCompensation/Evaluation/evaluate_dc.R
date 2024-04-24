@@ -467,6 +467,8 @@ br_cn_gain <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = 1) + xlab("Ex
 br_cn_loss <- plot_buffering_ratio_expr(buffering_ratio, cn_diff = -1) +
   xlab("Expression Difference (CN Loss)") + ylab(NULL) + theme(axis.text.y = element_blank())
 br_cn_diff <- plot_buffering_ratio_cn(buffering_ratio, tick_distance = 0.2) + ylab(NULL)
+br_cn_diff_expr_loss <- plot_buffering_ratio_cn(buffering_ratio, tick_distance = 0.2, expr_diff = -1)
+br_cn_diff_full_dc <- plot_buffering_ratio_cn(buffering_ratio, tick_distance = 0.2, expr_diff = 0)
 
 cn_baseline_plot_modified <- cn_baseline_plot +
   theme(legend.position = "bottom") +

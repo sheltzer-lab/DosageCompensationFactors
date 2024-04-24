@@ -82,9 +82,65 @@ copy_number_no_wgd <- copy_number %>%
 # ToDo: Use different copy number datasets for ProCan and DepMap
 
 # === Evaluation ===
-# TODO: Plot Copy Number, WGD, AS, CNA, ...
-
+# Plot Copy Number, WGD, AS, CNA, ...
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
+
+## Chromosome Arm CNA
+### TODO: Do single CNA events occur more often than doubling/halving of chr number per chromosome?
+### Events per chromosome
+copy_number %>%
+  # filter(CellLine.AneuploidyScore > 0) %>%
+  distinct(Gene.Chromosome, Gene.ChromosomeArm, Gene.ChromosomeBand, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  mutate(Chromosome = fct_reorder(Gene.Chromosome, as.integer(Gene.Chromosome)),
+         ChromosomeArm = factor(substr(Gene.ChromosomeBand, 1, 1), levels = c("p", "q"))) %>%
+  count(Chromosome, ChromosomeArm, ChromosomeArm.CNA) %>%
+  group_by(Chromosome, ChromosomeArm) %>%
+  mutate(CNA = factor(ChromosomeArm.CNA),
+         Share = n / sum(n),
+         EventShare = as.integer(ChromosomeArm.CNA) * Share) %>%
+  filter(CNA != 0) %>%
+  ggplot() +
+  aes(x = ChromosomeArm, y = EventShare, fill = CNA) +
+  geom_bar(stat = "identity", position = "identity") +
+  scale_y_continuous(limits = c(-0.5, 0.5),
+                     breaks = c(-0.5, -0.25, 0, 0.25, 0.5),
+                     labels = c("50%", "25%", "", "25%", "50%")) +
+  facet_grid(~Chromosome)
+
+### Total Number of CNA Events
+copy_number %>%
+  distinct(Gene.Chromosome, Gene.ChromosomeArm, Gene.ChromosomeBand, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  count(ChromosomeArm.CNA)
+
+### Ploidy + CNA
+copy_number %>%
+  filter(CellLine.AneuploidyScore > 0) %>%
+  distinct(Gene.ChromosomeArm, ChromosomeArm.CNA, CellLine.CustomId, CellLine.Ploidy) %>%
+  mutate(ChromosomeArm.Count = as.factor(ChromosomeArm.CNA + round(CellLine.Ploidy))) %>%
+  ggplot() +
+  aes(x = ChromosomeArm.Count) +
+  geom_bar()
+
+### Gain/Loss Correlation
+corr_matrix <- copy_number %>%
+  distinct(Gene.Chromosome, Gene.ChromosomeArm, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  mutate(Gene.ChromosomeArm = fct_reorder(Gene.ChromosomeArm, as.integer(Gene.Chromosome))) %>%
+  arrange(Gene.ChromosomeArm) %>%
+  select(Gene.ChromosomeArm, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  pivot_wider(names_from = "Gene.ChromosomeArm", values_from = "ChromosomeArm.CNA", id_cols = "CellLine.CustomId") %>%
+  select(-CellLine.CustomId) %>%
+  psych::corr.test(method = "kendall", adjust = "BH")
+
+corrplot(corr_matrix$r, p.mat = corr_matrix$p,
+         type = "upper", tl.col = "black", tl.srt = 45,
+         pch.cex = 1, pch.col = "darkgrey")
+
+# TODO: Gain/Loss co-occurrence
+## Step 1: Replace CNA with "Gain", "Neutral", "Loss" event
+## Step 2: Drop neutral events
+## Step 3: Combine event with chr arm
+## Step 4: Pivot wider (cols: chr arm event, rows: cell lines, values: TRUE/FALSE)
+## Step 5: Build Matrix - For each pair of ChrArmEvent increment by one if pair exists in a cell line
 
 ## Copy Number distribution per WGD and Ploidy
 copy_number %>%

@@ -101,7 +101,8 @@ plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-0.99, 0.99), expr_lim 
 }
 
 plot_buffering_ratio_expr <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
-                                 buffered_threshold = 0.3349625, anti_scaling_threshold = 0.6849625) {
+                                      buffered_threshold = br_cutoffs$Buffered,
+                                      anti_scaling_threshold = br_cutoffs$AntiScaling) {
   expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
   expr_base <- rep(2, length(expr_diff))
   cn_base <- rep(2, length(expr_diff))
@@ -119,7 +120,8 @@ plot_buffering_ratio_expr <- function(br_func, expr_lim = c(-1, 1), cn_diff = 1,
 }
 
 plot_buffering_ratio_cn <- function(br_func, expr_diff = 1, cn_lim = c(-1, 1), tick_distance = 0.1,
-                                    buffered_threshold = 0.3349625, anti_scaling_threshold = 0.6849625) {
+                                    buffered_threshold = br_cutoffs$Buffered,
+                                    anti_scaling_threshold = br_cutoffs$AntiScaling) {
   cn_diff <- seq(cn_lim[1], cn_lim[2], by = 0.01)
   cn_base <- rep(2, length(cn_diff))
   expr_diff <- rep(expr_diff, length(cn_diff))
