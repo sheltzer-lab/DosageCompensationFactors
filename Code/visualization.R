@@ -6,6 +6,7 @@ library(psych)
 library(corrplot)
 library(ggsignif)
 library(viridisLite)
+library(viridis)
 library(ggbeeswarm)
 library(pheatmap)
 library(forcats)
@@ -16,7 +17,7 @@ vertical_bar_chart <- function(df, category_col, value_col,
                                color_col = NULL, text_color = "white", default_fill_color = "dimgrey",
                                error_low_col = NULL, error_high_col = NULL,
                                value_range = c(0.45, 0.65), break_steps = 0.05,
-                               line_intercept = 0.5, bar_label_shift = 0.002,
+                               line_intercept = 0.5, bar_label_shift = 0.002, color_discrete = FALSE,
                                title = NULL, category_lab = NULL, value_lab = NULL, color_lab = NULL) {
   df %>%
     ggplot() +
@@ -31,7 +32,7 @@ vertical_bar_chart <- function(df, category_col, value_col,
                       colour = "orange", fatten = 1) } +
     geom_text(color = text_color, y = value_range[1] + bar_label_shift, hjust = 0) +
     scale_y_continuous(breaks = seq(value_range[1], value_range[2], break_steps)) +
-    scale_fill_viridis_c(option = "G", direction = -1, begin = 0.2, end = 0.8) +
+    scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = color_discrete) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
     coord_flip(ylim = c(value_range[1], value_range[2]))
 }

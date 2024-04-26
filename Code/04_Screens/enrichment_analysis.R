@@ -9,6 +9,7 @@ library(ggrepel)
 library(skimr)
 library(openxlsx)
 library(gprofiler2)
+library(WebGestaltR)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -48,52 +49,85 @@ volcano_plot <- diff_exp %>%
   save_plot("volcano_plot.png")
 
 # === Enrichment Analysis ===
-# TODO: Evaluate gprofiler against WebGestalt
-enrichment_analysis <- function(genes, ordered = TRUE, p_thresh = p_threshold) {
+# TODO: Hypergeometric test as ORA
+# TODO: GSEA
+# TODO: STRING Network Enrichment
+overrepresentation_analysis <- function(genes, ordered = TRUE, p_thresh = p_threshold, ref_background = NULL,
+                                        databases = c("GO:BP", "GO:MF", "KEGG", "REAC", "WP", "CORUM")) {
   gost(query = genes,
        organism = "hsapiens", ordered_query = ordered,
        multi_query = FALSE, significant = TRUE, exclude_iea = FALSE,
        measure_underrepresentation = FALSE, evcodes = FALSE,
        user_threshold = p_thresh, correction_method = "g_SCS",
-       domain_scope = "annotated", custom_bg = NULL,
-       numeric_ns = "", sources = NULL, as_short_link = FALSE, highlight = TRUE)
+       domain_scope = "annotated", custom_bg = ref_background,
+       numeric_ns = "", sources = databases, as_short_link = FALSE, highlight = TRUE)
 }
 
-enrichment_up <- diff_exp %>%
+ora_webgestalt <- function(genes, ref_background, p_thresh = p_threshold,
+                           databases = c("pathway_KEGG", "pathway_Reactome", "pathway_Wikipathway_cancer",
+                                         "geneontology_Biological_Process", "geneontology_Molecular_Function")) {
+  WebGestaltR(enrichMethod = "ORA", organism = "hsapiens", enrichDatabase = databases,
+              interestGene = as.vector(genes), interestGeneType = "genesymbol",
+              referenceGene = as.vector(ref_background), referenceGeneType = "genesymbol",
+              fdrThr = p_thresh, isOutput = FALSE)
+}
+
+ref_gene <- unique(diff_exp$Gene.Symbol)
+
+genes_up <- diff_exp %>%
   filter(Log2FC > log2fc_threshold & TTest.p.adj < p_threshold) %>%
   mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = TRUE)) %>%
-  arrange(Gene.Symbol) %>%
-  pull(Gene.Symbol) %>%
-  enrichment_analysis()
+  arrange(Gene.Symbol)
 
-enrichment_down <- diff_exp %>%
+ora_up <- genes_up %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis()
+
+ora_up_wg <- genes_up %>%
+  pull(Gene.Symbol) %>%
+  ora_webgestalt(ref_background = ref_gene)
+
+genes_down <- diff_exp %>%
   filter(Log2FC < -log2fc_threshold & TTest.p.adj < p_threshold) %>%
   mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = FALSE)) %>%
-  arrange(Gene.Symbol) %>%
+  arrange(Gene.Symbol)
+
+ora_down <- genes_down %>%
   pull(Gene.Symbol) %>%
-  enrichment_analysis()
+  overrepresentation_analysis()
 
-#gostplot(enrichment_up, capped = TRUE, interactive = TRUE)
-#gostplot(enrichment_down, capped = TRUE, interactive = TRUE)
+ora_down_wg <- genes_down %>%
+  pull(Gene.Symbol) %>%
+  ora_webgestalt(ref_background = ref_gene)
 
-plot_terms <- function(enrichment, selected_sources = c("CORUM", "KEGG", "REAC", "GO:MF", "GO:BP"), n = 20) {
-  enrichment$result %>%
-    filter(p_value < p_threshold) %>%
+#gostplot(ora_up, capped = TRUE, interactive = TRUE)
+#gostplot(ora_down, capped = TRUE, interactive = TRUE)
+
+# TODO: Use WebGestaltR::affinityPropagation() for reducing redundant terms
+# ora_down_reduced <- WebGestaltR::affinityPropagation(ora_down$result$term_name, -log10(ora_down$result$p_value))
+
+plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", "GO:MF", "GO:BP"),
+                       terms_per_source = 5, p_thresh = p_threshold) {
+  ora$result %>%
+    filter(p_value < p_thresh) %>%
     filter(source %in% selected_sources) %>%
-    slice_min(p_value, n = n) %>%
+    group_by(source) %>%
+    slice_min(p_value, n = terms_per_source) %>%
+    ungroup() %>%
     mutate(`-log10(p)` = -log10(p_value),
-           term_name = fct_reorder(term_name, p_value, .desc = TRUE)) %>%
-    vertical_bar_chart(term_name, `-log10(p)`,
+           term_name = fct_reorder(str_trunc(term_name, 50), p_value, .desc = TRUE)) %>%
+    vertical_bar_chart(term_name, `-log10(p)`, color_col = source, color_discrete = TRUE,
                        value_range = c(1, max(.$`-log10(p)`)),
                        line_intercept = 0, bar_label_shift = 0.18, break_steps = 2,
-                       category_lab = "Enriched Term", value_lab = "Significance (-log10(p))")
+                       category_lab = "Enriched Term", value_lab = "Significance (-log10(p))") +
+    facet_wrap(~source, scales = "free", ncol = 1) +
+    theme(legend.position = "none")
 }
 
- enrichment_up %>%
+ ora_up %>%
    plot_terms() %>%
-   save_plot("enriched_terms_up.png", width = 300)
+   save_plot("overrepresentation_terms_up.png", height = 300)
 
- enrichment_down %>%
+ ora_down %>%
    plot_terms() %>%
-   save_plot("enriched_terms_down.png", width = 300)
-
+   save_plot("overrepresentation_terms_down.png", height = 300)
