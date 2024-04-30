@@ -87,8 +87,47 @@ buffering_ratio_confidence <- function(cn_base, cn_obs, expr_neutral_cv) {
 }
 
 # === Example Code ===
+plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
+  require(tibble)
+  require(dplyr)
+  require(tidyr)
+  require(ggplot2)
+  require(viridisLite)
+  require(geomtextpath)
 
-plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-0.99, 0.99), expr_lim = c(-1, 1)) {
+  cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
+  cn_base <- rep(2, length(cn_diff))
+  expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
+  expr_base <- rep(2, length(expr_diff))
+
+  br <- outer(expr_diff + expr_base, cn_diff + cn_base,
+              FUN = \(x,y) br_func(expr_obs = x, cn_obs = y,
+                                   expr_base = expr_base, cn_base = cn_base))
+  dimnames(br) <- list(expr_diff + expr_base, cn_diff + cn_base)
+
+  br_df <- br %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("ExpressionLevel") %>%
+    tidyr::pivot_longer(everything() & !ExpressionLevel, names_to = "CopyNumber", values_to = "BufferingRatio") %>%
+    mutate_all(as.numeric)
+
+  expr_ticks <- seq(expr_lim[1], expr_lim[2], 0.25) + expr_base
+  cn_ticks <- seq(cnv_lim[1], cnv_lim[2], 0.25) + cn_base
+
+  br_df %>%
+    ggplot() +
+    aes(x = CopyNumber, y = ExpressionLevel, z = BufferingRatio) +
+    geom_raster(aes(fill = BufferingRatio)) +
+    geom_vline(xintercept = cn_ticks, color = "darkgrey", alpha = 0.5) +
+    geom_hline(yintercept = expr_ticks, color = "darkgrey", alpha = 0.5) +
+    geom_textcontour(color = "white") +
+    scale_fill_viridis_c() +
+    scale_x_continuous(limits = cnv_lim + cn_base, breaks = cn_ticks) +
+    scale_y_continuous(limits = expr_lim + expr_base, breaks = expr_ticks) +
+    theme_light()
+}
+
+plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
   cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
   cn_base <- rep(2, length(cn_diff))
   expr_diff <- seq(expr_lim[1], expr_lim[2], by = 0.01)
