@@ -111,8 +111,8 @@ plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1
     tidyr::pivot_longer(everything() & !ExpressionLevel, names_to = "CopyNumber", values_to = "BufferingRatio") %>%
     mutate_all(as.numeric)
 
-  expr_ticks <- seq(expr_lim[1], expr_lim[2], 0.25) + expr_base
-  cn_ticks <- seq(cnv_lim[1], cnv_lim[2], 0.25) + cn_base
+  expr_ticks <- seq(expr_lim[1], expr_lim[2], 0.25) + expr_base[1]
+  cn_ticks <- seq(cnv_lim[1], cnv_lim[2], 0.25) + cn_base[1]
 
   br_df %>%
     ggplot() +
@@ -122,8 +122,8 @@ plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1
     geom_hline(yintercept = expr_ticks, color = "darkgrey", alpha = 0.5) +
     geom_textcontour(color = "white") +
     scale_fill_viridis_c() +
-    scale_x_continuous(limits = cnv_lim + cn_base, breaks = cn_ticks) +
-    scale_y_continuous(limits = expr_lim + expr_base, breaks = expr_ticks) +
+    scale_x_continuous(limits = cnv_lim + cn_base[1], breaks = cn_ticks) +
+    scale_y_continuous(limits = expr_lim + expr_base[1], breaks = expr_ticks) +
     theme_light()
 }
 
