@@ -35,16 +35,20 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 # === Analyze Dosage Compensation on Cell Line level ===
 
 # TODO: Calculate confidence score based on SD, Observations & Gene-Level Confidence
-analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = CellLine.Name) {
+analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = CellLine.Name,
+                                       aneuploidy_col = CellLine.AneuploidyScore) {
   cellline_buf_avg <- df %>%
-    select({ { cellline_col } }, { { buffering_ratio_col } }) %>%
+    select({ { cellline_col } }, { { buffering_ratio_col } }, { { aneuploidy_col } }) %>%
     group_by({ { cellline_col } }) %>%
     summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
-              SD = sd({ { buffering_ratio_col } }, na.rm = TRUE)) %>%
+              SD = sd({ { buffering_ratio_col } }, na.rm = TRUE),
+              AneuploidyScore = first({ { aneuploidy_col } })) %>%
     filter(Observations > 50) %>%
     mutate(Buffering.CellLine.Ratio.ZScore = z_score(Buffering.CellLine.Ratio),
-           Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore))) %>%
+           Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore)),
+           Buffering.CellLine.Ratio.Adjusted = lm(Buffering.CellLine.Ratio ~ AneuploidyScore, data = .)$residuals) %>%
+    select(-AneuploidyScore) %>%
     arrange(Rank)
 }
 
@@ -72,7 +76,8 @@ expr_buf_procan_filtered <- expr_buf_procan %>%
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
   filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
 #  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
-  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
+  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession",
+         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore") %>%
   drop_na() %>%
   rename(ProCan = "Buffering.GeneLevel.Ratio")
 expr_buf_depmap_filtered <- expr_buf_depmap %>%
@@ -80,11 +85,13 @@ expr_buf_depmap_filtered <- expr_buf_depmap %>%
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
   filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
 #  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
-  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession", "Buffering.GeneLevel.Ratio") %>%
+  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession",
+         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore") %>%
   drop_na() %>%
   rename(DepMap = "Buffering.GeneLevel.Ratio")
 
 expr_buf_filtered <- expr_buf_procan_filtered %>%
+  select(-CellLine.AneuploidyScore) %>%
   inner_join(y = expr_buf_depmap_filtered, by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
              relationship = "one-to-one", na_matches = "never")
 
@@ -121,7 +128,8 @@ cellline_buf_merged_gene <- cellline_buf_gene_filtered_procan %>%
   bind_rows(cellline_buf_gene_filtered_depmap) %>%
   pivot_wider(id_cols = "CellLine.Name",
               names_from = "Dataset",
-              values_from = c("Buffering.CellLine.Ratio", "Buffering.CellLine.Ratio.ZScore", "Rank")) %>%
+              values_from = c("Buffering.CellLine.Ratio", "Buffering.CellLine.Ratio.ZScore",
+                              "Buffering.CellLine.Ratio.Adjusted", "Rank")) %>%
   arrange(CellLine.Name)
 
 ## Save results
