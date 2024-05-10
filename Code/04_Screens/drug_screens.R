@@ -9,6 +9,7 @@ library(forcats)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
 
@@ -179,7 +180,7 @@ moa_corr <- cellline_buf_agg %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.MOA, delim = ", ") %>%
-  mutate(Drug.MOA = trimws(Drug.MOA)) %>%
+  mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
   group_by(Drug.MOA) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
@@ -191,7 +192,7 @@ moa_corr <- cellline_buf_agg %>%
 
 moa_corr %>%
   filter(Corr.p < p_threshold) %>%
-  filter(Corr.Sensitivity_Buffering < -0.15) %>%
+  #filter(Corr.Sensitivity_Buffering < -0.15) %>%
   slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
   mutate(Drug.MOA = fct_reorder(Drug.MOA, Corr.Sensitivity_Buffering, .desc = TRUE),
          `-log10(p)` = -log10(Corr.p)) %>%
@@ -208,7 +209,7 @@ target_corr <- cellline_buf_agg %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.Target, delim = ", ") %>%
-  mutate(Drug.Target = trimws(Drug.Target)) %>%
+  mutate(Drug.Target = str_squish(Drug.Target)) %>%
   group_by(Drug.Target) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
@@ -368,5 +369,50 @@ higher_diff_target <- higher_diff %>%
   summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
             Target.Count = first(n))
 
+# Difference between groups
+## Mechanism of Action
+moa_diff <- cellline_buf_agg %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.MOA, delim = ", ") %>%
+  mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
+  split_by_quantiles(Buffering.CellLine.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
+  differential_expression(Drug.MOA, CellLine.Buffering.Group, Drug.MFI.Log2FC,
+                          groups = c("Low", "High"))
+
+moa_diff_signif <- moa_diff %>%
+  filter(TTest.p.adj < p_threshold)
+
+## Drug Target
+target_diff <- cellline_buf_agg %>%
+  inner_join(y = drug_screens, by = "CellLine.Name",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.Target, delim = ", ") %>%
+  mutate(Drug.MOA = str_squish(Drug.Target)) %>%
+  split_by_quantiles(Buffering.CellLine.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
+  differential_expression(Drug.Target, CellLine.Buffering.Group, Drug.MFI.Log2FC,
+                          groups = c("Low", "High"))
+
+target_diff_signif <- target_diff %>%
+  filter(TTest.p.adj < p_threshold)
+
 # ToDo: Create visualizations (Diff, MOA, Target)
 # ToDo: Cleanup Code
+# ToDo: Rename MOA to Mechanism
+
+# Drug Mechanism Groups
+# drug_meta_long <- drug_meta %>%
+#   separate_longer_delim(Drug.MOA, ", ") %>%
+#   mutate(Drug.MOA = str_squish(Drug.MOA))
+# mechanisms <- drug_meta_long %>%
+#   count(Drug.MOA) %>%
+#   drop_na()
+# mechanism_dist <- outer(mechanisms$Drug.MOA, mechanisms$Drug.MOA,
+#                         \(x, y) stringdist::stringdist(x, y, method = "lv"))
+# dimnames(mechanism_dist) <- list(mechanisms$Drug.MOA, mechanisms$Drug.MOA)
+# mechanism_clust <- hclust(as.dist(mechanism_dist))
+# pheatmap::pheatmap(mechanism_dist)
