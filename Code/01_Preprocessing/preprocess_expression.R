@@ -26,7 +26,9 @@ dir.create(plots_dir, recursive = TRUE)
 # === Load Datasets ===
 ## Load dataset from Goncalves et al. (DOI: https://doi.org/10.6084/m9.figshare.19345397.v1)
 # ToDo: evaluate use of dataset containing 8498 proteins per cell line
-procan_expr <- read_excel(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.xlsx"))
+procan_expr <- read.table(here(expression_data_dir, "ProCan-DepMapSanger_protein_matrix_6692_averaged.txt"),
+                          sep="\t", dec=".", header=FALSE, stringsAsFactors=FALSE)
+
 ## Load Proteomics dataset from DepMap
 depmap_expr <- read_csv_arrow(here(expression_data_dir, "Broad-DepMap-Proteomics.csv"))
 
@@ -37,8 +39,10 @@ df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_fil
 # === Tidy Datasets ===
 
 procan_expr_tidy <- procan_expr %>%
+  janitor::row_to_names(1) %>%
   pivot_longer(everything() & !Project_Identifier,
                names_to = "Protein", values_to = "Protein.Expression.Log2") %>%
+  mutate(Protein.Expression.Log2 = as.numeric(Protein.Expression.Log2)) %>%
   separate_wider_delim(Protein,
            delim = ";",
            names = c("Protein.Uniprot.Accession", "Protein.Uniprot.Id")) %>%
