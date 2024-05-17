@@ -143,7 +143,7 @@ calculate_pca <- function(df, sample_col, sample_group_col, value_group_col, val
     prcomp()
 
   sample_metadata <- df %>%
-    distinct({ { sample_col } }, { { sample_group_col } })
+    distinct({ { sample_col } }, { { sample_group_col } }, .keep_all = TRUE)
 
   df_pca <- pca_fit %>%
     augment(sample_metadata) %>%

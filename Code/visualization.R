@@ -10,6 +10,7 @@ library(viridis)
 library(ggbeeswarm)
 library(pheatmap)
 library(forcats)
+library(ggrepel)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -349,6 +350,14 @@ plot_corr_bracket <- function(corr, estimate_symbol = utf8_rho, signif = TRUE, d
     cowplot::theme_nothing()
 }
 
+vertical_box_plot <- function(df, value_col, id_col, group_col) {
+  df %>%
+    arrange({ { id_col } }) %>%
+    ggplot() +
+    aes(x = { { value_col } }, y = { { id_col } }, fill = { { group_col } }) +
+    geom_boxplot()
+}
+
 jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha = 0.5, jitter_width = 0.15) {
   df %>%
     ggplot() +
@@ -367,15 +376,17 @@ jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha =
     #scale_color_gradientn(colors = biderectional_color_pal, space = "Lab")
 }
 
-plot_pca <- function(pca) {
+plot_pca <- function(pca, color_col = CellLine.Name, label_col = Sample.Name) {
   eigenvalues <- pca$eigenvalues
   df_pca <- pca$df_pca
 
   df_pca %>%
     ggplot() +
-    aes(.fittedPC1, .fittedPC2, color = CellLine.Name, label = Sample.Name) +
+    aes(.fittedPC1, .fittedPC2, color = { { color_col } }, label = { { label_col } }) +
     geom_point(size = 1.5) +
-    geom_label_repel(force = 10, seed = 123) +
+    {
+      if (!quo_is_null(enquo(label_col))) geom_label_repel(force = 10, seed = 123)
+    } +
     xlab(sprintf("PC1 (%0.1f%% Variance Explained)", eigenvalues[eigenvalues$PC == 1,]$percent * 100)) +
     ylab(sprintf("PC2 (%0.1f%% Variance Explained)", eigenvalues[eigenvalues$PC == 2,]$percent * 100))
 }
