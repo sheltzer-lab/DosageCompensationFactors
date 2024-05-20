@@ -46,20 +46,29 @@ for (filename in file_list) {
            Model.SampleType = metadata$V9)
 }
 
+uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
+df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
+
 # === Combine & Tidy Datasets ===
 expr_cptac <- bind_rows(df_list) %>%
-  unite("Model.SampleID", c("Model.ID", "Model.SampleType"), sep = '_', remove = FALSE)
+  unite("Model.SampleID", c("Model.ID", "Model.SampleType"), sep = '_', remove = FALSE) %>%
+  rename(Gene.ENSEMBL.Id = idx) %>%
+  ## Remove ENSEMBL version
+  mutate(Gene.ENSEMBL.Id = sub("\\.\\d+$", "", Gene.ENSEMBL.Id)) %>%
+  ## ID Mapping
+  left_join(y = uniprot_mapping %>% select("Gene.ENSEMBL.Id", "Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Gene.ENSEMBL.Id",
+            na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
+  updateGeneSymbols()
 
 # === Preprocess Datasets ===
 # TODO: Reprodcibility Score filtering
 
 expr_cptac_processed <- expr_cptac %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
-  normalize_samples(Model.SampleID, Protein.Expression.Log2, idx,
+  semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
+  normalize_samples(Model.SampleID, Protein.Expression.Log2, Gene.ENSEMBL.Id,
                     normalized_colname = "Protein.Expression.Normalized")
-
-# === Annotation ===
-# TODO: ID Mapping
 
 # === Evaluation ===
 expr_dist <- plot_expr_dist(expr_cptac_processed) %>%
@@ -93,21 +102,22 @@ types_dist_post <- expr_cptac_processed %>%
   save_plot("cptac_cancer-type_distribution_norm.png")
 
 pca_pre <- expr_cptac_processed %>%
-  calculate_pca(Model.SampleID, Model.CancerType, idx, Protein.Expression.Log2) %>%
+  calculate_pca(Model.SampleID, Model.CancerType, Gene.ENSEMBL.Id, Protein.Expression.Log2) %>%
   plot_pca(color_col = Model.CancerType, label_col = NULL) %>%
   save_plot("cptac_pca_non-norm.png")
 
 pca_pre_sample <- expr_cptac_processed %>%
-  calculate_pca(Model.SampleID, Model.CancerType, idx, Protein.Expression.Log2) %>%
+  calculate_pca(Model.SampleID, Model.CancerType, Gene.ENSEMBL.Id, Protein.Expression.Log2) %>%
   plot_pca(color_col = Model.SampleType, label_col = NULL) %>%
   save_plot("cptac_pca_sample_non-norm.png")
 
 pca_norm <- expr_cptac_processed %>%
-  calculate_pca(Model.SampleID, Model.CancerType, idx, Protein.Expression.Normalized) %>%
+  calculate_pca(Model.SampleID, Model.CancerType, Gene.ENSEMBL.Id, Protein.Expression.Normalized) %>%
   plot_pca(color_col = Model.CancerType, label_col = NULL) %>%
   save_plot("cptac_pca_norm.png")
 
 pca_norm <- expr_cptac_processed %>%
-  calculate_pca(Model.SampleID, Model.CancerType, idx, Protein.Expression.Normalized) %>%
+  calculate_pca(Model.SampleID, Model.CancerType, Gene.ENSEMBL.Id, Protein.Expression.Normalized) %>%
   plot_pca(color_col = Model.SampleType, label_col = NULL) %>%
   save_plot("cptac_pca_sample_norm.png")
+
