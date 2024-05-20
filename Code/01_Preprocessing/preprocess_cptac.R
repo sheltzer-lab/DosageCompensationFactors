@@ -15,6 +15,7 @@ source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 
 expression_data_dir <- here(external_data_dir, "Expression", "CPTAC", "Proteome_BCM_GENCODE_v34_harmonized_v1")
+copynumber_data_dir <- here(external_data_dir, "CopyNumber", "CPTAC", "CNV_BCM_v1")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Preprocessing", "Expression", "CPTAC")
 
@@ -22,12 +23,13 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
-file_list <- list.files(expression_data_dir, include.dirs = FALSE, recursive = FALSE)
-file_list <- file_list[grep(".+_proteomics_.+.txt", file_list)]
+## Expression
+expr_file_list <- list.files(expression_data_dir, include.dirs = FALSE, recursive = FALSE)
+expr_file_list <- expr_file_list[grep(".+_proteomics_.+.txt", expr_file_list)]
 
-df_list <- list()
+df_list_expr <- list()
 
-for (filename in file_list) {
+for (filename in expr_file_list) {
   metadata <- sub('\\.txt$', '', filename) %>%
     str_split_fixed("_", 9) %>%
     as.data.frame() %>%
@@ -35,7 +37,7 @@ for (filename in file_list) {
 
   df_name <- paste(metadata$V1, metadata$V9, sep = "_")
 
-  df_list[[df_name]] <- read.table(here(expression_data_dir, filename),
+  df_list_expr[[df_name]] <- read.table(here(expression_data_dir, filename),
                                    sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE) %>%
     janitor::row_to_names(1) %>%
     pivot_longer(everything() & !idx,
@@ -46,11 +48,33 @@ for (filename in file_list) {
            Model.SampleType = metadata$V9)
 }
 
+## Copy Number
+cn_file_list <- list.files(copynumber_data_dir, include.dirs = FALSE, recursive = FALSE)
+cn_file_list <- cn_file_list[grep(".+_WES_.+_gistic_.+.txt", cn_file_list)]
+
+df_list_cn <- list()
+for (filename in cn_file_list) {
+  df_name <- sub('\\.txt$', '', filename) %>%
+    str_split_fixed("_", 6) %>%
+    as.data.frame() %>%
+    pull(V1)
+
+  df_list_cn[[df_name]] <- read.table(here(copynumber_data_dir, filename),
+                                   sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE) %>%
+    janitor::row_to_names(1) %>%
+    pivot_longer(everything() & !idx,
+                 names_to = "Model.ID", values_to = "CNV",
+                 names_ptypes = character(), values_ptypes = integer(),
+                 names_transform = as.character, values_transform = as.integer) %>%
+    mutate(Model.CancerType = df_name)
+}
+
+## Other
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
 df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
 
-# === Combine & Tidy Datasets ===
-expr_cptac <- bind_rows(df_list) %>%
+# === Combine & Tidy Expression Datasets ===
+expr_cptac <- bind_rows(df_list_expr) %>%
   unite("Model.SampleID", c("Model.ID", "Model.SampleType"), sep = '_', remove = FALSE) %>%
   rename(Gene.ENSEMBL.Id = idx) %>%
   ## Remove ENSEMBL version
@@ -61,14 +85,33 @@ expr_cptac <- bind_rows(df_list) %>%
             na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
   updateGeneSymbols()
 
-# === Preprocess Datasets ===
-# TODO: Reprodcibility Score filtering
-
+# === Preprocess Expression Datasets ===
 expr_cptac_processed <- expr_cptac %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
   normalize_samples(Model.SampleID, Protein.Expression.Log2, Gene.ENSEMBL.Id,
                     normalized_colname = "Protein.Expression.Normalized")
+
+# === Combine & Tidy Copy Number Datasets ===
+copy_number_cptac <- bind_rows(df_list_cn) %>%
+  rename(Gene.ENSEMBL.Id = idx) %>%
+  ## Remove ENSEMBL version
+  mutate(Gene.ENSEMBL.Id = sub("\\.\\d+$", "", Gene.ENSEMBL.Id)) %>%
+  ## ID Mapping
+  left_join(y = uniprot_mapping %>% select("Gene.ENSEMBL.Id", "Protein.Uniprot.Accession", "Gene.Symbol"),
+            by = "Gene.ENSEMBL.Id",
+            na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
+  updateGeneSymbols() %>%
+  get_chromosome_arms() %>%
+  filter(Gene.Chromosome %in% (1:22)) %>% # Only use autosomal genes
+  mutate(Gene.CopyNumber = 2L + CNV)
+
+# === Save Datasets ===
+expr_cptac_processed %>%
+  write_parquet(here(output_data_dir, 'expression_cptac.parquet'), version = "2.6")
+
+copy_number_cptac %>%
+  write_parquet(here(output_data_dir, 'copy_number_cptac.parquet'), version = "2.6")
 
 # === Evaluation ===
 expr_dist <- plot_expr_dist(expr_cptac_processed) %>%
@@ -120,4 +163,3 @@ pca_norm <- expr_cptac_processed %>%
   calculate_pca(Model.SampleID, Model.CancerType, Gene.ENSEMBL.Id, Protein.Expression.Normalized) %>%
   plot_pca(color_col = Model.SampleType, label_col = NULL) %>%
   save_plot("cptac_pca_sample_norm.png")
-

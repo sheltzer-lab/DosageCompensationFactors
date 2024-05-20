@@ -123,6 +123,23 @@ DepMap, Broad Institute. “DepMap 23Q2 Public.” figshare, 2023. https://doi.o
 #### Citation
 DepMap, Broad Institute. “DepMap 23Q2 Public.” figshare, 2023. https://doi.org/10.6084/M9.FIGSHARE.22765112.V4.
 
+### CPTAC
+
+**URL:** https://proteomic.datacommons.cancer.gov/pdc/cptac-pancancer
+
+**Location:** `./Data/External/CopyNumber/CPTAC/CNV_BCM_v1`
+
+#### Source Notes
+
+File:  CNV_BCM_v1.zip
+
+Description:  CPTAC Pan-Cancer CNV data processed by the Baylor College of Medicine team's pipeline. Details can be found in the STAR Methods of 'Proteogenomic Data and Resources for Pan-Cancer Analysis'.
+
+Cohorts:  BRCA, ccRCC, COAD, GBM, HGSC, HNSCC, LSCC, LUAD, PDAC, UCEC
+
+#### Citation
+Li, Y., Dou, Y., da Veiga Leprevost, F., Geffen, Y., et al. (2023). Proteogenomic data and resources for pan-cancer analysis, Cancer Cell, 41, 1397-1406. https://doi.org/10.1016/j.ccell.2023.06.009
+
 
 ## Cell Line Metadata
 
