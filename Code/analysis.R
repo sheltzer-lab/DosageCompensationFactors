@@ -31,6 +31,22 @@ split_by_quantiles <- function(df, col, quantile_low = "20%", quantile_high = "8
     mutate(!!target_group_col := if_else({ { col } } < quantiles[quantile_low], "Low", "High"))
 }
 
+split_by_3_quantiles <- function(df, col, quantile_range = 20L, target_group_col = "SplitGroup") {
+  quantiles <- quantile(df[[quo_name(enquo(col))]], probs = seq(0, 1, 0.01), na.rm = TRUE)
+  low_quantile <- quantiles[paste0(quantile_range, "%")]
+  high_quantile <- quantiles[paste0(100 - quantile_range, "%")]
+  center_quantiles <- c(quantiles[50L - ceiling(quantile_range / 2)],
+                        quantiles[50L + floor(quantile_range / 2)])
+
+  df %>%
+    mutate(Group_ = if_else({ { col } } < low_quantile, "Low",
+                                         if_else({ { col } } > high_quantile, "High",
+                                                 if_else({ { col } } > center_quantiles[1] & { { col } } < center_quantiles[2], "Center",
+                                                         NA)))) %>%
+    drop_na(Group_) %>%
+    rename(!!target_group_col := Group_)
+}
+
 ## Gene / Chromosome Copy Number Filtering
 filter_cn_diff_quantiles <- function(df, remove_between = c("5%", "95%")) {
   cn_diff_quantiles <- quantile(df$Gene.CopyNumber - df$Gene.CopyNumber.Baseline, probs = seq(0, 1, 0.01), na.rm = TRUE)
@@ -223,8 +239,8 @@ differential_expression <- function(df, id_col, group_col, expr_col,
     summarise(
       GroupA = groups[1],
       GroupB = groups[2],
-      Mean_GroupA = mean({ { expr_col } }[{ { group_col } } == unique({ { group_col } })[1]]),
-      Mean_GroupB = mean({ { expr_col } }[{ { group_col } } == unique({ { group_col } })[2]]),
+      Mean_GroupA = mean({ { expr_col } }[{ { group_col } } == groups[1]]),
+      Mean_GroupB = mean({ { expr_col } }[{ { group_col } } == groups[2]]),
       Log2FC = Mean_GroupB - Mean_GroupA,
       TTest.p = t.test(as.formula(paste(quo_name(enquo(expr_col)), "~", quo_name(enquo(group_col)))),
                        paired = paired)$p.value,

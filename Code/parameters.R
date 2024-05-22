@@ -29,6 +29,7 @@ output_data_base_dir <- here("Output", "Data")
 plots_base_dir <- here("Output", "Plots")
 tables_base_dir <- here("Output", "Tables")
 reports_base_dir <- here("Output", "Reports")
+temp_base_dir <- here("Output", "Temp")
 
 # === Theme Defaults ===
 default_theme <- theme_light(base_size = 14)

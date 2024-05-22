@@ -2,6 +2,7 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(stringr)
+library(magrittr)
 library(arrow)
 library(assertr)
 library(ggplot2)
@@ -10,6 +11,7 @@ library(skimr)
 library(openxlsx)
 library(gprofiler2)
 library(WebGestaltR)
+library(STRINGdb)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -21,11 +23,13 @@ output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
 plots_dir <- here(plots_base_dir, "Screens", "Enrichment")
 reports_dir <- reports_base_dir
+temp_dir <- temp_base_dir
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(tables_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
+dir.create(temp_dir, recursive = TRUE)
 
 # === Load Datasets ===
 
@@ -35,7 +39,8 @@ cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_ge
 # === Identify proteins with significant expression differences between cell lines with high and low buffering ===
 
 diff_exp <- cellline_buf_procan %>%
-  split_by_quantiles(Buffering.CellLine.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_3_quantiles(Buffering.CellLine.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
+  filter(CellLine.Buffering.Group != "Center") %>%
   inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
   select(CellLine.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
   differential_expression(Gene.Symbol, CellLine.Buffering.Group, Protein.Expression.Normalized,
@@ -49,9 +54,7 @@ volcano_plot <- diff_exp %>%
   save_plot("volcano_plot.png")
 
 # === Enrichment Analysis ===
-# TODO: Hypergeometric test as ORA
 # TODO: GSEA
-# TODO: STRING Network Enrichment
 overrepresentation_analysis <- function(genes, ordered = TRUE, p_thresh = p_threshold, ref_background = NULL,
                                         databases = c("GO:BP", "GO:MF", "KEGG", "REAC", "WP", "CORUM")) {
   gost(query = genes,
@@ -131,3 +134,68 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
  ora_down %>%
    plot_terms() %>%
    save_plot("overrepresentation_terms_down.png", height = 300)
+
+# === Network Analysis ===
+string_db <- STRINGdb$new(version = "12.0", species = 9606, score_threshold = 700,
+                          network_type = "full", input_directory = temp_dir)
+
+create_string_network <- function(df, gene_col, logfc_col, string_db) {
+  require(STRINGdb)
+  require(dplyr)
+  require(magrittr)
+  require(scales)
+
+  max_val <- df_mapped %>% pull(Log2FC) %>% abs() %>% max()
+  domain <- c(-max_val, max_val)
+  color_func <- scales::col_numeric(palette = bidirectional_color_pal, domain = domain)
+
+  df_mapped <- df %>%
+    select({ { gene_col } }, { { logfc_col } }) %>%
+    as.data.frame() %>%
+    string_db$map(quo_name(enquo(gene_col)), removeUnmappedRows = TRUE) %>%
+    mutate(Color = color_func({ { logfc_col } }))
+
+  payload <- df_mapped %$%
+    string_db$post_payload(STRING_id, colors = Color)
+
+  df_mapped %$%
+    return(list(df_mapped = df_mapped,
+                payload = payload,
+                network = string_db$get_subnetwork(STRING_id),
+                link = string_db$get_link(STRING_id, payload_id = payload, required_score = 700)))
+}
+
+string_up <- genes_up %>%
+  create_string_network(Gene.Symbol, Log2FC, string_db)
+
+string_up_png <- string_db$get_png(string_up$df_mapped$STRING_id, payload_id = string_up$payload,
+                                   required_score = 700, file = here(plots_dir, "string_up.png"))
+
+string_down <- genes_down %>%
+  create_string_network(Gene.Symbol, Log2FC, string_db)
+
+string_down_png <- string_db$get_png(string_down$df_mapped$STRING_id, payload_id = string_down$payload,
+                                     required_score = 700, file = here(plots_dir, "string_down.png"))
+
+# ===  Karyotype & Expression by ChrArm ===
+# TODO: Compare Karyotype & Expression per Chromosome between buffered and scaling cell lines
+gene_metadata <- expr_buf_procan %>%
+  distinct(Gene.Symbol, Gene.Chromosome, Gene.ChromosomeArm, Gene.StartPosition, Gene.EndPosition) %>%
+  mutate(Gene.Chromosome = as.integer(Gene.Chromosome))
+
+# TODO: Nested facet with chromosome arm
+diff_exp %>%
+  inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        x_lab = "Chromosome & Gene Position")
+
+# TODO: Check copy number / chromosome CNA between two cohorts
+
+egfr_dc <- expr_buf_procan %>%
+  filter(Gene.Symbol == "EGFR") %>%
+  mutate(CNDiff = ChromosomeArm.CopyNumber - ChromosomeArm.CopyNumber.Baseline) %>%
+  filter(abs(CNDiff) > 0.5) %>%
+  mutate(CNV = if_else(CNDiff > 0, "Gain", "Loss")) %>%
+  drop_na(Buffering.ChrArmLevel.Ratio) %>%
+  signif_beeswarm_plot(CNV, Buffering.ChrArmLevel.Ratio, color_col = CellLine.AneuploidyScore) %>%
+  save_plot("EGFR_DC_ChrArm.png", height = 150, width = 150)

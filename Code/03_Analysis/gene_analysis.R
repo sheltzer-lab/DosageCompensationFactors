@@ -129,3 +129,64 @@ expr_buf_p0211 %>%
                         cluster_rows = TRUE, cluster_cols = TRUE,
                         show_rownames = TRUE, show_colnames = TRUE) %>%
   save_plot("genes_chr13_log2fc_p0211.png", width = 500)
+
+# === Export Tables ===
+
+expr_buf_p0211 %>%
+  select(Sample.Name, Gene.Symbol, Protein.Expression.Normalized) %>%
+  pivot_wider(names_from = "Sample.Name", values_from = "Protein.Expression.Normalized", id_cols = "Gene.Symbol") %>%
+  write.xlsx(here(tables_base_dir, "p0211_expression_processed_wide.xlsx"),
+             colNames = TRUE)
+
+expr_buf_p0211 %>%
+  filter(Gene.Chromosome == 13) %>%
+  filter(CellLine.Name != "RPE1") %>%
+  select(Gene.Symbol, Gene.ChromosomeArm, Sample.Name, CellLine.Name, CellLine.Replicate,
+         ChromosomeArm.CopyNumber, ChromosomeArm.CopyNumber.Baseline,
+         Protein.Expression.Normalized, Protein.Expression.Baseline,
+         Log2FC, Log2FC.Average,
+         Buffering.ChrArmLevel.Ratio, Buffering.ChrArmLevel.Class, Buffering.ChrArmLevel.Ratio.Confidence,
+         Buffering.ChrArmLevel.Average.Class) %>%
+  write.xlsx(here(tables_base_dir, "p0211_dosage_compensation.xlsx"),
+             colNames = TRUE)
+
+chr_arms <- expr_buf_p0211 %>%
+  distinct(Gene.Symbol, Gene.Chromosome, Gene.ChromosomeArm)
+
+expr_buf_p0211 %>%
+  select(CellLine.Name, Sample.Name, Gene.Symbol, Protein.Expression.Normalized) %>%
+  filter(CellLine.Name %in% c("RM13", "RPE1")) %>%
+  differential_expression(Gene.Symbol, CellLine.Name, Protein.Expression.Normalized,
+                          groups = c("RPE1", "RM13")) %>%
+  left_join(y = chr_arms, by = "Gene.Symbol") %>%
+  write.xlsx(here(tables_base_dir, "p0211_diff_exp_RM13.xlsx"),
+             colNames = TRUE)
+
+expr_buf_p0211 %>%
+  select(CellLine.Name, Sample.Name, Gene.Symbol, Protein.Expression.Normalized, Gene.Chromosome) %>%
+  filter(CellLine.Name %in% c("RM13", "RPE1")) %>%
+  filter(Gene.Chromosome == 13) %>%
+  differential_expression(Gene.Symbol, CellLine.Name, Protein.Expression.Normalized,
+                          groups = c("RPE1", "RM13")) %>%
+  left_join(y = chr_arms, by = "Gene.Symbol") %>%
+  write.xlsx(here(tables_base_dir, "p0211_diff_exp_RM13_chr13.xlsx"),
+             colNames = TRUE)
+
+expr_buf_p0211 %>%
+  select(CellLine.Name, Sample.Name, Gene.Symbol, Protein.Expression.Normalized) %>%
+  filter(CellLine.Name %in% c("Rtr13", "RPE1")) %>%
+  differential_expression(Gene.Symbol, CellLine.Name, Protein.Expression.Normalized,
+                          groups = c("RPE1", "Rtr13")) %>%
+  left_join(y = chr_arms, by = "Gene.Symbol") %>%
+  write.xlsx(here(tables_base_dir, "p0211_diff_exp_Rtr13.xlsx"),
+             colNames = TRUE)
+
+expr_buf_p0211 %>%
+  select(CellLine.Name, Sample.Name, Gene.Symbol, Protein.Expression.Normalized, Gene.Chromosome) %>%
+  filter(CellLine.Name %in% c("Rtr13", "RPE1")) %>%
+  filter(Gene.Chromosome == 13) %>%
+  differential_expression(Gene.Symbol, CellLine.Name, Protein.Expression.Normalized,
+                          groups = c("RPE1", "Rtr13")) %>%
+  left_join(y = chr_arms, by = "Gene.Symbol") %>%
+  write.xlsx(here(tables_base_dir, "p0211_diff_exp_Rtr13_chr13.xlsx"),
+             colNames = TRUE)
