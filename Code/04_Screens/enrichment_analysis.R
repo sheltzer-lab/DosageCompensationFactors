@@ -145,7 +145,7 @@ create_string_network <- function(df, gene_col, logfc_col, string_db) {
   require(magrittr)
   require(scales)
 
-  max_val <- df_mapped %>% pull(Log2FC) %>% abs() %>% max()
+  max_val <- df %>% pull({ { logfc_col } }) %>% abs() %>% max()
   domain <- c(-max_val, max_val)
   color_func <- scales::col_numeric(palette = bidirectional_color_pal, domain = domain)
 
