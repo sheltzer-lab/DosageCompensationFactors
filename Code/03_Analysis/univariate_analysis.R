@@ -51,17 +51,25 @@ expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffer
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet')) %>%
+  filter(Model.SampleType == "Tumor")
 
 # === Define Processing Functions ===
-reshape_factors <- function(df, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
+establish_binary_classification <- function(df, buffering_class_col) {
   require(dplyr)
-  require(tidyr)
 
   df %>%
     filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
     mutate(Buffered = ifelse({ { buffering_class_col } } == "Buffered", 1, 0)) %>%
     mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
-    drop_na(Buffered) %>%
+    drop_na(Buffered)
+}
+
+reshape_factors <- function(df, factor_cols = dc_factor_cols, id_col = "UniqueId") {
+  require(dplyr)
+  require(tidyr)
+
+  df %>%
     select(all_of(id_col), Buffered, all_of(factor_cols)) %>%
     pivot_longer(all_of(factor_cols),
                  names_to = "DosageCompensation.Factor",
@@ -164,15 +172,15 @@ factor_roc_auc_prep_pipeline <- function(df, buffering_class_col, filter_func, d
   df %>%
     filter_func() %>%
     add_factors(df_factors) %>%
-    rename(BufferingClass = { { buffering_class_col } }) %>%
-    select(UniqueId, BufferingClass, all_of(factor_cols))
+    establish_binary_classification({ { buffering_class_col } }) %>%
+    select(UniqueId, Buffered, all_of(factor_cols))
 }
 
 factor_roc_auc_base_pipeline <- function(df) {
   require(dplyr)
 
   df %>%
-    reshape_factors(BufferingClass) %>%
+    reshape_factors() %>%
     determine_rocs() %>%
     summarize_roc_auc()
 }
@@ -194,15 +202,16 @@ datasets <- list(
   list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
   list(dataset = buf_wgd, name = "DepMap-WGD"),
   list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
-  list(dataset = expr_buf_p0211, name = "P0211")
+  list(dataset = expr_buf_p0211, name = "P0211"),
+  list(dataset = expr_buf_cptac, name = "CPTAC")
 )
 
 ## Define training data conditions
 analysis_conditions <- list(
   list(buffering = "Buffering.GeneLevel.Class", filter = identity, sub_dir =  list("Gene-Level", "Unfiltered")),
   list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff, sub_dir =  list("Gene-Level", "Filtered")),
-  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain, sub_dir =  list("Gene-Level", "Filtered_Gain")),
-  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss, sub_dir =  list("Gene-Level", "Filtered_Loss")),
+  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain_abs, sub_dir =  list("Gene-Level", "Filtered_Gain")),
+  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss_abs, sub_dir =  list("Gene-Level", "Filtered_Loss")),
   list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain, sub_dir =  list("ChromosomeArm-Level", "Gain")),
   list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss, sub_dir =  list("ChromosomeArm-Level", "Loss")),
   list(buffering = "Buffering.ChrArmLevel.Log2FC.Class", filter = filter_arm_gain, sub_dir = list("ChromosomeArm-Level", "Gain_Log2FC")),
@@ -226,7 +235,8 @@ for (dataset in datasets) {
     message("Univariate ROC AUC Analysis: ", analysis_id)
 
     analysis_results <- dataset$dataset %>%
-      run_analysis(buffering_class_col = !!quo(analysis$buffering),
+      rename(BufferingClass = analysis$buffering) %>%
+      run_analysis(buffering_class_col = BufferingClass,
                    filter_func = analysis$filter) %>%
       plot_roc_auc_summary(target_dir, "buffering-factors_roc-auc.png") %>%
       mutate(AnalysisID = analysis_id) %>%

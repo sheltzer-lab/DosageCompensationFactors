@@ -63,7 +63,7 @@ for (filename in cn_file_list) {
                                    sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE) %>%
     janitor::row_to_names(1) %>%
     pivot_longer(everything() & !idx,
-                 names_to = "Model.ID", values_to = "CNV",
+                 names_to = "Model.ID", values_to = "Gene.CNV",
                  names_ptypes = character(), values_ptypes = integer(),
                  names_transform = as.character, values_transform = as.integer) %>%
     mutate(Model.CancerType = df_name)
@@ -83,7 +83,9 @@ expr_cptac <- bind_rows(df_list_expr) %>%
   left_join(y = uniprot_mapping %>% select("Gene.ENSEMBL.Id", "Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Gene.ENSEMBL.Id",
             na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
-  updateGeneSymbols()
+  updateGeneSymbols() %>%
+  unite("UniqueId", c("Model.SampleID", "Gene.ENSEMBL.Id"), sep = '_', remove = FALSE) %>%
+  mutate(Dataset = "CPTAC")
 
 # === Preprocess Expression Datasets ===
 expr_cptac_processed <- expr_cptac %>%
@@ -104,7 +106,7 @@ copy_number_cptac <- bind_rows(df_list_cn) %>%
   updateGeneSymbols() %>%
   get_chromosome_arms() %>%
   filter(Gene.Chromosome %in% (1:22)) %>% # Only use autosomal genes
-  mutate(Gene.CopyNumber = 2L + CNV)
+  mutate(Gene.CopyNumber = 2L + Gene.CNV)
 
 # === Save Datasets ===
 expr_cptac_processed %>%
@@ -116,6 +118,11 @@ copy_number_cptac %>%
 # === Evaluation ===
 expr_dist <- plot_expr_dist(expr_cptac_processed) %>%
   save_plot("cptac_expression_distribution.png")
+
+expr_dist_sample <- expr_cptac_processed %>%
+  ggplot() +
+  aes(x = Protein.Expression.Normalized, color = Model.SampleType) +
+  geom_density()
 
 sample_subset <- expr_cptac_processed %>%
   distinct(Model.SampleID, Model.ID, Model.CancerType, Model.SampleType) %>%
@@ -163,3 +170,8 @@ pca_norm <- expr_cptac_processed %>%
   calculate_pca(Model.SampleID, Model.CancerType, Gene.ENSEMBL.Id, Protein.Expression.Normalized) %>%
   plot_pca(color_col = Model.SampleType, label_col = NULL) %>%
   save_plot("cptac_pca_sample_norm.png")
+
+cn_dist <- copy_number_cptac %>%
+  ggplot() +
+  aes(x = Gene.CopyNumber, fill = Model.CancerType) +
+  geom_bar()

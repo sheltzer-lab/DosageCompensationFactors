@@ -74,6 +74,14 @@ filter_cn_loss <- function(df, remove_above = "10%") {
     filter(Gene.CopyNumber < Gene.CopyNumber.Baseline + cn_diff_quantiles[remove_above])
 }
 
+filter_cn_gain_abs <- function(df) {
+  df %>% filter(Gene.CopyNumber - Gene.CopyNumber.Baseline > 0)
+}
+
+filter_cn_loss_abs <- function(df) {
+  df %>% filter(Gene.CopyNumber - Gene.CopyNumber.Baseline < 0)
+}
+
 filter_arm_gain <- function(df) {
   df %>% filter(ChromosomeArm.CNA > 0)
 }
