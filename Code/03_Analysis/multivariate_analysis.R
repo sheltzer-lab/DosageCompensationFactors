@@ -38,6 +38,7 @@ expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffer
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'))
 
 # === Define Functions ===
 
@@ -281,13 +282,14 @@ datasets <- list(
   list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
   list(dataset = buf_wgd, name = "DepMap-WGD"),
   list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
-  list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211)
+  # list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211),
+  list(dataset = expr_buf_cptac, name = "CPTAC")
 )
 
 ## Define training data conditions
 analysis_conditions <- list(
   # list(buffering = "Buffering.GeneLevel.Class", filter = identity, sub_dir =  list("Gene-Level", "Unfiltered")),
-  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff, sub_dir =  list("Gene-Level", "Filtered")),
+  # list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_diff, sub_dir =  list("Gene-Level", "Filtered")),
   list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain, sub_dir =  list("Gene-Level", "Filtered_Gain")),
   list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss, sub_dir =  list("Gene-Level", "Filtered_Loss")),
   list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain, sub_dir =  list("ChromosomeArm-Level", "Gain")),

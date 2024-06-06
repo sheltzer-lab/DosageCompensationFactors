@@ -202,4 +202,5 @@ expr_buf_cptac <- expr_cptac %>%
   ### DC Calculation
   calculate_protein_neutral_cv(Gene.ENSEMBL.Id, Gene.CNV, Protein.Expression.Normalized) %>%
   calculate_dc() %>%
+  filter(Model.SampleType == "Tumor")
   write_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'), version = "2.6")
