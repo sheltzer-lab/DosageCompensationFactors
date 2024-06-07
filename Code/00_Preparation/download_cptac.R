@@ -17,6 +17,7 @@ dir.create(downloads_dir, recursive = TRUE)
 
 api_url <- "https://api.gdc.cancer.gov/data/"
 
+# Get list of available files from cohort
 # For parameters see https://portal.gdc.cancer.gov/analysis_page?app=Downloads
 ## Cohort Builder -> Repository
 query_CPTAC3 <- GDCquery(project = "CPTAC-3",
@@ -31,6 +32,8 @@ cn_datasets <- list()
 
 pb <- txtProgressBar(min = 0, max = nrow(query_results), style = 3)
 for (i in seq_len(nrow(query_results))) {
+  # Get file from API
+  # https://docs.gdc.cancer.gov/API/Users_Guide/Downloading_Files/
   dataset <- query_results[i, ]
   download_result <- httr::GET(paste0(api_url, dataset$id))
   download_content <- httr::content(download_result, "raw")
@@ -55,3 +58,5 @@ close(pb)
 
 df_cn_ascat <- bind_rows(cn_datasets) %>%
   write_parquet(here(output_data_dir, 'gdc_cptac-3_cnv_ascat.parquet'), version = "2.6")
+
+

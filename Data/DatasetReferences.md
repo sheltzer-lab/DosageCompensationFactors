@@ -4,7 +4,7 @@
 
 ### Broad DepMap
 
-**URL:** https://depmap.org/portal/download/custom/
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=Proteomics&filename=protein_quant_current_normalized.csv
 
 **Location:** `./Data/External/Expression/Broad-DepMap-Proteomics.csv`
 
@@ -21,7 +21,7 @@ Primary Diseases: 24
 Lineages: 27
 Source: Broad Institute
 
-Quantitative profiling of thousands of proteins by mass spectrometry across 375 cell lines from the Gygi lab. The normalized protein quantitation data from https://gygi.med.harvard.edu/publications/ccle was imported into the portal. For more information about this dataset released in Nusinow et al., 2020, please see this supplemental guide.
+Quantitative profiling of thousands of proteins by mass spectrometry across 375 cell lines from the Gygi lab. The normalized protein quantitation data from https://gygi.med.harvard.edu/publications/ccle was imported into the portal. For more information about this dataset released in [Nusinow et al., 2020](https://www.cell.com/cell/fulltext/S0092-8674(19)31385-6#secsectitle0020), please see [this supplemental guide](https://www.biorxiv.org/content/10.1101/2020.02.03.932384v1).
 
 #### Citation
 David P. Nusinow, John Szpyt, Mahmoud Ghandi, Christopher M. Rose, E. Robert McDonald III, Marian Kalocsay, Judit Jané-Valbuena, Ellen Gelfand, Devin K. Schweppe, Mark Jedrychowski, Javad Golji, Dale A. Porter, Tomas Rejtar, Y. Karen Wang, Gregory V. Kryukov, Frank Stegmeier, Brian K. Erickson, Levi A. Garraway, William R. Sellers, Steven P. Gygi (2020). Quantitative Proteomics of the Cancer Cell Line Encyclopedia. Cell 180, 2. https://doi.org/10.1016/j.cell.2019.12.023
@@ -125,17 +125,8 @@ DepMap, Broad Institute. “DepMap 23Q2 Public.” figshare, 2023. https://doi.o
 
 ### CPTAC
 
-**URL:** https://proteomic.datacommons.cancer.gov/pdc/cptac-pancancer
-
-**Location:** `./Data/External/CopyNumber/CPTAC/CNV_BCM_v1`
-
-#### Source Notes
-
-File:  CNV_BCM_v1.zip
-
-Description:  CPTAC Pan-Cancer CNV data processed by the Baylor College of Medicine team's pipeline. Details can be found in the STAR Methods of 'Proteogenomic Data and Resources for Pan-Cancer Analysis'.
-
-Cohorts:  BRCA, ccRCC, COAD, GBM, HGSC, HNSCC, LSCC, LUAD, PDAC, UCEC
+Downloaded using the Genomic Data Commons Downloads API. 
+For more information see https://docs.gdc.cancer.gov/API/Users_Guide/Downloading_Files/. 
 
 #### Citation
 Li, Y., Dou, Y., da Veiga Leprevost, F., Geffen, Y., et al. (2023). Proteogenomic data and resources for pan-cancer analysis, Cancer Cell, 41, 1397-1406. https://doi.org/10.1016/j.ccell.2023.06.009

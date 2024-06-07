@@ -15,7 +15,6 @@ source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 
 expression_data_dir <- here(external_data_dir, "Expression", "CPTAC", "Proteome_BCM_GENCODE_v34_harmonized_v1")
-copynumber_data_dir <- here(external_data_dir, "CopyNumber", "CPTAC", "CNV_BCM_v1")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Preprocessing", "Expression", "CPTAC")
 
@@ -49,25 +48,7 @@ for (filename in expr_file_list) {
 }
 
 ## Copy Number
-cn_file_list <- list.files(copynumber_data_dir, include.dirs = FALSE, recursive = FALSE)
-cn_file_list <- cn_file_list[grep(".+_WES_.+_gistic_.+.txt", cn_file_list)]
-
-df_list_cn <- list()
-for (filename in cn_file_list) {
-  df_name <- sub('\\.txt$', '', filename) %>%
-    str_split_fixed("_", 6) %>%
-    as.data.frame() %>%
-    pull(V1)
-
-  df_list_cn[[df_name]] <- read.table(here(copynumber_data_dir, filename),
-                                   sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE) %>%
-    janitor::row_to_names(1) %>%
-    pivot_longer(everything() & !idx,
-                 names_to = "Model.ID", values_to = "Gene.CNV",
-                 names_ptypes = character(), values_ptypes = integer(),
-                 names_transform = as.character, values_transform = as.integer) %>%
-    mutate(Model.CancerType = df_name)
-}
+gdc_cptac_cnv <- read_parquet(here(output_data_dir, 'gdc_cptac-3_cnv_ascat.parquet'))
 
 ## Other
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
@@ -95,18 +76,23 @@ expr_cptac_processed <- expr_cptac %>%
                     normalized_colname = "Protein.Expression.Normalized")
 
 # === Combine & Tidy Copy Number Datasets ===
-copy_number_cptac <- bind_rows(df_list_cn) %>%
-  rename(Gene.ENSEMBL.Id = idx) %>%
-  ## Remove ENSEMBL version
-  mutate(Gene.ENSEMBL.Id = sub("\\.\\d+$", "", Gene.ENSEMBL.Id)) %>%
+copy_number_cptac <- gdc_cptac_cnv %>%
+  rename(Gene.ENSEMBL.Id = gene_id) %>%
+  mutate(Gene.CopyNumber = if_else(as.numeric(copy_number) < 10, as.numeric(copy_number), NA), # TODO: Temporary fix
+         ## Remove ENSEMBL version
+         Gene.ENSEMBL.Id = sub("\\.\\d+$", "", Gene.ENSEMBL.Id)) %>%
   ## ID Mapping
+  select(Model.ID, Gene.ENSEMBL.Id, Gene.CopyNumber) %>%
   left_join(y = uniprot_mapping %>% select("Gene.ENSEMBL.Id", "Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Gene.ENSEMBL.Id",
             na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
   updateGeneSymbols() %>%
   get_chromosome_arms() %>%
   filter(Gene.Chromosome %in% (1:22)) %>% # Only use autosomal genes
-  mutate(Gene.CopyNumber = 2L + Gene.CNV)
+  # TODO: Determine source of quality issues (multiple values per gene and sample)
+  drop_na(Gene.CopyNumber) %>%
+  group_by(Model.ID, Gene.ENSEMBL.Id) %>%
+  summarize(Gene.CopyNumber = max(Gene.CopyNumber, na.rm = TRUE), .groups = "drop")
 
 # === Save Datasets ===
 expr_cptac_processed %>%
@@ -173,5 +159,12 @@ pca_norm <- expr_cptac_processed %>%
 
 cn_dist <- copy_number_cptac %>%
   ggplot() +
-  aes(x = Gene.CopyNumber, fill = Model.CancerType) +
+  aes(x = Gene.CopyNumber) +
   geom_bar()
+
+ploidy_dist <- copy_number_cptac %>%
+  group_by(Model.ID) %>%
+  summarize(Ploidy = mean(Gene.CopyNumber, na.rm = TRUE), .groups = "drop") %>%
+  ggplot() +
+  aes(x = Ploidy) +
+  geom_density()

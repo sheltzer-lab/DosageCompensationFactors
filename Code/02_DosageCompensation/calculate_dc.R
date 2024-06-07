@@ -186,7 +186,7 @@ expr_buf_p0211 <- expr_p0211 %>%
 
 ## CPTAC
 expr_buf_cptac <- expr_cptac %>%
-  inner_join(y = copy_number_cptac %>% select(-Model.CancerType, -Protein.Uniprot.Accession, -Gene.Symbol),
+  inner_join(y = copy_number_cptac,
              by = c("Model.ID", "Gene.ENSEMBL.Id"), na_matches = "never", relationship = "many-to-one") %>%
   ### Baseline Estimation
   mutate(ChromosomeArm.CNA = NA,
@@ -194,13 +194,15 @@ expr_buf_cptac <- expr_cptac %>%
          ChromosomeArm.CopyNumber = NA,
          Gene.CopyNumber.Baseline = 2L) %>%
   group_by(Gene.ENSEMBL.Id, Protein.Uniprot.Accession) %>%
-  mutate(Protein.Expression.Baseline = median(Protein.Expression.Normalized[Model.SampleType == "Normal" & Gene.CNV == 0],
+  mutate(Protein.Expression.Baseline = median(Protein.Expression.Normalized[Model.SampleType == "Normal"],
                                               na.rm = TRUE),
          Protein.Expression.Baseline.Unweighted = NA) %>%
   ungroup() %>%
   # filter(Model.SampleType == "Tumor") %>%
   ### DC Calculation
+  mutate(Gene.CNV = if_else(Model.SampleType == "Normal" | Gene.CopyNumber == 2, 0L, NA)) %>%
   calculate_protein_neutral_cv(Gene.ENSEMBL.Id, Gene.CNV, Protein.Expression.Normalized) %>%
   calculate_dc() %>%
-  filter(Model.SampleType == "Tumor")
+  filter(Model.SampleType == "Tumor") %>%
+  select(-Gene.CNV) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'), version = "2.6")
