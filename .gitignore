@@ -151,6 +151,7 @@ fabric.properties
 
 /.idea/
 /Output/
+/Downloads/
 /Data/*
 ~$*.xls*
 .Rproj.user
