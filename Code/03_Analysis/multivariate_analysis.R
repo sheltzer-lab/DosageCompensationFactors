@@ -950,3 +950,15 @@ shap_cor_wgd_diff %>%
         axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.x = element_blank(),
         axis.title.y = element_blank())
+
+## ProCan vs. CPTAC
+shap_results_tumor <- shap_results %>%
+  filter(grepl("ProCan_Gene-Level", Model.Variant) | grepl("CPTAC_Gene-Level", Model.Variant)) %>%
+  mutate(Dataset = if_else(grepl("CPTAC_Gene-Level", Model.Variant), "CPTAC", "ProCan"))
+
+shap_results_tumor %>%
+  mutate(Model.Variant = str_remove(Model.Variant, "-Level")) %>%
+  mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
+  simple_heatmap(DosageCompensation.Factor, Model.Variant, SHAP.Factor.Corr, Label,
+                 x_lab = "Feature", y_lab = "Model", legend_lab = "SHAP-Value-Feature-Correlation")
