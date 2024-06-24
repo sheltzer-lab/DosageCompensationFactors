@@ -75,11 +75,11 @@ filter_cn_loss <- function(df, remove_above = "10%") {
 }
 
 filter_cn_gain_abs <- function(df) {
-  df %>% filter(Gene.CopyNumber - Gene.CopyNumber.Baseline > 0)
+  df %>% filter(Gene.CopyNumber > Gene.CopyNumber.Baseline)
 }
 
 filter_cn_loss_abs <- function(df) {
-  df %>% filter(Gene.CopyNumber - Gene.CopyNumber.Baseline < 0)
+  df %>% filter(Gene.CopyNumber < Gene.CopyNumber.Baseline)
 }
 
 filter_arm_gain <- function(df) {
