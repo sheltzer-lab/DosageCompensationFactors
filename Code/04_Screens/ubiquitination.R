@@ -68,6 +68,7 @@ ubi_buf_cptac %>%
                                 Scaling = bidirectional_color_pal[5],
                                 `Anti-Scaling` = "black"))
 
+# Model-level Analysis
 # TODO: Move to cell line level analysis
 model_buf_cptac <- expr_buf_cptac %>%
   filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
@@ -95,3 +96,60 @@ model_buf_cptac %>%
   theme(legend.position = "") +
   scale_color_manual(values = c(High = bidirectional_color_pal[1],
                                 Low = bidirectional_color_pal[5]))
+
+# Univariate Analyis
+library(pROC)
+
+# TODO: Reference function from univariate analysis
+establish_binary_classification <- function(df, buffering_class_col) {
+  require(dplyr)
+
+  df %>%
+    filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
+    mutate(Buffered = ifelse({ { buffering_class_col } } == "Buffered", 1, 0)) %>%
+    mutate(Buffered = factor(Buffered, levels = c(0, 1))) %>%
+    drop_na(Buffered)
+}
+
+roc_ubi_gain <- ubi_buf_cptac %>%
+  filter_cn_gain_abs() %>%
+  establish_binary_classification(Buffering.GeneLevel.Class) %>%
+  select(Protein.Ubiquitination.Log2, Buffered) %$%
+  roc(Buffered, Protein.Ubiquitination.Log2, na.rm = TRUE)
+
+roc_ubi_loss <- ubi_buf_cptac %>%
+  filter_cn_loss_abs() %>%
+  establish_binary_classification(Buffering.GeneLevel.Class) %>%
+  select(Protein.Ubiquitination.Log2, Buffered) %$%
+  roc(Buffered, Protein.Ubiquitination.Log2, na.rm = TRUE)
+
+auc(roc_ubi_gain)
+auc(roc_ubi_loss)
+
+roc_ubi_adj_gain <- ubi_buf_cptac %>%
+  filter_cn_gain_abs() %>%
+  establish_binary_classification(Buffering.GeneLevel.Class) %>%
+  select(Protein.Ubiquitination.Adj, Buffered) %$%
+  roc(Buffered, Protein.Ubiquitination.Adj, na.rm = TRUE)
+
+roc_ubi_adj_loss <- ubi_buf_cptac %>%
+  filter_cn_loss_abs() %>%
+  establish_binary_classification(Buffering.GeneLevel.Class) %>%
+  select(Protein.Ubiquitination.Adj, Buffered) %$%
+  roc(Buffered, Protein.Ubiquitination.Adj, na.rm = TRUE)
+
+auc(roc_ubi_adj_gain)
+auc(roc_ubi_adj_loss)
+
+df_rocs <- rocs_to_df(list(Gain_Ubi = roc_ubi_gain,
+                           Gain_UbiAdj = roc_ubi_adj_gain,
+                           Loss_Ubi = roc_ubi_loss,
+                           Loss_UbiAdj = roc_ubi_adj_loss))
+
+plot_rocs(df_rocs) +
+  scale_color_manual(values = c(Gain_Ubi = categorical_color_pal[4],
+                                Gain_UbiAdj = categorical_color_pal[3],
+                                Loss_Ubi = categorical_color_pal[8],
+                                Loss_UbiAdj = categorical_color_pal[7]))
+
+# TODO: Use XGBTree model for prediction
