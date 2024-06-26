@@ -26,7 +26,7 @@ cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_ge
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
-df_model_procan <- read_csv_arrow(here(procan_cn_data_dir, "model_list_20230801.csv")) %>%
+df_model_procan <- read_csv_arrow(here(procan_cn_data_dir, "model_list_20240110.csv")) %>%
   rename(CellLine.Name = "model_name") %>%
   add_count(CellLine.Name) %>%
   filter(n == 1) %>%

@@ -15,6 +15,8 @@ source(here("Code", "visualization.R"))
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Screens", "Ubiquitination")
 
+dir.create(plots_dir, recursive = TRUE)
+
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac.parquet"))
 ubi_cptac <- read_parquet(here(output_data_dir, 'ubiquitination_cptac.parquet'))
 
@@ -37,6 +39,10 @@ ubi_buf_cptac %>%
   filter_cn_gain_abs() %$%
   cor.test(Protein.Ubiquitination.Adj, Buffering.GeneLevel.Ratio)
 
+ubi_buf_cptac %>%
+  filter_cn_loss_abs() %$%
+  cor.test(Protein.Ubiquitination.Adj, Buffering.GeneLevel.Ratio)
+
 ubi_buf_corr <- ubi_buf_cptac %>%
   filter_cn_gain_abs() %>%
   drop_na(Protein.Ubiquitination.Adj, Buffering.GeneLevel.Ratio) %>%
@@ -52,7 +58,7 @@ ubi_buf_cptac %>%
   aes(x = Buffering.GeneLevel.Ratio, y = Protein.Ubiquitination.Adj, color = Gene.Symbol) +
   geom_point()
 
-ubi_buf_cptac %>%
+ubi_class_plot <- ubi_buf_cptac %>%
   filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0.2) %>%
   mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
   drop_na(Buffering.GeneLevel.Class) %>%
@@ -68,6 +74,8 @@ ubi_buf_cptac %>%
                                 Scaling = bidirectional_color_pal[5],
                                 `Anti-Scaling` = "black"))
 
+save_plot(ubi_class_plot, "ubiquitination_buffering_class.png", width = 150, height = 120)
+
 # Model-level Analysis
 # TODO: Move to cell line level analysis
 model_buf_cptac <- expr_buf_cptac %>%
@@ -82,7 +90,7 @@ model_buf_cptac <- expr_buf_cptac %>%
             SD = sd(Buffering.GeneLevel.Ratio, na.rm = TRUE)) %>%
   filter(Observations > 10)
 
-model_buf_cptac %>%
+ubi_model_plot <- model_buf_cptac %>%
   split_by_quantiles(Buffering.Model.Ratio, target_group_col = "Buffering.Model.Group") %>%
   inner_join(y = ubi_cptac_processed, "Model.ID") %>%
   drop_na(Protein.Ubiquitination.Log2) %>%
@@ -96,6 +104,8 @@ model_buf_cptac %>%
   theme(legend.position = "") +
   scale_color_manual(values = c(High = bidirectional_color_pal[1],
                                 Low = bidirectional_color_pal[5]))
+
+save_plot(ubi_model_plot, "ubiquitination_model_buffering.png", width = 80, height = 110)
 
 # Univariate Analyis
 library(pROC)
@@ -146,10 +156,12 @@ df_rocs <- rocs_to_df(list(Gain_Ubi = roc_ubi_gain,
                            Loss_Ubi = roc_ubi_loss,
                            Loss_UbiAdj = roc_ubi_adj_loss))
 
-plot_rocs(df_rocs) +
+ubi_roc_plot <- plot_rocs(df_rocs) +
   scale_color_manual(values = c(Gain_Ubi = categorical_color_pal[4],
                                 Gain_UbiAdj = categorical_color_pal[3],
                                 Loss_Ubi = categorical_color_pal[8],
                                 Loss_UbiAdj = categorical_color_pal[7]))
+
+save_plot(ubi_roc_plot, "ubiquitination_roc.png", width = 160, height = 130)
 
 # TODO: Use XGBTree model for prediction

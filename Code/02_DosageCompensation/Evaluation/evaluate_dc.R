@@ -426,14 +426,11 @@ corr_summary <- list(
 dc_report$corr_procan_depmap_summary <- corr_summary
 
 # Compare Buffering Ratio dsitributions between datasets
-set.seed(12)
-
 dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
-  select(Dataset, Buffering.GeneLevel.Ratio) %>%
+  filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0.2) %>%
+  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  select(Dataset, Buffering.GeneLevel.Ratio, Gene.CopyNumber.Event) %>%
   drop_na() %>%
-  group_by(Dataset) %>%
-  slice_sample(n = 20000) %>%
-  ungroup() %>%
   ggplot() +
   aes(x = Dataset, y = Buffering.GeneLevel.Ratio, color = Dataset) +
   geom_boxplot(outliers = FALSE, size = 0.8) +
@@ -441,15 +438,16 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %
                                  c("CPTAC", "DepMap"),
                                  c("CPTAC", "ProCan")),
               test = wilcox.test,
-              map_signif_level = print_signif, y_position = c(2, 2, 2.5),
+              map_signif_level = print_signif, y_position = c(1.8, 1.8, 2.1),
               size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
   theme(legend.position = "") +
   scale_color_manual(values = c(DepMap = categorical_color_pal[8],
                                 ProCan = categorical_color_pal[4],
-                                CPTAC = categorical_color_pal[10]))
+                                CPTAC = categorical_color_pal[10])) +
+  facet_wrap(~Gene.CopyNumber.Event, ncol = 2)
 
 dc_dataset_dist %>%
-  save_plot("dc_dataset_distribution.png", width = 100, height = 150)
+  save_plot("dc_dataset_distribution.png", width = 150, height = 150)
 
 # === Write Report ===
 report_file <- here(reports_dir, "dc_report.txt")

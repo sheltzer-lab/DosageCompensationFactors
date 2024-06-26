@@ -134,9 +134,9 @@ Li, Y., Dou, Y., da Veiga Leprevost, F., Geffen, Y., et al. (2023). Proteogenomi
 
 ## Cell Line Metadata
 
-### DepMap
+### Broad DepMap
 
-**URL:** https://depmap.org/portal/download/all/?releasename=DepMap+Public+23Q2&filename=Model.csv
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=DepMap+Public+24Q2&filename=Model.csv
 
 **Location:** `./Data/External/CopyNumber/DepMap/Model.csv`
 
@@ -151,6 +151,12 @@ Source: Broad Institute
 
 #### Citation
 DepMap, Broad Institute. “DepMap 23Q2 Public.” figshare, 2023. https://doi.org/10.6084/M9.FIGSHARE.22765112.V4.
+
+### Sanger ProCan
+
+**URL:** https://cellmodelpassports.sanger.ac.uk/downloads
+
+**Location:** `./Data/External/CopyNumber/ProCan/model_list_20240110.csv`
 
 ## Dosage Compensation Factors
 
