@@ -51,7 +51,7 @@ expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffer
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
-expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 
 # === Define Processing Functions ===
 establish_binary_classification <- function(df, buffering_class_col) {

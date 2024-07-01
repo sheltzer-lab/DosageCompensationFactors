@@ -43,6 +43,8 @@ expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_re
 expr_p0211 <- read_parquet(here(output_data_dir, 'expression_p0211.parquet'))
 expr_cptac <- read_parquet(here(output_data_dir, 'expression_cptac.parquet'))
 
+meta_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
+
 # === Combine Datasets and Calculate Buffering & Dosage Compensation ===
 # TODO: Rewrite to return vector and allow usage within dplyr::mutate()
 calculate_protein_neutral_cv <- function(df, gene_col, chr_arm_cna_col, expr_col) {
@@ -206,3 +208,12 @@ expr_buf_cptac <- expr_cptac %>%
   filter(Model.SampleType == "Tumor") %>%
   select(-Gene.CNV) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'), version = "2.6")
+
+
+purity_cptac <- meta_cptac %>%
+  select(Model.ID, Model.TumorPurity)
+
+expr_buf_cptac_pure <- expr_buf_cptac %>%
+  inner_join(y = purity_cptac, by = "Model.ID") %>%
+  filter(Model.TumorPurity > 0.333) %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'), version = "2.6")

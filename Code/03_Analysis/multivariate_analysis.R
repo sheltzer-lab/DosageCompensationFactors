@@ -38,7 +38,7 @@ expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffer
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
-expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 
 # === Define Functions ===
 
@@ -270,9 +270,9 @@ tc_p0211["number"] <- 10
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base),
-  list(modelName = "rf", tc = tc_base),
-  list(modelName = "pcaNNet", tc = tc_nn)
+  list(modelName = "xgbLinear", tc = tc_base)
+#  list(modelName = "rf", tc = tc_base),
+#  list(modelName = "pcaNNet", tc = tc_nn)
 )
 
 ## Define datasets to train models on
