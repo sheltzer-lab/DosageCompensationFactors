@@ -4,6 +4,7 @@ library(dplyr)
 library(stringr)
 library(arrow)
 library(readxl)
+library(readr)
 library(forcats)
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -15,6 +16,7 @@ source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 
 expression_data_dir <- here(external_data_dir, "Expression", "CPTAC", "Proteome_BCM_GENCODE_v34_harmonized_v1")
+meta_data_dir <- here(expression_data_dir, "README")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Preprocessing", "Expression", "CPTAC")
 
@@ -47,6 +49,21 @@ for (filename in expr_file_list) {
            Model.SampleType = metadata$V9)
 }
 
+## Metadata
+meta_filenames <- list.files(meta_data_dir, include.dirs = FALSE, recursive = FALSE)
+meta_filenames <- meta_filenames[grep(".+_meta.txt", meta_filenames)]
+
+df_list_meta <- list()
+
+for (filename in meta_filenames) {
+  cancer_type <- sub('\\.txt$', '', filename) %>%
+    str_split_i("_", 1)
+
+  df_list_meta[[cancer_type]] <- read_delim(here(meta_data_dir, filename), delim = "\t") %>%
+    filter(idx != "data_type") %>%
+    mutate(Model.CancerType = cancer_type)
+}
+
 ## Copy Number
 gdc_cptac_cnv <- read_parquet(here(output_data_dir, 'gdc_cptac-3_cnv_ascat.parquet'))
 
@@ -54,7 +71,8 @@ gdc_cptac_cnv <- read_parquet(here(output_data_dir, 'gdc_cptac-3_cnv_ascat.parqu
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
 df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
 
-# === Combine & Tidy Expression Datasets ===
+# === Combine & Tidy Datasets ===
+## Expression
 expr_cptac <- bind_rows(df_list_expr) %>%
   unite("Model.SampleID", c("Model.ID", "Model.SampleType"), sep = '_', remove = FALSE) %>%
   rename(Gene.ENSEMBL.Id = idx) %>%
@@ -68,14 +86,7 @@ expr_cptac <- bind_rows(df_list_expr) %>%
   unite("UniqueId", c("Model.SampleID", "Gene.ENSEMBL.Id"), sep = '_', remove = FALSE) %>%
   mutate(Dataset = "CPTAC")
 
-# === Preprocess Expression Datasets ===
-expr_cptac_processed <- expr_cptac %>%
-  remove_noisefloor(Protein.Expression.Log2) %>%
-  semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
-  normalize_samples(Model.SampleID, Protein.Expression.Log2, Gene.ENSEMBL.Id,
-                    normalized_colname = "Protein.Expression.Normalized")
-
-# === Combine & Tidy Copy Number Datasets ===
+## Copy Number
 copy_number_cptac <- gdc_cptac_cnv %>%
   rename(Gene.ENSEMBL.Id = gene_id) %>%
   mutate(Gene.CopyNumber = if_else(as.numeric(copy_number) < 10, as.numeric(copy_number), NA), # TODO: Temporary fix
@@ -94,12 +105,30 @@ copy_number_cptac <- gdc_cptac_cnv %>%
   group_by(Model.ID, Gene.ENSEMBL.Id) %>%
   summarize(Gene.CopyNumber = max(Gene.CopyNumber, na.rm = TRUE), .groups = "drop")
 
+# === Preprocess Datasets ===
+## Expression
+expr_cptac_processed <- expr_cptac %>%
+  remove_noisefloor(Protein.Expression.Log2) %>%
+  semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
+  normalize_samples(Model.SampleID, Protein.Expression.Log2, Gene.ENSEMBL.Id,
+                    normalized_colname = "Protein.Expression.Normalized")
+
+## Metadata
+metadata_cptac_processed <- bind_rows(df_list_meta) %>%
+  rename(Model.ID = idx) %>%
+  mutate_all(~type.convert(., as.is = TRUE)) %>%
+  mutate(Model.TumorPurity = pmin(WES_purity, WGS_purity, na.rm = TRUE))
+
+
 # === Save Datasets ===
 expr_cptac_processed %>%
   write_parquet(here(output_data_dir, 'expression_cptac.parquet'), version = "2.6")
 
 copy_number_cptac %>%
   write_parquet(here(output_data_dir, 'copy_number_cptac.parquet'), version = "2.6")
+
+metadata_cptac_processed %>%
+  write_parquet(here(output_data_dir, 'metadata_cptac.parquet'), version = "2.6")
 
 # === Evaluation ===
 expr_dist <- plot_expr_dist(expr_cptac_processed) %>%
@@ -168,3 +197,16 @@ ploidy_dist <- copy_number_cptac %>%
   ggplot() +
   aes(x = Ploidy) +
   geom_density()
+
+# Tumor Purity
+purity_dist <- metadata_cptac_processed %>%
+  ggplot() +
+  aes(x = Model.TumorPurity) +
+  geom_density() +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+
+fivenum(metadata_cptac_processed$Model.TumorPurity, na.rm = TRUE)
+
+# WGS and WES ploidy inconsistent
+ploidy_cptac <- metadata_cptac_processed %>%
+  scatter_plot_reg_corr(WES_ploidy, WGS_ploidy)
