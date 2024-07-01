@@ -956,9 +956,33 @@ shap_results_tumor <- shap_results %>%
   filter(grepl("ProCan_Gene-Level", Model.Variant) | grepl("CPTAC_Gene-Level", Model.Variant)) %>%
   mutate(Dataset = if_else(grepl("CPTAC_Gene-Level", Model.Variant), "CPTAC", "ProCan"))
 
-shap_results_tumor %>%
-  mutate(Model.Variant = str_remove(Model.Variant, "-Level")) %>%
+shap_heatmap_tumor <- shap_results_tumor %>%
+  mutate(Model.Condition = if_else(grepl("Gain", Model.Variant), "Gain", "Loss"),
+         Model.Variant = paste(Dataset, "Gene CN", Model.Condition)) %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
-  simple_heatmap(DosageCompensation.Factor, Model.Variant, SHAP.Factor.Corr, Label,
-                 x_lab = "Feature", y_lab = "Model", legend_lab = "SHAP-Value-Feature-Correlation")
+  distinct(DosageCompensation.Factor, Dataset, Model.Condition, Model.Variant, SHAP.Factor.Corr, Label) %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
+  geom_raster() +
+  geom_text(color = "black") +
+  ggh4x::facet_nested(Dataset + Model.Condition ~ ., switch = "y") +
+  scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                       limits = c(-1, 1), oob = scales::squish) +
+  labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
+  cowplot::theme_minimal_grid() +
+  theme(panel.spacing = unit(0, "lines"),
+        strip.background = element_rect(color = "lightgrey"),
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(16, "points"),
+        legend.key.width = unit(24, "points"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.margin = unit(c(5, 15, 5, 15), "mm"))
+
+save_plot(shap_heatmap_tumor, "shap_heatmap_cptac_procan.png", width = 280, height = 115)
