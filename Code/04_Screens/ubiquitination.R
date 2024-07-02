@@ -17,7 +17,7 @@ plots_dir <- here(plots_base_dir, "Screens", "Ubiquitination")
 
 dir.create(plots_dir, recursive = TRUE)
 
-expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac.parquet"))
+expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
 ubi_cptac <- read_parquet(here(output_data_dir, 'ubiquitination_cptac.parquet'))
 
 ubi_cptac_processed <- ubi_cptac %>%

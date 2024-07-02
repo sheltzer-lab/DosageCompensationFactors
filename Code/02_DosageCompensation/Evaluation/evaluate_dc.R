@@ -32,7 +32,7 @@ dc_report <- list()
 
 expr_buf_procan <- read_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'))
 expr_buf_depmap <- read_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'))
-expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
