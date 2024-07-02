@@ -334,3 +334,82 @@ standardized_mean <- function (df, value_col, group_col, id_col) {
     group_by({{id_col}}) %>%
     summarize(StandardizedMean = mean(Buffering.CellLine.Ratio, na.rm = TRUE))
 }
+
+# === SHAP Analysis ===
+estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method = "ctree") {
+  require(shapr)
+  require(dplyr)
+
+  set.seed(42)
+  # Prepare the data for explanation
+  if (is.null(model$datasets$test)) {
+    x_small <- model$datasets$training %>%
+      group_by(buffered) %>%
+      slice_sample(n = 2 * n_samples) %>%
+      ungroup() %>%
+      split_train_test(training_set_ratio = 0.5)  # From preprocessing.R
+
+    training_x_small <- x_small$training
+    test_x_small <- x_small$test
+  } else {
+    training_x_small <- model$datasets$training %>%
+      group_by(buffered) %>%
+      slice_sample(n = n_samples) %>%
+      ungroup() %>%
+      select(-buffered)
+    test_x_small <- model$datasets$test %>%
+      group_by(buffered) %>%
+      slice_sample(n = n_samples) %>%
+      ungroup() %>%
+      select(-buffered)
+  }
+
+  # https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
+  explainer <- shapr(training_x_small, model$finalModel, n_combinations = n_combinations)
+  # Specifying the phi_0, i.e. the expected prediction without any features
+  # Note: buffered column is a factor: 1 = "Buffered", 2 = "Scaling"
+  # Lower (SHAP) values means prediction is closer to Buffered
+  p <- mean(as.numeric(model$datasets$training$buffered))
+
+  # Default method: ctree, as counted values are numerical but not continuous
+  explanation <- explain(
+    test_x_small,
+    approach = method,
+    explainer = explainer,
+    prediction_zero = p
+  )
+
+  return(explanation)
+}
+
+shap2df <- function(explanation) {
+  require(dplyr)
+  require(tidyr)
+
+  factor_values <- explanation$x_test %>%
+    pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "DosageCompensation.Factor.Value")
+
+  df_explanation <- explanation$dt %>%
+    select(-none) %>%
+    pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "SHAP.Value") %>%
+    mutate(Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
+    group_by(DosageCompensation.Factor) %>%
+    mutate(Factor.Value.Relative = normalize_min_max(Factor.Value, na.rm = TRUE),
+           SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
+           SHAP.Median.Absolute = median(abs(SHAP.Value)),
+           SHAP.p75.Absolute = quantile(abs(SHAP.Value), probs = 0.75)[["75%"]]) %>%
+    ungroup()
+
+  df_corr <- df_explanation %>%
+    group_by(DosageCompensation.Factor) %>%
+    rstatix::cor_test(Factor.Value, SHAP.Value, method = "spearman", use = "na.or.complete") %>%
+    select(DosageCompensation.Factor, cor, p) %>%
+    rename(SHAP.Factor.Corr = cor, SHAP.Factor.Corr.p = p) %>%
+    mutate(SHAP.Factor.Corr.p.adj = p.adjust(SHAP.Factor.Corr.p, method = "BY"))
+
+  df_explanation <- df_explanation %>%
+    left_join(y = df_corr, by = "DosageCompensation.Factor",
+              relationship = "many-to-one", unmatched = "error", na_matches = "never")
+
+  return(df_explanation)
+}
