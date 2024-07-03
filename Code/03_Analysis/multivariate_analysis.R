@@ -139,13 +139,13 @@ models <- list(
 
 ## Define datasets to train models on
 datasets <- list(
-  list(dataset = expr_buf_procan, name = "ProCan"),
-  list(dataset = expr_buf_depmap, name = "DepMap"),
-  list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm"),
-  list(dataset = buf_wgd, name = "DepMap-WGD"),
-  list(dataset = buf_no_wgd, name = "DepMap-NoWGD"),
-  # list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211),
-  list(dataset = expr_buf_cptac, name = "CPTAC")
+  list(dataset = expr_buf_procan, name = "ProCan", sourceDataset = "ProCan"),
+  list(dataset = expr_buf_depmap, name = "DepMap", sourceDataset = "DepMap"),
+  # list(dataset = expr_buf_matched_renorm, name = "MatchedRenorm", sourceDataset = "DepMap+ProCan"),
+  list(dataset = buf_wgd, name = "DepMap-WGD", sourceDataset = "DepMap"),
+  list(dataset = buf_no_wgd, name = "DepMap-NoWGD", sourceDataset = "DepMap"),
+  # list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211, sourceDataset = "P0211"),
+  list(dataset = expr_buf_cptac, name = "CPTAC", sourceDataset = "CPTAC")
 )
 
 ## Define training data conditions
@@ -165,7 +165,7 @@ analysis_conditions <- list(
 ## Training & Evaluation Loop
 ### Test robustness of models by excluding certain factors
 ### ToDo: Test this separately
-excluded_factors <- c("Homology Score")
+excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance")
 
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(datasets) * length(analysis_conditions) * 3,
@@ -230,11 +230,19 @@ for (dataset in datasets) {
     }
 
     df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
-      estimate_shap(n_samples = 250, n_combinations = 400) %>%  # Only override defaults if 128GB RAM available
+      estimate_shap(n_samples = 300, n_combinations = 300) %>%
       shap2df() %>%
       mutate(Model.Filename = model_filename,
              Model.BaseModel = model_name,
-             Model.Variant = paste0(sub_dir, collapse = "_"))
+             Model.Variant = paste0(sub_dir, collapse = "_"),
+             Model.Dataset = dataset$sourceDataset,
+             Model.Subset = case_when(grepl("-WGD", dataset$name) ~ "WGD",
+                                      grepl("-NoWGD", dataset$name) ~ "Non-WGD",
+                                      TRUE ~ "All"),
+             Model.Condition = if_else(grepl("Gain", Model.Variant), "Gain", "Loss"),
+             Model.Level = if_else(grepl("Gene", Model.Variant), "Gene", "Chromosome Arm"),
+             Model.BufferingMethod = if_else(grepl("Log2FC", Model.Variant), "Log2FC", "BR"))
+
     df_explanation %>%
       shap_plot() %>%
       save_plot(paste0("shap-explanation_", model_name, ".png"), dir = here(plots_dir, sub_dir))

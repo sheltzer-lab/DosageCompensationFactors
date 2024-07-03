@@ -161,44 +161,17 @@ plot_model_poster
 dev.off()
 
 # === Draft Area ===
-# TODO: Cleanup, set as metadata in model file
-# TODO: Control for WGD in ProCan
-model_metadata <- data.frame(
-  Model.Variant = c("DepMap_ChromosomeArm-Level_Gain_Log2FC", "DepMap_ChromosomeArm-Level_Loss_Log2FC",
-                    "DepMap_Gene-Level_Filtered_Gain", "DepMap_Gene-Level_Filtered_Loss",
-                    "DepMap-WGD_ChromosomeArm-Level_Loss", "DepMap-WGD_Gene-Level_Filtered_Loss",
-                    "DepMap-NoWGD_ChromosomeArm-Level_Loss", "DepMap-NoWGD_Gene-Level_Filtered_Loss"),
-  Model.Level = c("Chr", "Chr", "Gene", "Gene", "Chr", "Gene", "Chr", "Gene"),
-  Model.Condition = c("Gain", "Loss", "Gain", "Loss", "Loss", "Loss", "Loss", "Loss"),
-  Model.Control = c("All", "All", "All", "All", "WGD", "WGD", "Non-WGD", "Non-WGD")
-)
-
-model_metadata_wgd <- data.frame(
-  Model.Variant = c("DepMap-WGD_ChromosomeArm-Level_Loss", "DepMap-WGD_Gene-Level_Filtered_Loss",
-                    "DepMap-NoWGD_ChromosomeArm-Level_Loss", "DepMap-NoWGD_Gene-Level_Filtered_Loss"),
-  Model.Level = c("Chr", "Gene", "Chr", "Gene"),
-  Model.Condition = c("Loss", "Loss", "Loss", "Loss"),
-  Model.Control = c("WGD", "WGD", "Non-WGD", "Non-WGD")
-)
-
-shap_results_selected <- shap_results %>%
-  inner_join(y = model_metadata, by = "Model.Variant") %>%
+heatmap_shap_depmap <- shap_results %>%
+  filter(Model.Dataset == "DepMap") %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
-         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE))
-
-shap_results_selected_wgd <- shap_results %>%
-  inner_join(y = model_metadata_wgd, by = "Model.Variant") %>%
-  mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
-         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE))
-
-heatmap_shap_selected <- shap_results_selected %>%
-  distinct(DosageCompensation.Factor, Model.Variant, Model.Control,
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
+  distinct(DosageCompensation.Factor, Model.Variant, Model.Subset,
            Model.Level, Model.Condition, SHAP.Factor.Corr, Label) %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
   geom_raster() +
   geom_text(color = "black") +
-  ggh4x::facet_nested(Model.Control + Model.Level + Model.Condition ~ ., switch = "y") +
+  ggh4x::facet_nested(Model.Subset + Model.Level + Model.Condition ~ ., switch = "y") +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-1, 1), oob = scales::squish) +
   labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
@@ -216,17 +189,20 @@ heatmap_shap_selected <- shap_results_selected %>%
         axis.title.x = element_blank(),
         axis.title.y = element_blank())
 
-heatmap_shap_selected %>%
-  save_plot("shap_heatmap_selected.png", width = 300)
+heatmap_shap_depmap %>%
+  save_plot("shap_heatmap_depmap.png", width = 300)
 
-heatmap_shap_selected_wgd <- shap_results_selected_wgd %>%
-  distinct(DosageCompensation.Factor, Model.Variant, Model.Control,
+heatmap_shap_wgd <- shap_results %>%
+  filter(Model.Subset %in% c("WGD", "Non-WGD") & Model.Condition == "Loss") %>%
+  mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
+  distinct(DosageCompensation.Factor, Model.Variant, Model.Subset,
            Model.Level, Model.Condition, SHAP.Factor.Corr, Label) %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
   geom_raster() +
   geom_text(color = "black") +
-  ggh4x::facet_nested(Model.Control + Model.Level + Model.Condition ~ ., switch = "y") +
+  ggh4x::facet_nested(Model.Subset + Model.Level + Model.Condition ~ ., switch = "y") +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-1, 1), oob = scales::squish) +
   labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
@@ -244,8 +220,8 @@ heatmap_shap_selected_wgd <- shap_results_selected_wgd %>%
         axis.title.x = element_blank(),
         axis.title.y = element_blank())
 
-heatmap_shap_selected_wgd %>%
-  save_plot("shap_heatmap_selected_wgd.png", width = 300, height = 150)
+heatmap_shap_wgd %>%
+  save_plot("shap_heatmap_wgd.png", width = 300, height = 150)
 
 # TODO: Visualize change between WGD and Non-WGD
 ## Difference SHAP, t-test, normalize SHAP
@@ -254,52 +230,17 @@ heatmap_shap_selected_wgd %>%
 # TODO: Add Observation IDs to SHAP data (Gene Symbol, Cell Line ID, etc.)
 # TODO: Random choice of SHAP observations could be confounded by Gene and Cell Line -> sample for each cell line
 
-shap_cor_wgd_diff <- shap_results_selected_wgd %>%
-  distinct(DosageCompensation.Factor, Model.Variant, Model.Control,
-           Model.Level, Model.Condition, SHAP.Factor.Corr) %>%
-  group_by(DosageCompensation.Factor, Model.Level, Model.Condition, Model.Control) %>%
-  summarize(SHAP.Factor.Corr = first(SHAP.Factor.Corr), .groups = "drop") %>%
-  pivot_wider(names_from = Model.Control, values_from = SHAP.Factor.Corr) %>%
-  mutate(SHAP.Factor.Corr.Diff = `WGD` - `Non-WGD`)
-
-shap_cor_wgd_diff %>%
-  ggplot() +
-  aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr.Diff) +
-  geom_raster() +
-  ggh4x::facet_nested(Model.Level + Model.Condition ~ ., switch = "y") +
-  scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
-                       limits = c(-1, 1), oob = scales::squish) +
-  labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation-Difference") +
-  cowplot::theme_minimal_grid() +
-  theme(panel.spacing = unit(0, "lines"),
-        strip.background = element_rect(color = "lightgrey"),
-        axis.ticks.y = element_blank(),
-        legend.key.size = unit(16, "points"),
-        legend.key.width = unit(24, "points"),
-        legend.title = element_text(size = 12),
-        legend.text = element_text(size = 10),
-        legend.position = "top",
-        legend.direction = "horizontal",
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank())
-
-## ProCan vs. CPTAC
-shap_results_tumor <- shap_results %>%
-  filter(grepl("ProCan_Gene-Level", Model.Variant) | grepl("CPTAC_Gene-Level", Model.Variant)) %>%
-  mutate(Dataset = if_else(grepl("CPTAC_Gene-Level", Model.Variant), "CPTAC", "ProCan"))
-
-shap_heatmap_tumor <- shap_results_tumor %>%
-  mutate(Model.Condition = if_else(grepl("Gain", Model.Variant), "Gain", "Loss"),
-         Model.Variant = paste(Dataset, "Gene CN", Model.Condition)) %>%
+## DepMap vs. ProCan vs. CPTAC
+shap_heatmap_datasets <- shap_results %>%
+  filter(Model.Level == "Gene" & Model.Subset == "All") %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
-  distinct(DosageCompensation.Factor, Dataset, Model.Condition, Model.Variant, SHAP.Factor.Corr, Label) %>%
+  distinct(DosageCompensation.Factor, Model.Dataset, Model.Condition, Model.Variant, SHAP.Factor.Corr, Label) %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
   geom_raster() +
   geom_text(color = "black") +
-  ggh4x::facet_nested(Dataset + Model.Condition ~ ., switch = "y") +
+  ggh4x::facet_nested(Model.Dataset + Model.Condition ~ ., switch = "y") +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-1, 1), oob = scales::squish) +
   labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
@@ -318,4 +259,4 @@ shap_heatmap_tumor <- shap_results_tumor %>%
         axis.title.y = element_blank(),
         plot.margin = unit(c(5, 15, 5, 15), "mm"))
 
-save_plot(shap_heatmap_tumor, "shap_heatmap_cptac_procan.png", width = 280, height = 115)
+save_plot(shap_heatmap_datasets, "shap_heatmap_datasets.png", width = 280, height = 150)
