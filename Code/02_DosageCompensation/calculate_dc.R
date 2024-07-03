@@ -215,5 +215,5 @@ purity_cptac <- meta_cptac %>%
 
 expr_buf_cptac_pure <- expr_buf_cptac %>%
   inner_join(y = purity_cptac, by = "Model.ID") %>%
-  filter(Model.TumorPurity > 0.333) %>%
+  filter(Model.TumorPurity > 0.4) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'), version = "2.6")

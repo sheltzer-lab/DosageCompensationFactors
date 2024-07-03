@@ -336,6 +336,7 @@ standardized_mean <- function (df, value_col, group_col, id_col) {
 }
 
 # === SHAP Analysis ===
+# Only override defaults if enough RAM available
 estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method = "ctree") {
   require(shapr)
   require(dplyr)
