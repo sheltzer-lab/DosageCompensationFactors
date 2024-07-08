@@ -32,7 +32,7 @@ dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
-dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
+dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors_filtered.parquet"))
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))

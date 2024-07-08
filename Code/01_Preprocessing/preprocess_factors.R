@@ -340,6 +340,27 @@ df_dc_factors %>%
   plot_correlation()
 dev.off()
 
+# === Filter Factor Dataset by Missingness ===
+
+factor_na_share <- dc_factors %>%
+  select(Protein.Uniprot.Accession, Gene.Symbol, all_of(dc_factor_cols)) %>%
+  pivot_longer(all_of(dc_factor_cols), names_to = "Factor.Name", values_to = "Factor.Value") %>%
+  group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
+  summarize(Factor.NA.Share = sum(is.na(Factor.Value)) / length(dc_factor_cols))
+
+factor_na_share %>%
+  ggplot() +
+  aes(Factor.NA.Share) +
+  geom_histogram(binwidth = 0.025, boundary = 0.025)
+
+df_dc_factors_filtered <- df_dc_factors %>%
+  semi_join(y = factor_na_share %>% filter(Factor.NA.Share < 0.25),
+            by = c("Protein.Uniprot.Accession", "Gene.Symbol"))
+
+
 # === Write combined factors to disk ===
 write_parquet(df_dc_factors, here(output_data_dir, 'dosage_compensation_factors.parquet'),
+              version = "2.6")
+
+write_parquet(df_dc_factors_filtered, here(output_data_dir, 'dosage_compensation_factors_filtered.parquet'),
               version = "2.6")
