@@ -187,6 +187,9 @@ expr_buf_p0211 <- expr_p0211 %>%
   write_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'), version = "2.6")
 
 ## CPTAC
+purity_cptac <- meta_cptac %>%
+  select(Model.ID, Model.TumorPurity)
+
 expr_buf_cptac <- expr_cptac %>%
   inner_join(y = copy_number_cptac,
              by = c("Model.ID", "Gene.ENSEMBL.Id"), na_matches = "never", relationship = "many-to-one") %>%
@@ -207,13 +210,9 @@ expr_buf_cptac <- expr_cptac %>%
   calculate_dc() %>%
   filter(Model.SampleType == "Tumor") %>%
   select(-Gene.CNV) %>%
+  inner_join(y = purity_cptac, by = "Model.ID") %>%
   write_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'), version = "2.6")
 
-
-purity_cptac <- meta_cptac %>%
-  select(Model.ID, Model.TumorPurity)
-
 expr_buf_cptac_pure <- expr_buf_cptac %>%
-  inner_join(y = purity_cptac, by = "Model.ID") %>%
   filter(Model.TumorPurity > 0.4) %>%
   write_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'), version = "2.6")

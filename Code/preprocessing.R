@@ -91,12 +91,13 @@ rebalance_binary <- function(df, class_col, target_balance = 0.5) {
     select(-Samples)
 }
 
-clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_cols) {
+clean_data <- function (dataset, buffering_class_col, factor_cols = dc_factor_cols, id_col = "UniqueId") {
   dataset %>%
     filter({ { buffering_class_col } } == "Buffered" | { { buffering_class_col } } == "Scaling") %>%
     mutate(Buffered = factor({ { buffering_class_col } }, levels = c("Scaling", "Buffered"))) %>%
     mutate_if(is.numeric, \(x) as.numeric(x)) %>%
     drop_na(Buffered) %>%
+    tibble::column_to_rownames(id_col) %>%
     select(Buffered, all_of(factor_cols)) %>%
     janitor::clean_names()
 }

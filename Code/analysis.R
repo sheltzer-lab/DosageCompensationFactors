@@ -10,7 +10,7 @@ source(here("Code", "parameters.R"))
 # Add dosage compensation factors to a dataframe
 add_factors <- function(df, df_factors, factor_cols = dc_factor_cols) {
   df %>%
-    left_join(y = df_factors %>% select(Protein.Uniprot.Accession, Gene.Symbol, all_of(factor_cols)),
+    inner_join(y = df_factors %>% select(Protein.Uniprot.Accession, Gene.Symbol, all_of(factor_cols)),
               by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
               na_matches = "never", relationship = "many-to-one")
 }

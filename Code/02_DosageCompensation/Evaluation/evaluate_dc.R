@@ -32,7 +32,8 @@ dc_report <- list()
 
 expr_buf_procan <- read_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'))
 expr_buf_depmap <- read_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'))
-expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
+expr_buf_cptac_pure <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac.parquet'))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
@@ -426,7 +427,7 @@ corr_summary <- list(
 dc_report$corr_procan_depmap_summary <- corr_summary
 
 # Compare Buffering Ratio dsitributions between datasets
-dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac_pure) %>%
   filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0.2) %>%
   mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
   select(Dataset, Buffering.GeneLevel.Ratio, Gene.CopyNumber.Event) %>%
@@ -448,6 +449,23 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %
 
 dc_dataset_dist %>%
   save_plot("dc_dataset_distribution.png", width = 150, height = 150)
+
+# Compare Tumor Purity against Copy Number
+purity_cn_plot <- expr_buf_cptac %>%
+  select(Gene.Symbol, Model.ID, Gene.CopyNumber, Model.TumorPurity) %>%
+  slice_sample(n = 20000) %>%
+  scatter_plot_reg_corr(Gene.CopyNumber, Model.TumorPurity) +
+  scale_x_continuous(breaks = seq(0, 10, 2))
+
+purity_cn_plot %>%
+  save_plot("cptac_purity_copy_number.png")
+
+expr_buf_cptac %>%
+  group_by(Model.ID) %>%
+  summarize(Ploidy = mean(Gene.CopyNumber, na.rm = TRUE),
+            Model.TumorPurity = mean(Model.TumorPurity, na.rm = TRUE)) %>%
+  scatter_plot_reg_corr(Ploidy, Model.TumorPurity) %>%
+  save_plot("cptac_purity_ploidy.png")
 
 # === Write Report ===
 report_file <- here(reports_dir, "dc_report.txt")
