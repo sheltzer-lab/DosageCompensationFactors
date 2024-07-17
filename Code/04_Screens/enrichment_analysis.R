@@ -199,3 +199,26 @@ egfr_dc <- expr_buf_procan %>%
   drop_na(Buffering.ChrArmLevel.Ratio) %>%
   signif_beeswarm_plot(CNV, Buffering.ChrArmLevel.Ratio, color_col = CellLine.AneuploidyScore) %>%
   save_plot("EGFR_DC_ChrArm.png", height = 150, width = 150)
+
+
+# Gene Sets
+## Proteotoxic Stress / Unfolded Proteins / Autophagosome
+library(msigdbr)
+hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
+  rename(Gene.Symbol = "gene_symbol")
+
+unfolded_gene_set <- hallmark_gene_set %>%
+  filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE")
+
+expr_buf_procan_hallmark <- cellline_buf_procan %>%
+  split_by_3_quantiles(Buffering.CellLine.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
+  filter(CellLine.Buffering.Group != "Center") %>%
+  inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
+  select(Gene.Symbol, CellLine.CustomId, CellLine.Buffering.Group, Protein.Expression.Normalized) %>%
+  right_join(y = hallmark_gene_set, by = "Gene.Symbol", relationship = "many-to-many")
+
+hallmark_tests <- expr_buf_procan_hallmark %>%
+  group_by(gs_name) %>%
+  group_modify(~tidy(t.test(Protein.Expression.Normalized ~ CellLine.Buffering.Group, data = .x))) %>%
+  ungroup() %>%
+  mutate(p.value.adj = p.adjust(p.value, method = "bonferroni"))
