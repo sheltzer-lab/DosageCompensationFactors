@@ -33,58 +33,6 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, "expression_buffering_p0211.parquet"))
 
-# === Determine Genes that are significantly Buffered on average ===
-
-# signif_buf_genes <- function(df, buffering_col, gene_col) {
-#   df %>%
-#   select({ { gene_col } }, { { buffering_col } }) %>%
-#   drop_na() %>%
-#   group_by({ { gene_col } }) %>%
-#   # Avoid having not enough samples for t-test
-#   add_count({ { gene_col } }) %>%
-#   filter(n > 1) %>%
-#   summarize(TTest.p = t.test({ { buffering_col } }, mu = 0)$p.value,
-#             Buffering.Ratio.Average = mean({ { buffering_col } })) %>%
-#   mutate(TTest.p.adjusted = p.adjust(TTest.p, method = "BY"))
-# }
-#
-# # ToDo: Repeat analysis with Log2FC (Gene Level & Chromosome Level)
-#
-# test_all <- expr_buf_procan %>%
-#   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
-#
-# plot_all <- test_all %>%
-#   mutate(Buffering.Class = buffering_class(Buffering.Ratio.Average)) %>%
-#   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
-#   save_plot("volcano_buffering_all.png")
-#
-# test_gain <- expr_buf_procan %>%
-#   filter_cn_gain() %>%
-#   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
-#
-# plot_gain <- test_gain %>%
-#   mutate(Buffering.Class = buffering_class(Buffering.Ratio.Average)) %>%
-#   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
-#   save_plot("volcano_buffering_cn-gain.png")
-#
-# test_loss <- expr_buf_procan %>%
-#   filter_cn_loss() %>%
-#   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
-#
-# plot_loss <- test_loss %>%
-#   mutate(Buffering.Class = buffering_class(Buffering.Ratio.Average)) %>%
-#   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
-#   save_plot("volcano_buffering_cn-loss.png")
-#
-# test_filtered <- expr_buf_procan %>%
-#   filter_cn_diff() %>%
-#   signif_buf_genes(Buffering.GeneLevel.Ratio, Gene.Symbol)
-#
-# plot_filtered <- test_filtered %>%
-#   mutate(Buffering.Class = buffering_class(Buffering.Ratio.Average)) %>%
-#   plot_volcano_buffered(Buffering.Ratio.Average, TTest.p.adjusted, Gene.Symbol, Buffering.Class) %>%
-#   save_plot("volcano_buffering_cn-filtered.png")
-
 # === Plot Buffering in Genes on Rtr13 and RM13 (P0211) ===
 ## ChrArm Buffering Ratio by Sample
 expr_buf_p0211 %>%
@@ -194,32 +142,50 @@ expr_buf_p0211 %>%
              colNames = TRUE)
 
 # === Low Variance Buffered Genes ===
-mean_var_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
-  select(Dataset, Gene.Symbol, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.Class) %>%
-  drop_na(Buffering.GeneLevel.Ratio) %>%
-  group_by(Dataset, Gene.Symbol) %>%
-  summarize(Gene.BR.Mean = mean(Buffering.GeneLevel.Ratio),
-            Gene.BR.SD = sd(Buffering.GeneLevel.Ratio),
-            Gene.Buffered.Count = sum(Buffering.GeneLevel.Class == "Buffered"),
-            Samples = sum(!is.na(Buffering.GeneLevel.Class)),
-            Gene.Buffered.Share = Gene.Buffered.Count / Samples, .groups = "drop")
+analyze_low_br_variance <- function (df_expr_buf) {
+  # Per gene summarize Mean, SD, and share of samples buffered across dataset
+  mean_var_buf <- df_expr_buf %>%
+    select(Dataset, Gene.Symbol, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.Class) %>%
+    drop_na(Buffering.GeneLevel.Ratio) %>%
+    group_by(Dataset, Gene.Symbol) %>%
+    summarize(Gene.BR.Mean = mean(Buffering.GeneLevel.Ratio),
+              Gene.BR.SD = sd(Buffering.GeneLevel.Ratio),
+              Gene.Buffered.Count = sum(Buffering.GeneLevel.Class == "Buffered"),
+              Samples = sum(!is.na(Buffering.GeneLevel.Class)),
+              Gene.Buffered.Share = Gene.Buffered.Count / Samples,
+              .groups = "drop")
 
-buf_rank <- mean_var_buf %>%
-  filter(Samples > 20) %>%
-  filter(Gene.Buffered.Share > 1/3 & Gene.BR.Mean > br_cutoffs$Buffered) %>%
-  add_count(Gene.Symbol) %>%
-  filter(n >= 3) %>%
-  mean_norm_rank(Gene.BR.SD, Dataset, Gene.Symbol) %>%
-  rename(Gene.BR.SD.MeanNormRank = MeanNormRank)
+  # Filter genes by number of samples, share of buffered samples, and mean buffering ratio and rank by SD of BR
+  buf_rank <- mean_var_buf %>%
+    filter(Samples > 20) %>%
+    filter(Gene.Buffered.Share > 1 / 3 & Gene.BR.Mean > br_cutoffs$Buffered & Gene.BR.SD < 2) %>%
+    add_count(Gene.Symbol) %>%
+    filter(n >= length(unique(df_expr_buf$Dataset))) %>%
+    mean_norm_rank(Gene.BR.SD, Dataset, Gene.Symbol) %>%
+    rename(Gene.BR.SD.MeanNormRank = MeanNormRank)
 
-mean_var_buf_highlighted <- mean_var_buf %>%
-  left_join(y = buf_rank, by = "Gene.Symbol") %>%
-  mutate(Top50 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 50)$Gene.Symbol,
-         Top10 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 10)$Gene.Symbol) %>%
-  arrange(Gene.BR.SD.MeanNormRank)
+  # Rank genes by lowest BR variance
+  mean_var_buf %>%
+    left_join(y = buf_rank, by = "Gene.Symbol") %>%
+    mutate(Top50 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 50)$Gene.Symbol,
+           Top10 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 10)$Gene.Symbol) %>%
+    arrange(Gene.BR.SD.MeanNormRank) %>%
+    return()
+}
+
+low_var_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  analyze_low_br_variance()
+
+low_var_buf_gain <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  filter_cn_gain_abs() %>%
+  analyze_low_br_variance()
+
+low_var_buf_loss <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  filter_cn_loss_abs() %>%
+  analyze_low_br_variance()
 
 scatter_signif_buffered <- mean_var_buf_highlighted %>%
-  mutate(Label = if_else(Gene.Symbol %in% buf_labels$Gene.Symbol, Gene.Symbol, NA)) %>%
+  mutate(Label = if_else(Top10, Gene.Symbol, NA)) %>%
   filter(Dataset == "CPTAC") %>%
   arrange(Top50) %>%
   ggplot() +
@@ -234,7 +200,39 @@ scatter_signif_buffered <- mean_var_buf_highlighted %>%
 scatter_signif_buffered %>%
   save_plot("frequently_buffered_genes.png", width = 210, height = 160)
 
-mean_var_buf_highlighted %>%
+scatter_signif_buffered_cna <- bind_rows(low_var_buf_gain %>% mutate(Gene.CNA = "Gain"),
+                                         low_var_buf_loss %>% mutate(Gene.CNA = "Loss")) %>%
+  mutate(Label = if_else(Top10, Gene.Symbol, NA)) %>%
+  filter(Dataset == "CPTAC") %>%
+  arrange(Top50) %>%
+  ggplot() +
+  aes(x = Gene.BR.SD, y = Gene.BR.Mean, label = Label, color = Top50, alpha = Top50) +
+  geom_point() +
+  geom_label_repel(na.rm = TRUE, max.overlaps = 50) +
+  scale_color_manual(values = c(default_color, highlight_color)) +
+  scale_alpha_manual(values = c(0.5, 1)) +
+  labs(x = "Standard Deviation of Buffering Ratio", y = "Mean Buffering Ratio",
+       color = "Frequently Buffered", alpha = "Frequently Buffered") +
+  facet_grid(~Gene.CNA)
+
+scatter_signif_buffered_cna %>%
+  save_plot("frequently_buffered_genes_by-cna.png", width = 280, height = 160)
+
+low_var_buf %>%
   drop_na() %>%
   write.xlsx(here(tables_base_dir, "frequently_buffered_genes.xlsx"),
              colNames = TRUE)
+
+low_var_buf_gain %>%
+  drop_na() %>%
+  write.xlsx(here(tables_base_dir, "frequently_buffered_genes_gain.xlsx"),
+             colNames = TRUE)
+
+low_var_buf_loss %>%
+  drop_na() %>%
+  write.xlsx(here(tables_base_dir, "frequently_buffered_genes_loss.xlsx"),
+             colNames = TRUE)
+
+## VCP occurs consistently (gain/loss/all)
+### Potential target for cancer therapy drugs (Eerl, CB-5083)
+### VCP inhibitors synergize with proteasome inhibitors (Bortezomib)
