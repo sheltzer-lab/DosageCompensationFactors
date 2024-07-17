@@ -55,14 +55,14 @@ create_plots <- function (df_prolif, color_col = NULL, dataset_name = NULL, cond
 
   # Scatter plot
   prolif_plot <- df_prolif %>%
-    scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
+    scatter_plot_reg_corr(Model.Buffering.Ratio, CellLine.GrowthRatio,
                           point_size = 2, color_col = { { color_col } },
                           title_prefix = title) %>%
     save_plot(paste0("dosage_compensation_proliferation_", filename_suffix, ".png"))
 
   ## Correlation Report
   report_file <- here(reports_dir, paste0("dosage_compensation_proliferation_correlation_", filename_suffix, ".txt"))
-  dc_prolif_corr <- cor.test(x = df_prolif$Buffering.CellLine.Ratio, y = df_prolif$CellLine.GrowthRatio,
+  dc_prolif_corr <- cor.test(x = df_prolif$Model.Buffering.Ratio, y = df_prolif$CellLine.GrowthRatio,
                              method = "spearman")
   dc_prolif_corr %>%
     capture.output() %>%
@@ -70,17 +70,17 @@ create_plots <- function (df_prolif, color_col = NULL, dataset_name = NULL, cond
 
   # Statistical comparison between cell line groups
   dc_growth_violin <- df_prolif %>%
-    split_by_quantiles(Buffering.CellLine.Ratio, target_group_col = "Buffering.CellLine.Group") %>%
-    signif_violin_plot(Buffering.CellLine.Group, CellLine.GrowthRatio,
+    split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+    signif_violin_plot(Model.Buffering.Group, CellLine.GrowthRatio,
                        test = wilcox.test, title = title) %>%
     save_plot(paste0("dosage_compensation_proliferation_test_", filename_suffix, ".png"))
 
   ## Ratio between cell line groups
   df_median <- df_prolif %>%
-    split_by_quantiles(Buffering.CellLine.Ratio, target_group_col = "Buffering.CellLine.Group") %>%
-    group_by(Buffering.CellLine.Group) %>%
+    split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+    group_by(Model.Buffering.Group) %>%
     summarize(MedianGrowthRatio = median(CellLine.GrowthRatio, na.rm = TRUE)) %>%
-    pivot_wider(names_from = Buffering.CellLine.Group, values_from = MedianGrowthRatio)
+    pivot_wider(names_from = Model.Buffering.Group, values_from = MedianGrowthRatio)
 
   growth_change <- df_median$High / df_median$Low
 
@@ -115,7 +115,7 @@ results_depmap <- cellline_buf_depmap %>%
   proliferation_analysis(copy_number, df_growth, dataset_name = "DepMap")
 
 results_agg <- cellline_buf_agg %>%
-  mutate(Buffering.CellLine.Ratio = Buffering.CellLine.MeanNormRank) %>%
+  mutate(Model.Buffering.Ratio = Model.Buffering.MeanNormRank) %>%
   proliferation_analysis(copy_number, df_growth, dataset_name = "Aggregated")
 
 
@@ -133,7 +133,7 @@ df_prolif <- merge_datasets(cellline_buf_procan, copy_number, df_growth) %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
 
 growth_poster <- (df_prolif %>%
-  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
+  scatter_plot_reg_corr(Model.Buffering.Ratio, CellLine.GrowthRatio,
                           point_size = 2, color_col = WGD,
                           title_prefix = "ProCan")) +
   theme_light(base_size = 20) +
@@ -148,7 +148,7 @@ growth_poster <- (df_prolif %>%
 
 growth_poster_nowgd <- (df_prolif %>%
   filter(WGD == "Non-WGD") %>%
-  scatter_plot_reg_corr(Buffering.CellLine.Ratio, CellLine.GrowthRatio,
+  scatter_plot_reg_corr(Model.Buffering.Ratio, CellLine.GrowthRatio,
                           point_size = 2, color_col = WGD,
                           title_prefix = "ProCan, Non-WGD")) +
   theme_light(base_size = 20) +

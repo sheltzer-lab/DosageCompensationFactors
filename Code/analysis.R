@@ -332,7 +332,7 @@ standardized_mean <- function (df, value_col, group_col, id_col) {
     mutate(Scaled = scale({ { value_col } })[,1]) %>%
     ungroup() %>%
     group_by({{id_col}}) %>%
-    summarize(StandardizedMean = mean(Buffering.CellLine.Ratio, na.rm = TRUE))
+    summarize(StandardizedMean = mean(Model.Buffering.Ratio, na.rm = TRUE))
 }
 
 # === SHAP Analysis ===

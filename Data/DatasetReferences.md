@@ -56,7 +56,7 @@ Li, Y., Dou, Y., da Veiga Leprevost, F., Geffen, Y., et al. (2023). Proteogenomi
 
 ### Arm-Level CNAs
 
-**URL:** https://depmap.org/portal/download/custom/
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=CCLE%20arm-level%20CNAs&filename=arm_call_scores.csv
 
 **Location:** `./Data/External/CopyNumber/DepMap/Arm-level_CNAs.csv`
 
@@ -76,7 +76,7 @@ Cohen-Sharir, Yael, et al. "Aneuploidy renders cancer cells vulnerable to mitoti
 
 ### Aneuploidy Scores
 
-**URL:** https://depmap.org/portal/download/custom/
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=CCLE%20arm-level%20CNAs&filename=aneuploidy_scores.csv
 
 **Location:** `./Data/External/CopyNumber/DepMap/Aneuploidy.csv`
 

@@ -66,15 +66,15 @@ depmap_expr_tidy <- depmap_expr %>%
   rename(CellLine.DepMapModelId = 1) %>%
   pivot_longer(everything() & !CellLine.DepMapModelId,
                names_to = "Protein", values_to = "Protein.Expression.Log2") %>%
-  # ToDo: Find more elegant way
   separate_wider_delim(Protein,
-           delim = " ",
-           names = c("Gene.Symbol", "Protein.Uniprot.Accession")) %>%
-  mutate(Protein.Uniprot.Accession = gsub("[()]", "", Protein.Uniprot.Accession)) %>%
+           delim = "|",
+           names = c("Gene.Symbol", "Protein.Uniprot.Accession", "Protein.Name")) %>%
+  select(-Gene.Symbol, -Protein.Name) %>%
   # Add cell line identifiers
+  rename(Protein.Uniprot.Accession.Isoform = "Protein.Uniprot.Accession") %>%
+  mutate(Protein.Uniprot.Accession = str_split_i(Protein.Uniprot.Accession.Isoform, "-", 1)) %>%
   inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
              relationship = "many-to-one", na_matches = "never") %>%
-  select(-Gene.Symbol) %>%
   left_join(y = uniprot_mapping %>% select("Protein.Uniprot.Accession", "Gene.Symbol"),
             by = "Protein.Uniprot.Accession",
             na_matches = "never", relationship = "many-to-one") %>%
@@ -98,13 +98,13 @@ procan_expr_processed <- procan_expr_tidy %>%
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
-  group_by(Model.ID, CellLine.SangerModelId, CellLine.DepMapModelId, CellLine.Name, Dataset,
+  group_by(Model.ID, CellLine.SangerModelId, CellLine.DepMapModelId, CellLine.Name, Dataset, Model.Type,
            UniqueId, Gene.Symbol, Protein.Uniprot.Accession) %>%
   summarize(Protein.Expression.Log2 = mean(Protein.Expression.Log2, na.rm = TRUE)) %>%
   ungroup() %>%
   # ToDo: Reconsider standardization
   # mutate_at(c('Protein.Expression.Log2'), ~(scale(.) %>% as.vector)) %>%
-  normalize_samples(CellLine.DepMapModelId, Protein.Expression.Log2, Protein.Uniprot.Accession,
+  normalize_samples(Model.ID, Protein.Expression.Log2, Protein.Uniprot.Accession,
                     normalized_colname = "Protein.Expression.Normalized")
 
 

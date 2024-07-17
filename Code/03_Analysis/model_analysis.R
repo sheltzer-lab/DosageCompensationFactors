@@ -28,108 +28,113 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
-## ToDo: Sanitize Cell Line names
+df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 
 # === Analyze Dosage Compensation on Cell Line level ===
 
 # TODO: Calculate confidence score based on SD, Observations & Gene-Level Confidence
-analyze_cellline_buffering <- function(df, buffering_ratio_col, cellline_col = CellLine.Name,
-                                       aneuploidy_col = CellLine.AneuploidyScore) {
+analyze_model_buffering <- function(df, buffering_ratio_col, model_col = Model.ID,
+                                    aneuploidy_col = CellLine.AneuploidyScore) {
   cellline_buf_avg <- df %>%
-    select({ { cellline_col } }, { { buffering_ratio_col } }, { { aneuploidy_col } }) %>%
-    group_by({ { cellline_col } }) %>%
-    summarize(Buffering.CellLine.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
+    select({ { model_col } }, { { buffering_ratio_col } }, { { aneuploidy_col } }) %>%
+    group_by({ { model_col } }) %>%
+    summarize(Model.Buffering.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
               SD = sd({ { buffering_ratio_col } }, na.rm = TRUE),
               AneuploidyScore = first({ { aneuploidy_col } })) %>%
     filter(Observations > 50) %>%
-    mutate(Buffering.CellLine.Ratio.ZScore = z_score(Buffering.CellLine.Ratio),
-           Rank = as.integer(rank(Buffering.CellLine.Ratio.ZScore)),
-           Buffering.CellLine.Ratio.Adjusted = lm(Buffering.CellLine.Ratio ~ AneuploidyScore, data = .)$residuals) %>%
+    mutate(Model.Buffering.Ratio.ZScore = z_score(Model.Buffering.Ratio),
+           Rank = as.integer(rank(Model.Buffering.Ratio.ZScore)),
+           Model.Buffering.Ratio.Adjusted = lm(Model.Buffering.Ratio ~ AneuploidyScore, data = .)$residuals) %>%
     select(-AneuploidyScore) %>%
     arrange(Rank)
 }
 
 # Note: Not required when merging datasets to match genes and cell lines
-filter_genes <- function(df, gene_col = Gene.Symbol, value_col = Protein.Expression.Normalized, keep = "90%") {
-  df %>%
-    group_by({ { gene_col } }) %>%
-    mutate(CV = abs(sd({ { value_col } }, na.rm = TRUE) / mean({ { value_col } }, na.rm = TRUE))) %>%
-    ungroup() %>%
-    filter(CV < quantile(CV, probs = seq(0, 1, 0.01))[keep])
+filter_samples <- function(df_expr_buf) {
+  df_expr_buf %>%
+    filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
+    filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
+    # filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+    filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>% # Remove BR estimates with low confidence
+    drop_na(Buffering.GeneLevel.Ratio)
 }
 
-# Note: Does not seem to improve correlation
-remove_antiscaling <- function(df, buffering_col, gene_col = Gene.Symbol) {
+add_cellline_names <- function (df, df_cl = df_celllines) {
+  df_cl <- df_cl %>%
+    distinct(Model.ID, CellLine.Name)
+
   df %>%
-    group_by({ { gene_col } }) %>%
-    mutate(AvgBuf = mean({ { buffering_col } }, na.rm = TRUE)) %>%
-    filter(buffering_class(AvgBuf) != "Anti-Scaling") %>%
-    select(-AvgBuf)
+    inner_join(y = df_cl, by = "Model.ID", relationship = "many-to-one")
 }
 
 ## Combine datasets
 expr_buf_procan_filtered <- expr_buf_procan %>%
-  filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
-  filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
-  filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
-#  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
-  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession",
-         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore") %>%
-  drop_na() %>%
-  rename(ProCan = "Buffering.GeneLevel.Ratio")
-expr_buf_depmap_filtered <- expr_buf_depmap %>%
-  filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
-  filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
-  filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
-#  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
-  select("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession",
-         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore") %>%
-  drop_na() %>%
-  rename(DepMap = "Buffering.GeneLevel.Ratio")
+  filter_samples() %>%
+  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
+         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore", "Dataset") %>%
+  drop_na()
 
-expr_buf_filtered <- expr_buf_procan_filtered %>%
+expr_buf_depmap_filtered <- expr_buf_depmap %>%
+  filter_samples() %>%
+  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
+         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore", "Dataset") %>%
+  drop_na()
+
+expr_buf_joined <- expr_buf_procan_filtered %>%
+  rename(ProCan = Buffering.GeneLevel.Ratio) %>%
   select(-CellLine.AneuploidyScore) %>%
-  inner_join(y = expr_buf_depmap_filtered, by = c("CellLine.Name", "Gene.Symbol", "Protein.Uniprot.Accession"),
+  inner_join(y = expr_buf_depmap_filtered %>% rename(DepMap = Buffering.GeneLevel.Ratio),
+             by = c("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession"),
              relationship = "one-to-one", na_matches = "never")
 
 common_genes <- intersect(unique(expr_buf_procan$Gene.Symbol),
                           unique(expr_buf_depmap$Gene.Symbol))
 
 ## Calculate Cell Line level Dosage Compensation
+### All genes & cell lines
 cellline_buf_procan <- expr_buf_procan_filtered %>%
-  analyze_cellline_buffering(ProCan)
-cellline_buf_depmap <- expr_buf_depmap_filtered %>%
-  analyze_cellline_buffering(DepMap)
+  analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
+  add_cellline_names() %>%
+  mutate(Dataset = "ProCan")
 
+cellline_buf_depmap <- expr_buf_depmap_filtered %>%
+  analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
+  add_cellline_names() %>%
+  mutate(Dataset = "DepMap")
+
+### Common genes, all cell lines
 cellline_buf_gene_filtered_procan <- expr_buf_procan_filtered %>%
   filter(Gene.Symbol %in% common_genes) %>%
-  analyze_cellline_buffering(ProCan) %>%
+  analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
+  add_cellline_names() %>%
   mutate(Dataset = "ProCan")
+
 cellline_buf_gene_filtered_depmap <- expr_buf_depmap_filtered %>%
   filter(Gene.Symbol %in% common_genes) %>%
-  analyze_cellline_buffering(DepMap) %>%
+  analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
+  add_cellline_names() %>%
   mutate(Dataset = "DepMap")
-
-cellline_buf_filtered_procan <- expr_buf_filtered %>%
-  analyze_cellline_buffering(ProCan) %>%
-  mutate(Dataset = "ProCan")
-cellline_buf_filtered_depmap <- expr_buf_filtered %>%
-  analyze_cellline_buffering(DepMap) %>%
-  mutate(Dataset = "DepMap")
-
-cellline_buf_merged <- cellline_buf_filtered_procan %>%
-  bind_rows(cellline_buf_filtered_depmap) %>%
-  arrange(CellLine.Name)
 
 cellline_buf_merged_gene <- cellline_buf_gene_filtered_procan %>%
   bind_rows(cellline_buf_gene_filtered_depmap) %>%
-  pivot_wider(id_cols = "CellLine.Name",
-              names_from = "Dataset",
-              values_from = c("Buffering.CellLine.Ratio", "Buffering.CellLine.Ratio.ZScore",
-                              "Buffering.CellLine.Ratio.Adjusted", "Rank")) %>%
+  arrange(CellLine.Name)
+
+### Joined on common genes and cell lines
+cellline_buf_joined_procan <- expr_buf_joined %>%
+  analyze_model_buffering(ProCan) %>%
+  add_cellline_names() %>%
+  mutate(Dataset = "ProCan")
+
+cellline_buf_joined_depmap <- expr_buf_joined %>%
+  analyze_model_buffering(DepMap) %>%
+  add_cellline_names() %>%
+  mutate(Dataset = "DepMap")
+
+cellline_buf_joined <- cellline_buf_joined_procan %>%
+  bind_rows(cellline_buf_joined_depmap) %>%
   arrange(CellLine.Name)
 
 ## Save results
@@ -141,9 +146,9 @@ write.xlsx(cellline_buf_gene_filtered_procan, here(tables_base_dir, "cellline_bu
            colNames = TRUE)
 write.xlsx(cellline_buf_gene_filtered_depmap, here(tables_base_dir, "cellline_buffering_gene_filtered_depmap.xlsx"),
            colNames = TRUE)
-write.xlsx(cellline_buf_filtered_procan, here(tables_base_dir, "cellline_buffering_filtered_procan.xlsx"),
+write.xlsx(cellline_buf_joined_procan, here(tables_base_dir, "cellline_buffering_filtered_procan.xlsx"),
            colNames = TRUE)
-write.xlsx(cellline_buf_filtered_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
+write.xlsx(cellline_buf_joined_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
            colNames = TRUE)
 
 write_parquet(cellline_buf_procan, here(output_data_dir, "cellline_buffering_procan.parquet"),
@@ -154,55 +159,55 @@ write_parquet(cellline_buf_gene_filtered_procan, here(output_data_dir, "cellline
               version = "2.6")
 write_parquet(cellline_buf_gene_filtered_depmap, here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"),
               version = "2.6")
-write_parquet(cellline_buf_filtered_procan, here(output_data_dir, "cellline_buffering_filtered_procan.parquet"),
+write_parquet(cellline_buf_joined_procan, here(output_data_dir, "cellline_buffering_filtered_procan.parquet"),
               version = "2.6")
-write_parquet(cellline_buf_filtered_depmap, here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"),
+write_parquet(cellline_buf_joined_depmap, here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"),
               version = "2.6")
 
 ## Create plots
 cellline_buf_waterfall_procan <- cellline_buf_procan %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_procan.png")
 cellline_buf_waterfall_depmap <- cellline_buf_depmap %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_depmap.png")
 
 # ToDo: Facetted waterfall plot
-cellline_buf_waterfall_filtered_procan <- cellline_buf_filtered_procan %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+cellline_buf_waterfall_filtered_procan <- cellline_buf_joined_procan %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_procan.png")
-cellline_buf_waterfall_filtered_depmap <- cellline_buf_filtered_depmap %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+cellline_buf_waterfall_filtered_depmap <- cellline_buf_joined_depmap %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_filtered_depmap.png")
 
 cellline_buf_waterfall_gene_filtered_procan <- cellline_buf_gene_filtered_procan %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_gene_filtered_procan.png")
 cellline_buf_waterfall_gene_filtered_depmap <- cellline_buf_gene_filtered_depmap %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name) %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_gene_filtered_depmap.png")
 
 ### Show cell line intersection betwen datasets in Venn diagram
-celllines <- list(ProCan = (expr_buf_procan_filtered %>% distinct(CellLine.Name))$CellLine.Name,
-                  DepMap = (expr_buf_depmap_filtered %>% distinct(CellLine.Name))$CellLine.Name)
+celllines <- list(ProCan = (expr_buf_procan_filtered %>% distinct(Model.ID))$Model.ID,
+                  DepMap = (expr_buf_depmap_filtered %>% distinct(Model.ID))$Model.ID)
 
 ggvenn(celllines, columns = c("ProCan", "DepMap"), fill_alpha = 2/3,
        fill_color = c(bidirectional_color_pal[1], bidirectional_color_pal[5]), show_percentage = FALSE) %>%
   save_plot("cellline_venn_filtered.png", height = 120, width = 150)
 
 # === Determine Correlation between Datasets ===
-cellline_dist <- cellline_buf_merged %>%
-  violin_plot(Dataset, Buffering.CellLine.Ratio) %>%
+cellline_dist <- cellline_buf_joined %>%
+  violin_plot(Dataset, Model.Buffering.Ratio) %>%
   save_plot("cellline_buffering_distribution.png")
 
 # TODO: QQ-Plot (geom_qq) & shapiro.test()
 
 ## Full datasets
 cellline_buf_full <- bind_rows(
-  cellline_buf_procan %>% select(CellLine.Name, Buffering.CellLine.Ratio) %>% mutate(Dataset = "ProCan"),
-  cellline_buf_depmap %>% select(CellLine.Name, Buffering.CellLine.Ratio) %>% mutate(Dataset = "DepMap")
+  cellline_buf_procan %>% select(Model.ID, Model.Buffering.Ratio, Dataset),
+  cellline_buf_depmap %>% select(Model.ID, Model.Buffering.Ratio, Dataset)
 ) %>%
-  pivot_wider(names_from = "Dataset", values_from = "Buffering.CellLine.Ratio", id_cols = "CellLine.Name")
+  pivot_wider(names_from = "Dataset", values_from = "Model.Buffering.Ratio", id_cols = "Model.ID")
 
 cellline_kendall <- cor.test(x = cellline_buf_full$ProCan,
                              y = cellline_buf_full$DepMap,
@@ -224,16 +229,16 @@ cat(capture.output(cellline_spearman), file = here(reports_dir, "cellline_buffer
     append = TRUE, sep = "\n")
 
 ## Datasets filtered by common genes and cell lines
-cellline_kendall_filtered <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                                      y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+cellline_kendall_filtered <- cor.test(x = (cellline_buf_joined %>% filter(Dataset == "ProCan"))$Model.Buffering.Ratio,
+                                      y = (cellline_buf_joined %>% filter(Dataset == "DepMap"))$Model.Buffering.Ratio,
                                       method = "kendall")
 
-cellline_pearson_filtered <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                                      y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+cellline_pearson_filtered <- cor.test(x = (cellline_buf_joined %>% filter(Dataset == "ProCan"))$Model.Buffering.Ratio,
+                                      y = (cellline_buf_joined %>% filter(Dataset == "DepMap"))$Model.Buffering.Ratio,
                                       method = "pearson")
 
-cellline_spearman_filtered <- cor.test(x = (cellline_buf_merged %>% filter(Dataset == "ProCan"))$Buffering.CellLine.Ratio,
-                                       y = (cellline_buf_merged %>% filter(Dataset == "DepMap"))$Buffering.CellLine.Ratio,
+cellline_spearman_filtered <- cor.test(x = (cellline_buf_joined %>% filter(Dataset == "ProCan"))$Model.Buffering.Ratio,
+                                       y = (cellline_buf_joined %>% filter(Dataset == "DepMap"))$Model.Buffering.Ratio,
                                        method = "spearman")
 
 cat(capture.output(cellline_kendall_filtered), file = here(reports_dir, "cellline_buffering_correlation_filtered.txt"),
@@ -244,16 +249,19 @@ cat(capture.output(cellline_spearman_filtered), file = here(reports_dir, "cellli
     append = TRUE, sep = "\n")
 
 ## Datasets filtered by common genes only
-cellline_kendall_gene <- cor.test(x = cellline_buf_merged_gene$Buffering.CellLine.Ratio_ProCan,
-                                  y = cellline_buf_merged_gene$Buffering.CellLine.Ratio_DepMap,
+cellline_buf_merged_gene_wide <- cellline_buf_merged_gene %>%
+  pivot_wider(names_from = "Dataset", values_from = "Model.Buffering.Ratio", id_cols = "Model.ID")
+
+cellline_kendall_gene <- cor.test(x = cellline_buf_merged_gene_wide$ProCan,
+                                  y = cellline_buf_merged_gene_wide$DepMap,
                                   method = "kendall")
 
-cellline_pearson_gene <- cor.test(x = cellline_buf_merged_gene$Buffering.CellLine.Ratio_ProCan,
-                                  y = cellline_buf_merged_gene$Buffering.CellLine.Ratio_DepMap,
+cellline_pearson_gene <- cor.test(x = cellline_buf_merged_gene_wide$ProCan,
+                                  y = cellline_buf_merged_gene_wide$DepMap,
                                   method = "pearson")
 
-cellline_spearman_gene <- cor.test(x = cellline_buf_merged_gene$Buffering.CellLine.Ratio_ProCan,
-                                   y = cellline_buf_merged_gene$Buffering.CellLine.Ratio_DepMap,
+cellline_spearman_gene <- cor.test(x = cellline_buf_merged_gene_wide$ProCan,
+                                   y = cellline_buf_merged_gene_wide$DepMap,
                                    method = "spearman")
 
 cat(capture.output(cellline_kendall_gene), file = here(reports_dir, "cellline_buffering_correlation_gene.txt"),
@@ -265,36 +273,35 @@ cat(capture.output(cellline_spearman_gene), file = here(reports_dir, "cellline_b
 
 # === Create aggregated Cell Line Ranking ===
 
-cellline_buf_rank <- cellline_buf_gene_filtered_procan %>%
-  bind_rows(cellline_buf_gene_filtered_depmap) %>%
-  mean_norm_rank(Buffering.CellLine.Ratio, Dataset, CellLine.Name)
+cellline_buf_rank <- cellline_buf_merged_gene %>%
+  mean_norm_rank(Model.Buffering.Ratio, Dataset, Model.ID)
 
-cellline_buf_mean <- cellline_buf_gene_filtered_procan %>%
-  bind_rows(cellline_buf_gene_filtered_depmap) %>%
-  standardized_mean(Buffering.CellLine.Ratio, Dataset, CellLine.Name)
+cellline_buf_mean <- cellline_buf_merged_gene %>%
+  standardized_mean(Model.Buffering.Ratio, Dataset, Model.ID)
 
 cellline_buf_agg <- cellline_buf_rank %>%
-  inner_join(y = cellline_buf_mean, by = "CellLine.Name",
+  inner_join(y = cellline_buf_mean, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never", unmatched = "error") %>%
-  rename(Buffering.CellLine.MeanNormRank = "MeanNormRank",
-         Buffering.CellLine.StandardizedMean = "StandardizedMean") %>%
-  mutate(CellLine.Name = fct_reorder(CellLine.Name, Buffering.CellLine.MeanNormRank)) %>%
+  rename(Model.Buffering.MeanNormRank = "MeanNormRank",
+         Model.Buffering.StandardizedMean = "StandardizedMean") %>%
+  add_cellline_names() %>%
+  mutate(CellLine.Name = fct_reorder(CellLine.Name, Model.Buffering.MeanNormRank)) %>%
   write_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"), version = "2.6")
 
 write.xlsx(cellline_buf_agg, here(tables_base_dir, "cellline_buffering_agg.xlsx"),
            colNames = TRUE)
 
 ## Compare aggregated ranks
-agg_corr_kendall <- cor.test(x = cellline_buf_agg$Buffering.CellLine.MeanNormRank,
-                             y = cellline_buf_agg$Buffering.CellLine.StandardizedMean,
+agg_corr_kendall <- cor.test(x = cellline_buf_agg$Model.Buffering.MeanNormRank,
+                             y = cellline_buf_agg$Model.Buffering.StandardizedMean,
                              method = "kendall")
 
-agg_corr_pearson <- cor.test(x = cellline_buf_agg$Buffering.CellLine.MeanNormRank,
-                             y = cellline_buf_agg$Buffering.CellLine.StandardizedMean,
+agg_corr_pearson <- cor.test(x = cellline_buf_agg$Model.Buffering.MeanNormRank,
+                             y = cellline_buf_agg$Model.Buffering.StandardizedMean,
                              method = "pearson")
 
-agg_corr_spearman <- cor.test(x = cellline_buf_agg$Buffering.CellLine.MeanNormRank,
-                             y = cellline_buf_agg$Buffering.CellLine.StandardizedMean,
+agg_corr_spearman <- cor.test(x = cellline_buf_agg$Model.Buffering.MeanNormRank,
+                             y = cellline_buf_agg$Model.Buffering.StandardizedMean,
                               method = "spearman")
 
 cat(capture.output(agg_corr_kendall), file = here(reports_dir, "cellline_buffering_correlation_agg.txt"),
@@ -306,16 +313,16 @@ cat(capture.output(agg_corr_spearman), file = here(reports_dir, "cellline_buffer
 
 ## Plot aggregated ranks
 plot_agg_top <- cellline_buf_agg %>%
-  slice_max(Buffering.CellLine.MeanNormRank, n = 10) %>%
-  vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
+  slice_max(Model.Buffering.MeanNormRank, n = 10) %>%
+  vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
                      default_fill_color = head(bidirectional_color_pal, n = 1),
                      text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
   save_plot("cellline_buffering_aggregated_top.png")
 
 plot_agg_bot <- cellline_buf_agg %>%
-  slice_min(Buffering.CellLine.MeanNormRank, n = 10) %>%
-  vertical_bar_chart(CellLine.Name, Buffering.CellLine.MeanNormRank,
+  slice_min(Model.Buffering.MeanNormRank, n = 10) %>%
+  vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
                      default_fill_color = tail(bidirectional_color_pal, n = 1),
                      text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank") %>%
@@ -327,7 +334,7 @@ plot_agg_bot <- cellline_buf_agg %>%
 
 eval_buf_expr_procan <- cellline_buf_procan %>%
   filter(Observations >= 500) %>%
-  split_by_quantiles(Buffering.CellLine.Ratio, quantile_low = "10%", quantile_high = "90%",
+  split_by_quantiles(Model.Buffering.Ratio, quantile_low = "10%", quantile_high = "90%",
                      target_group_col = "Bufffering.CellLine.Group") %>%
   inner_join(y = expr_buf_procan, by = "CellLine.Name") %>%
   mutate(CopyNumberRatio = Gene.CopyNumber / Gene.CopyNumber.Baseline)
@@ -379,7 +386,7 @@ dev.off()
 ## Poster
 cairo_pdf(here(plots_dir, "cellline_buffering_gene_filtered_procan_poster.pdf"))
 cellline_buf_waterfall_gene_filtered_procan <- cellline_buf_gene_filtered_procan %>%
-  waterfall_plot(Buffering.CellLine.Ratio.ZScore, Rank, CellLine.Name, font_size = 6)
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name, font_size = 6)
 cellline_buf_waterfall_gene_filtered_procan +
   ylab("Mean Buffering Ratio (z-score)") +
   theme_light(base_size = 20)

@@ -39,7 +39,7 @@ cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_ge
 # === Identify proteins with significant expression differences between cell lines with high and low buffering ===
 
 diff_exp <- cellline_buf_procan %>%
-  split_by_3_quantiles(Buffering.CellLine.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
   filter(CellLine.Buffering.Group != "Center") %>%
   inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
   select(CellLine.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
@@ -211,7 +211,7 @@ unfolded_gene_set <- hallmark_gene_set %>%
   filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE")
 
 expr_buf_procan_hallmark <- cellline_buf_procan %>%
-  split_by_3_quantiles(Buffering.CellLine.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
   filter(CellLine.Buffering.Group != "Center") %>%
   inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
   select(Gene.Symbol, Model.ID, CellLine.Buffering.Group, Protein.Expression.Normalized) %>%

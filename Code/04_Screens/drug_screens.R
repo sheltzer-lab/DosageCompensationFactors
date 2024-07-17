@@ -62,13 +62,13 @@ analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_co
 }
 
 drug_dc_corr_procan <- cellline_buf_filtered_procan %>%
-  analyze_sensitivity(drug_screens, Buffering.CellLine.Ratio.ZScore, Drug.MFI.Log2FC)
+  analyze_sensitivity(drug_screens, Model.Buffering.Ratio.ZScore, Drug.MFI.Log2FC)
 drug_dc_corr_depmap <- cellline_buf_filtered_depmap %>%
-  analyze_sensitivity(drug_screens, Buffering.CellLine.Ratio.ZScore, Drug.MFI.Log2FC)
+  analyze_sensitivity(drug_screens, Model.Buffering.Ratio.ZScore, Drug.MFI.Log2FC)
 drug_dc_corr_agg_rank <- cellline_buf_agg %>%
-  analyze_sensitivity(drug_screens, Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC)
+  analyze_sensitivity(drug_screens, Model.Buffering.MeanNormRank, Drug.MFI.Log2FC)
 drug_dc_corr_agg_mean <- cellline_buf_agg %>%
-  analyze_sensitivity(drug_screens, Buffering.CellLine.StandardizedMean, Drug.MFI.Log2FC)
+  analyze_sensitivity(drug_screens, Model.Buffering.StandardizedMean, Drug.MFI.Log2FC)
 
 
 # Evaluate Reproducibility of Results
@@ -114,15 +114,15 @@ bot_sensitivity <- drug_dc_corr_agg_rank %>%
 df_sensitivity_agg <- cellline_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
-  mutate(Buffering.CellLine = if_else(Buffering.CellLine.MeanNormRank > 0.5, "High", "Low"))
+  mutate(Model.Buffering = if_else(Model.Buffering.MeanNormRank > 0.5, "High", "Low"))
 
 df_sensitivity_agg %>%
   inner_join(y = top_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
   mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
                                                                  nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, desc(Corr.Sensitivity_Buffering))) %>%
-  arrange(Buffering.CellLine.MeanNormRank) %>%
-  jittered_boxplot(Label, Drug.MFI.Log2FC, Buffering.CellLine.MeanNormRank,
+  arrange(Model.Buffering.MeanNormRank) %>%
+  jittered_boxplot(Label, Drug.MFI.Log2FC, Model.Buffering.MeanNormRank,
                    alpha = 3/4, jitter_width = 0.25) %>%
   save_plot("correlation_buffering_sensitivity_top.png", width = 300)
 
@@ -131,19 +131,19 @@ df_sensitivity_agg %>%
   mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
                                                                  nsmall = 3, scientific = FALSE), ")")) %>%
   mutate(Label = fct_reorder(Label, Corr.Sensitivity_Buffering)) %>%
-  arrange(Buffering.CellLine.MeanNormRank) %>%
-  jittered_boxplot(Label, Drug.MFI.Log2FC, Buffering.CellLine.MeanNormRank,
+  arrange(Model.Buffering.MeanNormRank) %>%
+  jittered_boxplot(Label, Drug.MFI.Log2FC, Model.Buffering.MeanNormRank,
                    alpha = 3/4, jitter_width = 0.25) %>%
   save_plot("correlation_buffering_sensitivity_bot.png", width = 300)
 
 df_sensitivity_agg %>%
   semi_join(y = top_sensitivity, by = "Drug.ID") %>%
-  signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
+  signif_violin_plot(Model.Buffering, Drug.MFI.Log2FC, Drug.Name) %>%
   save_plot(paste0("buffering_sensitivity_distributions_top.png"), width = 350)
 
 df_sensitivity_agg %>%
   semi_join(y = bot_sensitivity, by = "Drug.ID") %>%
-  signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
+  signif_violin_plot(Model.Buffering, Drug.MFI.Log2FC, Drug.Name) %>%
   save_plot(paste0("buffering_sensitivity_distributions_bot.png"), width = 350)
 
 # Scatter- & Violin-plot visualization of selected drugs
@@ -153,14 +153,14 @@ selected_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "IN
 for (drug in selected_drugs) {
   df_sensitivity_agg %>%
     filter(Drug.Name == drug) %>%
-    scatter_plot_reg_corr(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+    scatter_plot_reg_corr(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                           point_size = 2, title_prefix = drug) %>%
     save_plot(paste0("buffering_sensitivity_", drug, "_scatterplot.png"))
 }
 
 df_sensitivity_agg %>%
   filter(Drug.Name %in% selected_drugs) %>%
-  signif_violin_plot(Buffering.CellLine, Drug.MFI.Log2FC, Drug.Name) %>%
+  signif_violin_plot(Model.Buffering, Drug.MFI.Log2FC, Drug.Name) %>%
   save_plot(paste0("buffering_sensitivity_distributions_selected.png"), width = 350)
 
 # Get mechanism of action and target of top drugs
@@ -184,9 +184,9 @@ moa_corr <- cellline_buf_agg %>%
   group_by(Drug.MOA) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
-    Corr.Sensitivity_Buffering = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+    Corr.Sensitivity_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                                           method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                       method = "pearson")$p.value
   )
 
@@ -213,9 +213,9 @@ target_corr <- cellline_buf_agg %>%
   group_by(Drug.Target) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
-    Corr.Sensitivity_Buffering = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+    Corr.Sensitivity_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                                           method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Buffering.CellLine.MeanNormRank, Drug.MFI.Log2FC,
+    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                       method = "pearson")$p.value
   )
 
@@ -249,13 +249,13 @@ drug_confounder_heatmap <- function(df, desc = FALSE) {
     mutate(Drug.Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
                                                                         nsmall = 3, scientific = FALSE), ")")) %>%
     mutate(Drug.Label = fct_reorder(Drug.Label, Corr.Sensitivity_Buffering, .desc = desc),
-           CellLine.Name = fct_reorder(CellLine.Name, Buffering.CellLine.MeanNormRank),
+           CellLine.Name = fct_reorder(CellLine.Name, Model.Buffering.MeanNormRank),
            CellLine.WGD = as.factor(CellLine.WGD))
 
   heatmap_buffering <- df %>%
-    distinct(CellLine.Name, Buffering.CellLine.MeanNormRank) %>%
+    distinct(CellLine.Name, Model.Buffering.MeanNormRank) %>%
     ggplot() +
-    aes(x = CellLine.Name, y = "Buffering Score", fill = Buffering.CellLine.MeanNormRank) +
+    aes(x = CellLine.Name, y = "Buffering Score", fill = Model.Buffering.MeanNormRank) +
     geom_raster() +
     scale_fill_viridis_c(option = "mako", labels = c(0, 0.5, 1), breaks = c(0, 0.5, 1), limits = c(0, 1)) +
     cowplot::theme_minimal_hgrid() +
@@ -378,7 +378,7 @@ moa_diff <- cellline_buf_agg %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.MOA, delim = ", ") %>%
   mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
-  split_by_quantiles(Buffering.CellLine.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
   differential_expression(Drug.MOA, CellLine.Buffering.Group, Drug.MFI.Log2FC,
                           groups = c("Low", "High"))
 
@@ -393,7 +393,7 @@ target_diff <- cellline_buf_agg %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.Target, delim = ", ") %>%
   mutate(Drug.MOA = str_squish(Drug.Target)) %>%
-  split_by_quantiles(Buffering.CellLine.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
   differential_expression(Drug.Target, CellLine.Buffering.Group, Drug.MFI.Log2FC,
                           groups = c("Low", "High"))
 
