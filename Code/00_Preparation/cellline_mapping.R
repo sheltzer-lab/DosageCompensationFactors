@@ -26,8 +26,8 @@ df_celllines <- read_csv_arrow(here(copynumber_data_dir, "Model.csv")) %>%
   mutate(SangerReplicates = if_else(is.na(CellLine.SangerModelId), 0, SangerReplicates),
          DepMapReplicates = if_else(is.na(CellLine.DepMapModelId), 0, DepMapReplicates)) %>%
   filter(SangerReplicates < 2 & DepMapReplicates < 2) %>%
-  mutate(CellLine.CustomId = paste0("CL_", consecutive_id(CellLine.DepMapModelId,
+  mutate(Model.ID = paste0("CL_", consecutive_id(CellLine.DepMapModelId,
                                                           CellLine.SangerModelId,
                                                           CellLine.Name))) %>%
-  select(CellLine.CustomId, CellLine.DepMapModelId, CellLine.SangerModelId, CellLine.Name) %>%
+  select(Model.ID, CellLine.DepMapModelId, CellLine.SangerModelId, CellLine.Name) %>%
   write_parquet(here(output_data_dir, 'celllines.parquet'), version = "2.6")

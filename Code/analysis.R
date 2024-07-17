@@ -139,12 +139,12 @@ rocs_to_df <- function(rocs) {
 # Calculate correlation between datasets (cell lines as separate samples)
 dataset_correlation <- function(df, dataset_col, value_col, comparison_name, method = "pearson") {
   test <- df %>%
-    pivot_wider(id_cols = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+    pivot_wider(id_cols = c("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession"),
                 names_from = quo_name(enquo(dataset_col)),
                 values_from = quo_name(enquo(value_col))) %>%
     rename(DatasetA = 4,
            DatasetB = 5) %>%
-    group_by(CellLine.CustomId) %>%
+    group_by(Model.ID) %>%
     summarize(Correlation = cor(DatasetA, DatasetB,
                                 method = method, use = "na.or.complete"),
               Observations = min(c(sum(!is.na(DatasetA)), sum(!is.na(DatasetB))))

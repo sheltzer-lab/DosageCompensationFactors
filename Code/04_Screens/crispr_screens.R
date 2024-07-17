@@ -31,8 +31,8 @@ expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_proc
 
 df_crispr_buf <- crispr_screens %>%
   inner_join(y = expr_buf_procan %>% select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name),
-             by = c("CellLine.CustomId", "Protein.Uniprot.Accession", "Gene.Symbol")) %>%
-  select(CellLine.CustomId, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol,
+             by = c("Model.ID", "Protein.Uniprot.Accession", "Gene.Symbol")) %>%
+  select(Model.ID, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol,
          Gene.ChromosomeArm, ChromosomeArm.CNA, Buffering.GeneLevel.Ratio, CRISPR.EffectScore, CRISPR.DependencyScore)
 
 ## Check distributions

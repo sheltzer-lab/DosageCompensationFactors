@@ -37,11 +37,11 @@ remove_noisefloor <- function(df, value_col, percentile_cutoff = 0.0001) {
 match_datasets <- function(df_dataset1, df_dataset2) {
   matched_set1 <- df_dataset1 %>%
     semi_join(y = df_dataset2,
-            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            by = c("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession"),
             na_matches = "never")
   matched_set2 <- df_dataset2 %>%
     semi_join(y = df_dataset1,
-            by = c("CellLine.CustomId", "Gene.Symbol", "Protein.Uniprot.Accession"),
+            by = c("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession"),
             na_matches = "never")
 
   return(bind_rows(matched_set1, matched_set2))

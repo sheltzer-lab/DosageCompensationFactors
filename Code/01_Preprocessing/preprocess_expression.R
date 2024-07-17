@@ -59,7 +59,8 @@ procan_expr_tidy <- procan_expr %>%
   updateGeneSymbols() %>%
   unite("UniqueId", c("CellLine.SangerModelId", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE) %>%
-  mutate(Dataset = "ProCan")
+  mutate(Dataset = "ProCan",
+         Model.Type = "Cell Line")
 
 depmap_expr_tidy <- depmap_expr %>%
   rename(CellLine.DepMapModelId = 1) %>%
@@ -80,7 +81,8 @@ depmap_expr_tidy <- depmap_expr %>%
   updateGeneSymbols() %>%
   unite("UniqueId", c("CellLine.DepMapModelId", "Gene.Symbol", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE) %>%
-  mutate(Dataset = "DepMap")
+  mutate(Dataset = "DepMap",
+         Model.Type = "Cell Line")
 
 # === Preprocess Datasets ===
 # ToDo: Evaluate if applying batch effect correction unaveraged dataset and then averaging it is a better approach
@@ -96,7 +98,7 @@ procan_expr_processed <- procan_expr_tidy %>%
 depmap_expr_processed <- depmap_expr_tidy %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   semi_join(df_rep_filtered, by = "Gene.Symbol") %>%  # Remove proteins with low reproducibilty across datasets
-  group_by(CellLine.CustomId, CellLine.SangerModelId, CellLine.DepMapModelId, CellLine.Name, Dataset,
+  group_by(Model.ID, CellLine.SangerModelId, CellLine.DepMapModelId, CellLine.Name, Dataset,
            UniqueId, Gene.Symbol, Protein.Uniprot.Accession) %>%
   summarize(Protein.Expression.Log2 = mean(Protein.Expression.Log2, na.rm = TRUE)) %>%
   ungroup() %>%
@@ -114,11 +116,11 @@ expr_combined <- procan_expr_processed %>%
   bind_rows(depmap_expr_processed)
 
 ## Matched Cell Lines
-common_celllines <- intersect(unique(procan_expr_processed$CellLine.CustomId),
-                          unique(depmap_expr_processed$CellLine.CustomId))
+common_celllines <- intersect(unique(procan_expr_processed$Model.ID),
+                          unique(depmap_expr_processed$Model.ID))
 
 expr_combined_celllines <- expr_combined %>%
-  filter(CellLine.CustomId %in% common_celllines)
+  filter(Model.ID %in% common_celllines)
 
 ## Matched Genes
 common_genes <- intersect(unique(procan_expr_processed$Gene.Symbol),
@@ -133,7 +135,7 @@ expr_matched <- match_datasets(procan_expr_processed, depmap_expr_processed)
 ## Matched Genes per matched Cell Line (re-normalized)
 expr_matched_renorm <- expr_matched %>%
   select(-Protein.Expression.Normalized) %>%
-  mutate(CellLine.Name.Unique = paste(CellLine.CustomId, Dataset, sep = "_")) %>%
+  mutate(CellLine.Name.Unique = paste(Model.ID, Dataset, sep = "_")) %>%
   normalize_samples(CellLine.Name.Unique, Protein.Expression.Log2, Protein.Uniprot.Accession,
                     normalized_colname = "Protein.Expression.Normalized") %>%
   select(-CellLine.Name.Unique)

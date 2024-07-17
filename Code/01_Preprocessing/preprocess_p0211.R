@@ -46,7 +46,7 @@ p0211_expr_tidy <- p0211_raw %>%
                names_to = "raw_name", values_to = "Protein.Expression") %>%
   inner_join(y = p0211_meta, by = "raw_name",
              unmatched = "error", relationship = "many-to-one") %>%
-  unite("CellLine.CustomId", c("project_id", "cell_line"), remove = FALSE, sep = "_") %>%
+  unite("Model.ID", c("project_id", "cell_line"), remove = FALSE, sep = "_") %>%
   mutate(Sample.ID = as.integer(sample_number),
          Sample.Name = sample_name) %>%
   rename(CellLine.Name = cell_line,
@@ -63,8 +63,10 @@ p0211_expr_tidy <- p0211_raw %>%
          Identified.In.Some = any(Protein.Expression != 0) &
            !Potential.Contaminant & !Reverse & !Only.Identified.By.Site & !Identified.In.All) %>%
   ungroup() %>%
-  select(Sample.ID, Sample.Name, CellLine.CustomId, CellLine.Name, CellLine.Replicate,
-         ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols))
+  select(Sample.ID, Sample.Name, Model.ID, CellLine.Name, CellLine.Replicate,
+         ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols)) %>%
+    mutate(Dataset = "P0211",
+           Model.Type = "Cell Line")
 
 # === Filter & Normalize Dataset ===
 

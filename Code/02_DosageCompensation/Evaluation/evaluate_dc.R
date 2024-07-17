@@ -273,10 +273,10 @@ dc_report$AvailableBaselineObservations <- quantile(num_baseline_samples$Observa
 
 # Copy Number Baseline
 df_cn_eval <- expr_depmap %>%
-  select(Gene.Symbol, CellLine.CustomId) %>%
-  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+  select(Gene.Symbol, Model.ID) %>%
+  inner_join(y = copy_number, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
-  select(Gene.Symbol, CellLine.CustomId, Gene.CopyNumber, CellLine.Ploidy,
+  select(Gene.Symbol, Model.ID, Gene.CopyNumber, CellLine.Ploidy,
          ChromosomeArm.CNA, CellLine.AneuploidyScore) %>%
   mutate(PloidyDistance = abs(2 - CellLine.Ploidy),
          CombinedDistance = 0.3 * PloidyDistance / max(PloidyDistance, na.rm = TRUE) +
@@ -316,10 +316,10 @@ cn_baseline_plot %>%
 
 # Expression Baseline
 df_expr_eval <- expr_depmap %>%
-  select(Gene.Symbol, CellLine.CustomId, Protein.Expression.Normalized) %>%
-  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+  select(Gene.Symbol, Model.ID, Protein.Expression.Normalized) %>%
+  inner_join(y = copy_number, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
-  select(Gene.Symbol, CellLine.CustomId, ChromosomeArm.CNA, CellLine.Ploidy,
+  select(Gene.Symbol, Model.ID, ChromosomeArm.CNA, CellLine.Ploidy,
          CellLine.AneuploidyScore, Protein.Expression.Normalized) %>%
   mutate(PloidyDistance = abs(2 - CellLine.Ploidy),
          CombinedDistance = 0.3 * PloidyDistance / max(PloidyDistance, na.rm = TRUE) +

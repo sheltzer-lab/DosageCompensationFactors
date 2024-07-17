@@ -92,7 +92,7 @@ df_crispr <- df_crispr_eff %>%
             relationship = "many-to-one", na_matches = "never") %>%
   updateGeneSymbols() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
-  select(CellLine.CustomId, CellLine.DepMapModelId, CellLine.SangerModelId, CellLine.Name,
+  select(Model.ID, CellLine.DepMapModelId, CellLine.SangerModelId, CellLine.Name,
          Protein.Uniprot.Accession, Gene.Symbol, CRISPR.EffectScore, CRISPR.DependencyScore) %>%
   write_parquet(here(output_data_dir, 'crispr_screens.parquet'),
                 version = "2.6")

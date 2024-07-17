@@ -131,7 +131,7 @@ calculate_dc <- function(df) {
 
 # Note: DepMap copy number data does not cover all cell lines in ProCan (333 cell lines lost here)
 expr_buf_procan <- expr_procan %>%
-  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+  inner_join(y = copy_number, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
   filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 10) %>%
   baseline_estimation() %>%
@@ -140,7 +140,7 @@ expr_buf_procan <- expr_procan %>%
   write_parquet(here(output_data_dir, 'expression_buffering_procan.parquet'), version = "2.6")
 
 expr_buf_depmap <- expr_depmap %>%
-  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+  inner_join(y = copy_number, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
   filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 10) %>%
   baseline_estimation() %>%
@@ -149,7 +149,7 @@ expr_buf_depmap <- expr_depmap %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap.parquet'), version = "2.6")
 
 expr_buf_matched_renorm <- expr_matched_renorm %>%
-  inner_join(y = copy_number, by = c("CellLine.CustomId", "Gene.Symbol"),
+  inner_join(y = copy_number, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
   filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 10) %>%
   baseline_estimation() %>%
@@ -159,7 +159,7 @@ expr_buf_matched_renorm <- expr_matched_renorm %>%
 
 ## Whole Genome Doubling
 buf_wgd <- expr_depmap %>%
-  inner_join(y = copy_number_wgd, by = c("CellLine.CustomId", "Gene.Symbol"),
+  inner_join(y = copy_number_wgd, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
   filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 10) %>%
   baseline_estimation() %>%
@@ -168,7 +168,7 @@ buf_wgd <- expr_depmap %>%
   write_parquet(here(output_data_dir, 'expression_buffering_depmap_wgd.parquet'), version = "2.6")
 
 buf_no_wgd <- expr_depmap %>%
-  inner_join(y = copy_number_no_wgd, by = c("CellLine.CustomId", "Gene.Symbol"),
+  inner_join(y = copy_number_no_wgd, by = c("Model.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
   filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 10) %>%
   baseline_estimation() %>%

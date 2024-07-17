@@ -90,7 +90,7 @@ copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
 ### Events per chromosome
 copy_number %>%
   # filter(CellLine.AneuploidyScore > 0) %>%
-  distinct(Gene.Chromosome, Gene.ChromosomeArm, Gene.ChromosomeBand, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  distinct(Gene.Chromosome, Gene.ChromosomeArm, Gene.ChromosomeBand, ChromosomeArm.CNA, Model.ID) %>%
   mutate(Chromosome = fct_reorder(Gene.Chromosome, as.integer(Gene.Chromosome)),
          ChromosomeArm = factor(substr(Gene.ChromosomeBand, 1, 1), levels = c("p", "q"))) %>%
   count(Chromosome, ChromosomeArm, ChromosomeArm.CNA) %>%
@@ -109,13 +109,13 @@ copy_number %>%
 
 ### Total Number of CNA Events
 copy_number %>%
-  distinct(Gene.Chromosome, Gene.ChromosomeArm, Gene.ChromosomeBand, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  distinct(Gene.Chromosome, Gene.ChromosomeArm, Gene.ChromosomeBand, ChromosomeArm.CNA, Model.ID) %>%
   count(ChromosomeArm.CNA)
 
 ### Ploidy + CNA
 copy_number %>%
   filter(CellLine.AneuploidyScore > 0) %>%
-  distinct(Gene.ChromosomeArm, ChromosomeArm.CNA, CellLine.CustomId, CellLine.Ploidy) %>%
+  distinct(Gene.ChromosomeArm, ChromosomeArm.CNA, Model.ID, CellLine.Ploidy) %>%
   mutate(ChromosomeArm.Count = as.factor(ChromosomeArm.CNA + round(CellLine.Ploidy))) %>%
   ggplot() +
   aes(x = ChromosomeArm.Count) +
@@ -123,12 +123,12 @@ copy_number %>%
 
 ### Gain/Loss Correlation
 corr_matrix <- copy_number %>%
-  distinct(Gene.Chromosome, Gene.ChromosomeArm, ChromosomeArm.CNA, CellLine.CustomId) %>%
+  distinct(Gene.Chromosome, Gene.ChromosomeArm, ChromosomeArm.CNA, Model.ID) %>%
   mutate(Gene.ChromosomeArm = fct_reorder(Gene.ChromosomeArm, as.integer(Gene.Chromosome))) %>%
   arrange(Gene.ChromosomeArm) %>%
-  select(Gene.ChromosomeArm, ChromosomeArm.CNA, CellLine.CustomId) %>%
-  pivot_wider(names_from = "Gene.ChromosomeArm", values_from = "ChromosomeArm.CNA", id_cols = "CellLine.CustomId") %>%
-  select(-CellLine.CustomId) %>%
+  select(Gene.ChromosomeArm, ChromosomeArm.CNA, Model.ID) %>%
+  pivot_wider(names_from = "Gene.ChromosomeArm", values_from = "ChromosomeArm.CNA", id_cols = "Model.ID") %>%
+  select(-Model.ID) %>%
   psych::corr.test(method = "kendall", adjust = "BH")
 
 corrplot(corr_matrix$r, p.mat = corr_matrix$p,

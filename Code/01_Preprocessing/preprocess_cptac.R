@@ -84,7 +84,8 @@ expr_cptac <- bind_rows(df_list_expr) %>%
             na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
   updateGeneSymbols() %>%
   unite("UniqueId", c("Model.SampleID", "Gene.ENSEMBL.Id"), sep = '_', remove = FALSE) %>%
-  mutate(Dataset = "CPTAC")
+  mutate(Dataset = "CPTAC",
+         Model.Type = "Tumor Sample")
 
 ## Copy Number
 copy_number_cptac <- gdc_cptac_cnv %>%
