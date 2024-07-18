@@ -2,6 +2,7 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(stringr)
+library(magrittr)
 library(arrow)
 library(assertr)
 library(ggplot2)
@@ -37,7 +38,7 @@ expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac
 # TODO: Calculate confidence score based on SD, Observations & Gene-Level Confidence
 analyze_model_buffering <- function(df, buffering_ratio_col, model_col = Model.ID,
                                     aneuploidy_col = CellLine.AneuploidyScore) {
-  cellline_buf_avg <- df %>%
+  model_buf_avg <- df %>%
     select({ { model_col } }, { { buffering_ratio_col } }, { { aneuploidy_col } }) %>%
     group_by({ { model_col } }) %>%
     summarize(Model.Buffering.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
@@ -103,8 +104,8 @@ common_genes <- intersect(unique(expr_buf_procan$Gene.Symbol),
 
 common_genes <- intersect(common_genes, unique(expr_buf_cptac$Gene.Symbol))
 
-## Calculate Cell Line level Dosage Compensation
-### All genes & cell lines
+## Calculate Model level Dosage Compensation
+### All genes, all cell lines / models
 cellline_buf_procan <- expr_buf_procan_filtered %>%
   analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
   add_cellline_names() %>%
@@ -120,7 +121,7 @@ cellline_buf_cptac <- expr_buf_cptac_filtered %>%
   select(-Model.Buffering.Ratio.Adjusted) %>%
   mutate(Dataset = "CPTAC")
 
-### Common genes, all cell lines
+### Common genes, all cell lines / models
 cellline_buf_gene_filtered_procan <- expr_buf_procan_filtered %>%
   filter(Gene.Symbol %in% common_genes) %>%
   analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
@@ -159,35 +160,28 @@ cellline_buf_joined <- cellline_buf_joined_procan %>%
   arrange(CellLine.Name)
 
 ## Save results
-write.xlsx(cellline_buf_procan, here(tables_base_dir, "cellline_buffering_procan.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_depmap, here(tables_base_dir, "cellline_buffering_depmap.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_cptac, here(tables_base_dir, "cellline_buffering_cptac.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_gene_filtered_procan, here(tables_base_dir, "cellline_buffering_gene_filtered_procan.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_gene_filtered_depmap, here(tables_base_dir, "cellline_buffering_gene_filtered_depmap.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_gene_filtered_cptac, here(tables_base_dir, "cellline_buffering_gene_filtered_cptac.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_joined_procan, here(tables_base_dir, "cellline_buffering_filtered_procan.xlsx"),
-           colNames = TRUE)
-write.xlsx(cellline_buf_joined_depmap, here(tables_base_dir, "cellline_buffering_filtered_depmap.xlsx"),
-           colNames = TRUE)
+datasets <- list(
+  ### All genes, all models
+  "cellline_buffering_procan" = cellline_buf_procan,
+  "cellline_buffering_depmap" = cellline_buf_depmap,
+  "cellline_buffering_cptac" = cellline_buf_cptac,
+  ### Common genes, all models
+  "cellline_buffering_gene_filtered_procan" = cellline_buf_gene_filtered_procan,
+  "cellline_buffering_gene_filtered_depmap" = cellline_buf_gene_filtered_depmap,
+  "cellline_buffering_gene_filtered_cptac" = cellline_buf_gene_filtered_cptac,
+  ### Joined genes & cell lines
+  "cellline_buffering_joined_procan" = cellline_buf_joined_procan,
+  "cellline_buffering_joined_depmap" = cellline_buf_joined_depmap
+)
 
-write_parquet(cellline_buf_procan, here(output_data_dir, "cellline_buffering_procan.parquet"),
-              version = "2.6")
-write_parquet(cellline_buf_depmap, here(output_data_dir, "cellline_buffering_depmap.parquet"),
-              version = "2.6")
-write_parquet(cellline_buf_gene_filtered_procan, here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"),
-              version = "2.6")
-write_parquet(cellline_buf_gene_filtered_depmap, here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"),
-              version = "2.6")
-write_parquet(cellline_buf_joined_procan, here(output_data_dir, "cellline_buffering_filtered_procan.parquet"),
-              version = "2.6")
-write_parquet(cellline_buf_joined_depmap, here(output_data_dir, "cellline_buffering_filtered_depmap.parquet"),
-              version = "2.6")
+for (i in seq_along(datasets)) {
+  dataset <- datasets[[i]]
+  name <- names(datasets)[[i]]
+
+  dataset %T>%
+    write_parquet(here(output_data_dir, paste0(name, ".parquet")), version = "2.6") %>%
+    write.xlsx(here(tables_base_dir, paste0(name, ".xlsx")), colNames = TRUE)
+}
 
 ## Create plots
 cellline_buf_waterfall_procan <- cellline_buf_procan %>%

@@ -3,6 +3,7 @@ library(tidyr)
 library(dplyr)
 library(arrow)
 library(stringr)
+library(magrittr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -22,6 +23,7 @@ dir.create(output_data_dir, recursive = TRUE)
 
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+cellline_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
@@ -37,6 +39,8 @@ df_model_depmap <- read_csv_arrow(here(depmap_cn_data_dir, "Model.csv")) %>%
   add_count(CellLine.Name) %>%
   filter(n == 1) %>%
   select(-n)
+
+df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 
 aneuploidy_quant <- quantile(copy_number$CellLine.AneuploidyScore, probs = c(0.25, 0.5, 0.75))
 
@@ -72,6 +76,10 @@ df_depmap <- df_model_depmap %>%
            TRUE ~ "Very Low",
          ))
 
+df_cptac <- df_model_cptac %>%
+  inner_join(y = cellline_buf_cptac, by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never")
+
 plot_categorical_properties <- function (df, cols_categorical) {
   plots <- list()
   for (col in cols_categorical) {
@@ -81,10 +89,29 @@ plot_categorical_properties <- function (df, cols_categorical) {
   return(plots)
 }
 
+plot_continuous_properties <- function (df, cols_continuous) {
+  plots <- list()
+  df_corr <- NULL
+  for (col_ in cols_continuous) {
+    plots[[col_]]  <- df %>%
+      scatter_plot_reg_corr(col_, Model.Buffering.Ratio)
+
+    df_corr <- df %>%
+      rename(x = col_, y = "Model.Buffering.Ratio") %>%
+      rstatix::cor_test(x, y, method = "spearman") %>%
+      mutate(var1 = col_, var2 = "Model.Buffering.Ratio") %>%
+      bind_rows(df_corr)
+  }
+  return(list(plots = plots, df_corr = df_corr))
+}
+
 data_density_procan <- df_procan %>%
   data_density()
 
 data_density_depmap <- df_procan %>%
+  data_density()
+
+data_density_cptac <- df_cptac %>%
   data_density()
 
 cancers_depmap <- df_depmap %>%
@@ -98,11 +125,21 @@ cols_procan <- c("tissue_status", "cancer_type", "msi_status",
 cols_depmap <- c("PrimaryOrMetastasis", "OncotreeSubtype", "Sex",
                  "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
 
+cols_cptac_hallmark <- df_cptac %>% select(starts_with("HALLMARK")) %>% colnames()
+
 violoin_plots_procan <- df_procan %>%
   plot_categorical_properties(cols_procan)
 
 violoin_plots_depmap <- df_depmap %>%
   plot_categorical_properties(cols_depmap)
+
+scatter_plots_cptac <- df_cptac %>%
+  plot_continuous_properties(cols_cptac_hallmark)
+
+df_signif_hallmarks <- scatter_plots_cptac$df_corr %>%
+  mutate(p.adj = p.adjust(p, method = "BH")) %>%
+  filter(p.adj < p_threshold) %>%
+  arrange(p.adj)
 
 ## Plot cell line buffering per cancer type
 df_procan %>%
@@ -113,6 +150,9 @@ df_depmap %>%
   sorted_beeswarm_plot("OncotreeSubtype", Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_depmap.png", width = 300)
+df_cptac %>%
+  sorted_violin_plot("Model.CancerType", Model.Buffering.Ratio) %>%
+  save_plot("cancer-type_cptac.png", width = 300)
 
 ### Plot aneuploidy score per cancer type
 df_procan %>%
@@ -332,6 +372,33 @@ mutational_burden_comparison <- df_procan %>%
                        test = wilcox.test) %>%
   save_plot("cellline_mutations_comparison_procan.png")
 
+## Cancer Stages
+df_cptac %>%
+  drop_na(Stage) %>%
+  violin_plot(Stage, Model.Buffering.Ratio) %>%
+  save_plot("cancer_stages_cptac.png")
+
+df_cptac %>%
+  drop_na(Stage) %$%
+  pairwise.wilcox.test(Model.Buffering.Ratio, Stage, p.adjust.method = "BH")
+
+## Histologic Grade
+df_cptac %>%
+  drop_na(Histologic_Grade) %>%
+  violin_plot(Histologic_Grade, Model.Buffering.Ratio) %>%
+  save_plot("histologic_grade_cptac.png")
+
+df_cptac %>%
+  drop_na(Histologic_Grade) %$%
+  pairwise.wilcox.test(Model.Buffering.Ratio, Histologic_Grade, p.adjust.method = "BH")
+
+## TP53 Mutation
+df_cptac %>%
+  drop_na(TP53_mutation) %>%
+  mutate(TP53_mutation = factor(TP53_mutation)) %>%
+  violin_plot(TP53_mutation, Model.Buffering.Ratio) %>%
+  save_plot("tp53_mutation_cptac.png")
+
 # Regression analysis
 ## Age
 df_procan %>%
@@ -363,6 +430,16 @@ aneuploidy_reg_plot <- df_procan %>%
 df_depmap %>%
   scatter_plot_reg_corr(CellLine.AneuploidyScore, Model.Buffering.Ratio, color_col = WGD, point_size = 2) %>%
   save_plot("cellline_aneuploidy_depmap.png")
+
+## Tumor Purity
+df_cptac %>%
+  scatter_plot_reg_corr(Model.TumorPurity, Model.Buffering.Ratio) %>%
+  save_plot("tumor_purity_cptac.png")
+
+## Overall survival
+df_cptac %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, OS_days) %>%
+  save_plot("overall_survival_cptac.png")
 
 ## Misc
 df_procan %>%
