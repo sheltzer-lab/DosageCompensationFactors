@@ -119,11 +119,25 @@ plot_br_distributions(expr_buf_procan, "procan")
 plot_br_distributions(expr_buf_depmap, "depmap")
 
 ## Distribution of Confidence Score
-# TODO: Facet by Gene vs. ChrArm Level
-ggplot() +
-  geom_density(aes(x = expr_buf_depmap$Buffering.GeneLevel.Ratio.Confidence, color = "DepMap")) +
-  geom_density(aes(x = expr_buf_procan$Buffering.GeneLevel.Ratio.Confidence, color = "ProCan")) +
+### Per dataset
+bind_rows(expr_buf_cptac, expr_buf_procan, expr_buf_depmap) %>%
+  ggplot() +
+  aes(x = Buffering.GeneLevel.Ratio.Confidence, color = Dataset) +
+  geom_density() +
   labs(x = "Gene Level Buffering Ratio (Confidence Score)", color = "Dataset")
+
+### Per level & dataset
+bind_rows(expr_buf_procan, expr_buf_depmap) %>%
+  select(Dataset, Model.ID, Gene.Symbol,
+         Buffering.GeneLevel.Ratio.Confidence, Buffering.ChrArmLevel.Ratio.Confidence) %>%
+  pivot_longer(c("Buffering.GeneLevel.Ratio.Confidence", "Buffering.ChrArmLevel.Ratio.Confidence"),
+               values_to = "Protein.Buffering.Ratio", names_to = "Buffering.Level") %>%
+  mutate(Buffering.Level = str_split_i(Buffering.Level, "\\.", 2)) %>%
+  ggplot() +
+  aes(x = Protein.Buffering.Ratio, color = Buffering.Level) +
+  geom_density() +
+  labs(x = "Buffering Ratio Confidence Score", color = "Level") +
+  facet_wrap(~Dataset)
 
 # Buffering Classes
 ## Similarity between Chromosome-Level Avg Log2FC classes and Gene-Level BR classes
