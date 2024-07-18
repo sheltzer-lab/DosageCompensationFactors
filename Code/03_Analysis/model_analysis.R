@@ -31,9 +31,9 @@ dir.create(reports_dir, recursive = TRUE)
 df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 
 # === Analyze Dosage Compensation on Cell Line level ===
-
 # TODO: Calculate confidence score based on SD, Observations & Gene-Level Confidence
 analyze_model_buffering <- function(df, buffering_ratio_col, model_col = Model.ID,
                                     aneuploidy_col = CellLine.AneuploidyScore) {
@@ -53,9 +53,9 @@ analyze_model_buffering <- function(df, buffering_ratio_col, model_col = Model.I
 }
 
 # Note: Not required when merging datasets to match genes and cell lines
-filter_samples <- function(df_expr_buf) {
+filter_samples <- function(df_expr_buf, aneuploidy_col = CellLine.AneuploidyScore, ploidy_col = CellLine.Ploidy) {
   df_expr_buf %>%
-    filter(CellLine.AneuploidyScore > 0 | round(CellLine.Ploidy) != 2) %>%  # Remove non-aneuploid cell lines
+    filter({ { aneuploidy_col } } > 0 | round({ { ploidy_col } }) != 2) %>%  # Remove non-aneuploid cell lines
     filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
     # filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
     filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>% # Remove BR estimates with low confidence
@@ -63,14 +63,12 @@ filter_samples <- function(df_expr_buf) {
 }
 
 add_cellline_names <- function (df, df_cl = df_celllines) {
-  df_cl <- df_cl %>%
-    distinct(Model.ID, CellLine.Name)
-
   df %>%
-    inner_join(y = df_cl, by = "Model.ID", relationship = "many-to-one")
+    inner_join(y = df_cl %>% distinct(Model.ID, CellLine.Name),
+               by = "Model.ID", relationship = "many-to-one")
 }
 
-## Combine datasets
+## Filter datasets
 expr_buf_procan_filtered <- expr_buf_procan %>%
   filter_samples() %>%
   select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
@@ -83,6 +81,16 @@ expr_buf_depmap_filtered <- expr_buf_depmap %>%
          "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore", "Dataset") %>%
   drop_na()
 
+expr_buf_cptac_filtered <- expr_buf_cptac %>%
+  # TODO: Estimate aneuploidy and ploidy
+  mutate(Dummy.AneuploidyScore = 0,
+         Dummy.Ploidy = 0) %>%
+  filter_samples(aneuploidy_col = Dummy.AneuploidyScore, ploidy_col = Dummy.Ploidy) %>%
+  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
+         "Buffering.GeneLevel.Ratio", "Dummy.AneuploidyScore", "Dataset") %>%
+  drop_na()
+
+## Join cell line datasets
 expr_buf_joined <- expr_buf_procan_filtered %>%
   rename(ProCan = Buffering.GeneLevel.Ratio) %>%
   select(-CellLine.AneuploidyScore) %>%
@@ -92,6 +100,8 @@ expr_buf_joined <- expr_buf_procan_filtered %>%
 
 common_genes <- intersect(unique(expr_buf_procan$Gene.Symbol),
                           unique(expr_buf_depmap$Gene.Symbol))
+
+common_genes <- intersect(common_genes, unique(expr_buf_cptac$Gene.Symbol))
 
 ## Calculate Cell Line level Dosage Compensation
 ### All genes & cell lines
@@ -105,6 +115,11 @@ cellline_buf_depmap <- expr_buf_depmap_filtered %>%
   add_cellline_names() %>%
   mutate(Dataset = "DepMap")
 
+cellline_buf_cptac <- expr_buf_cptac_filtered %>%
+  analyze_model_buffering(Buffering.GeneLevel.Ratio, aneuploidy_col = Dummy.AneuploidyScore) %>%
+  select(-Model.Buffering.Ratio.Adjusted) %>%
+  mutate(Dataset = "CPTAC")
+
 ### Common genes, all cell lines
 cellline_buf_gene_filtered_procan <- expr_buf_procan_filtered %>%
   filter(Gene.Symbol %in% common_genes) %>%
@@ -117,6 +132,12 @@ cellline_buf_gene_filtered_depmap <- expr_buf_depmap_filtered %>%
   analyze_model_buffering(Buffering.GeneLevel.Ratio) %>%
   add_cellline_names() %>%
   mutate(Dataset = "DepMap")
+
+cellline_buf_gene_filtered_cptac <- expr_buf_cptac_filtered %>%
+  filter(Gene.Symbol %in% common_genes) %>%
+  analyze_model_buffering(Buffering.GeneLevel.Ratio, aneuploidy_col = Dummy.AneuploidyScore) %>%
+  select(-Model.Buffering.Ratio.Adjusted) %>%
+  mutate(Dataset = "CPTAC")
 
 cellline_buf_merged_gene <- cellline_buf_gene_filtered_procan %>%
   bind_rows(cellline_buf_gene_filtered_depmap) %>%
@@ -142,9 +163,13 @@ write.xlsx(cellline_buf_procan, here(tables_base_dir, "cellline_buffering_procan
            colNames = TRUE)
 write.xlsx(cellline_buf_depmap, here(tables_base_dir, "cellline_buffering_depmap.xlsx"),
            colNames = TRUE)
+write.xlsx(cellline_buf_cptac, here(tables_base_dir, "cellline_buffering_cptac.xlsx"),
+           colNames = TRUE)
 write.xlsx(cellline_buf_gene_filtered_procan, here(tables_base_dir, "cellline_buffering_gene_filtered_procan.xlsx"),
            colNames = TRUE)
 write.xlsx(cellline_buf_gene_filtered_depmap, here(tables_base_dir, "cellline_buffering_gene_filtered_depmap.xlsx"),
+           colNames = TRUE)
+write.xlsx(cellline_buf_gene_filtered_cptac, here(tables_base_dir, "cellline_buffering_gene_filtered_cptac.xlsx"),
            colNames = TRUE)
 write.xlsx(cellline_buf_joined_procan, here(tables_base_dir, "cellline_buffering_filtered_procan.xlsx"),
            colNames = TRUE)
@@ -171,6 +196,9 @@ cellline_buf_waterfall_procan <- cellline_buf_procan %>%
 cellline_buf_waterfall_depmap <- cellline_buf_depmap %>%
   waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_depmap.png")
+cellline_buf_waterfall_cptac <- cellline_buf_cptac %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, Model.ID) %>%
+  save_plot("cellline_buffering_waterfall_cptac.png")
 
 # ToDo: Facetted waterfall plot
 cellline_buf_waterfall_filtered_procan <- cellline_buf_joined_procan %>%
@@ -186,6 +214,9 @@ cellline_buf_waterfall_gene_filtered_procan <- cellline_buf_gene_filtered_procan
 cellline_buf_waterfall_gene_filtered_depmap <- cellline_buf_gene_filtered_depmap %>%
   waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) %>%
   save_plot("cellline_buffering_waterfall_gene_filtered_depmap.png")
+cellline_buf_waterfall_gene_filtered_cptac <- cellline_buf_gene_filtered_cptac %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, Model.ID) %>%
+  save_plot("cellline_buffering_waterfall_gene_filtered_cptac.png")
 
 ### Show cell line intersection betwen datasets in Venn diagram
 celllines <- list(ProCan = (expr_buf_procan_filtered %>% distinct(Model.ID))$Model.ID,
