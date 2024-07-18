@@ -80,6 +80,13 @@ expr_buf_p0211 %>%
                         show_rownames = TRUE, show_colnames = TRUE) %>%
   save_plot("genes_chr13_log2fc_p0211.png", width = 500)
 
+## Buffering Ratio per cell line
+expr_buf_p0211 %>%
+  filter(CellLine.Name != "RPE1") %>%
+  filter(Gene.Chromosome == 13) %>%
+  signif_violin_plot(CellLine.Name, Buffering.ChrArmLevel.Ratio) %>%
+  save_plot("p0211_buffering_cellline.png", width = 100, height = 150)
+
 # === Export Tables ===
 
 expr_buf_p0211 %>%
