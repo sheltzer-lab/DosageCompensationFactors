@@ -20,7 +20,7 @@ df_ubi <- read.table(here(ubi_dir, "CPTAC3_Lung_Squamous_Cell_Carcinoma_Ubiquity
                      sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE) %>%
   janitor::row_to_names(1)
 
-df_ubi_meta <- read.table(here(ubi_dir, "PDC_biospecimen_manifest.tsv"),
+df_ubi_meta <- read.table(here(external_data_dir, "PDC_biospecimen_manifest.tsv"),
                           sep = "\t", dec = ".", header = FALSE, stringsAsFactors = FALSE) %>%
     janitor::row_to_names(1)
 

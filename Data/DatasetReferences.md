@@ -132,7 +132,7 @@ For more information see https://docs.gdc.cancer.gov/API/Users_Guide/Downloading
 Li, Y., Dou, Y., da Veiga Leprevost, F., Geffen, Y., et al. (2023). Proteogenomic data and resources for pan-cancer analysis, Cancer Cell, 41, 1397-1406. https://doi.org/10.1016/j.ccell.2023.06.009
 
 
-## Cell Line Metadata
+## Metadata
 
 ### Broad DepMap
 
@@ -157,6 +157,19 @@ DepMap, Broad Institute. “DepMap 23Q2 Public.” figshare, 2023. https://doi.o
 **URL:** https://cellmodelpassports.sanger.ac.uk/downloads
 
 **Location:** `./Data/External/CopyNumber/ProCan/model_list_20240110.csv`
+
+### CPTAC
+
+**URL:** https://proteomic.datacommons.cancer.gov/pdc/browse
+
+**Location:** `./Data/External/PDC_biospecimen_manifest.tsv`
+
+How to Download:
+1. Visit URL
+2. Select "Proteome" in filter "General" -> "Analytical Fraction"
+3. Open the "Biospecimens" page
+4. Select all entries on all pages
+5. Click on "Export Biospecimen Manifest (TSV)"
 
 ## Dosage Compensation Factors
 

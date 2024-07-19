@@ -17,9 +17,15 @@ screens_data_dir <- here(external_data_dir, "Screens")
 plots_dir <- here(plots_base_dir, "Screens", "CellLineProperties")
 output_data_dir <- output_data_base_dir
 reports_dir <- reports_base_dir
+hallmarks_dir <- here(plots_dir, "CPTAC_Hallmarks")
+immunity_dir <- here(plots_dir, "CPTAC_Immunity")
+signature_dir <- here(plots_dir, "CPTAC_Signature")
 
 dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
+dir.create(hallmarks_dir, recursive = TRUE)
+dir.create(immunity_dir, recursive = TRUE)
+dir.create(signature_dir, recursive = TRUE)
 
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
@@ -94,7 +100,7 @@ plot_continuous_properties <- function (df, cols_continuous) {
   df_corr <- NULL
   for (col_ in cols_continuous) {
     plots[[col_]]  <- df %>%
-      scatter_plot_reg_corr(col_, Model.Buffering.Ratio)
+      scatter_plot_reg_corr({ { col_ } }, Model.Buffering.Ratio, point_size = 2)
 
     df_corr <- df %>%
       rename(x = col_, y = "Model.Buffering.Ratio") %>%
@@ -102,7 +108,23 @@ plot_continuous_properties <- function (df, cols_continuous) {
       mutate(var1 = col_, var2 = "Model.Buffering.Ratio") %>%
       bind_rows(df_corr)
   }
+  df_corr <- df_corr %>%
+    mutate(p.adj = p.adjust(p, method = "BH")) %>%
+    arrange(p.adj)
+
+
   return(list(plots = plots, df_corr = df_corr))
+}
+
+save_signif_continuous_plots <- function (plots, dir = plots_dir, p_thresh = 0.01) {
+  signif_plots <- plots$df_corr %>%
+    filter(p.adj < p_thresh) %>%
+    pull(var1)
+
+  for (plot_name in signif_plots) {
+    plot <- plots$plots[[plot_name]] %>%
+      save_plot(paste0(plot_name, ".png"), dir)
+  }
 }
 
 data_density_procan <- df_procan %>%
@@ -127,19 +149,32 @@ cols_depmap <- c("PrimaryOrMetastasis", "OncotreeSubtype", "Sex",
 
 cols_cptac_hallmark <- df_cptac %>% select(starts_with("HALLMARK")) %>% colnames()
 
-violoin_plots_procan <- df_procan %>%
+cols_cptac_immune <- df_cptac %>%
+  select(starts_with("xCell"), starts_with("CIBERSORT"), starts_with("ESTIMATE")) %>%
+  colnames()
+
+cols_cptac_signatures <- data_density_cptac %>%
+  filter(grepl("PROGENy", Column) | grepl("Mutation_signature", Column)) %>%
+  filter(Density > 0.1) %>%
+  pull(Column)
+
+violin_plots_procan <- df_procan %>%
   plot_categorical_properties(cols_procan)
 
-violoin_plots_depmap <- df_depmap %>%
+violin_plots_depmap <- df_depmap %>%
   plot_categorical_properties(cols_depmap)
 
-scatter_plots_cptac <- df_cptac %>%
-  plot_continuous_properties(cols_cptac_hallmark)
+hallmark_plots_cptac <- df_cptac %>%
+  plot_continuous_properties(cols_cptac_hallmark) %T>%
+  save_signif_continuous_plots(dir = hallmarks_dir)
 
-df_signif_hallmarks <- scatter_plots_cptac$df_corr %>%
-  mutate(p.adj = p.adjust(p, method = "BH")) %>%
-  filter(p.adj < p_threshold) %>%
-  arrange(p.adj)
+immune_plots_cptac <- df_cptac %>%
+  plot_continuous_properties(cols_cptac_immune) %T>%
+  save_signif_continuous_plots(dir = immunity_dir)
+
+signature_plots_cptac <- df_cptac %>%
+  plot_continuous_properties(cols_cptac_signatures) %T>%
+  save_signif_continuous_plots(dir = signature_dir)
 
 ## Plot cell line buffering per cancer type
 df_procan %>%
@@ -153,6 +188,10 @@ df_depmap %>%
 df_cptac %>%
   sorted_violin_plot("Model.CancerType", Model.Buffering.Ratio) %>%
   save_plot("cancer-type_cptac.png", width = 300)
+
+df_cptac %>%
+  aov(Model.Buffering.Ratio ~ Model.CancerType, data = .) %>%
+  summary.aov()
 
 ### Plot aneuploidy score per cancer type
 df_procan %>%
@@ -396,7 +435,7 @@ df_cptac %>%
 df_cptac %>%
   drop_na(TP53_mutation) %>%
   mutate(TP53_mutation = factor(TP53_mutation)) %>%
-  violin_plot(TP53_mutation, Model.Buffering.Ratio) %>%
+  signif_violin_plot(TP53_mutation, Model.Buffering.Ratio) %>%
   save_plot("tp53_mutation_cptac.png")
 
 # Regression analysis
@@ -423,6 +462,11 @@ mutational_burden_reg_plot <- df_procan %>%
   scatter_plot_reg_corr(mutational_burden, Model.Buffering.Ratio, point_size = 2) %>%
   save_plot("cellline_mutations_procan.png")
 
+df_cptac %>%
+  mutate(MutationalBurden.Log10 = log10(TMB)) %>%
+  scatter_plot_reg_corr(MutationalBurden.Log10, Model.Buffering.Ratio, point_size = 2) %>%
+  save_plot("mutational_burden_cptac.png")
+
 ## Aneuploidy score
 aneuploidy_reg_plot <- df_procan %>%
   scatter_plot_reg_corr(CellLine.AneuploidyScore, Model.Buffering.Ratio, color_col = WGD, point_size = 2) %>%
@@ -440,6 +484,7 @@ df_cptac %>%
 df_cptac %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, OS_days) %>%
   save_plot("overall_survival_cptac.png")
+
 
 ## Misc
 df_procan %>%
