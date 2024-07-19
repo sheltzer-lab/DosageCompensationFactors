@@ -207,13 +207,10 @@ library(msigdbr)
 hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
   rename(Gene.Symbol = "gene_symbol")
 
-unfolded_gene_set <- hallmark_gene_set %>%
-  filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE")
-
 expr_buf_procan_hallmark <- cellline_buf_procan %>%
   split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
   filter(CellLine.Buffering.Group != "Center") %>%
-  inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
+  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
   select(Gene.Symbol, Model.ID, CellLine.Buffering.Group, Protein.Expression.Normalized) %>%
   right_join(y = hallmark_gene_set, by = "Gene.Symbol", relationship = "many-to-many")
 
@@ -222,3 +219,48 @@ hallmark_tests <- expr_buf_procan_hallmark %>%
   group_modify(~tidy(t.test(Protein.Expression.Normalized ~ CellLine.Buffering.Group, data = .x))) %>%
   ungroup() %>%
   mutate(p.value.adj = p.adjust(p.value, method = "bonferroni"))
+
+# === TEST AREA ===
+single_gene_set_enrichment <- function(df, gene_set, score_col, group_col, target_group, sample_col,
+                                       gene_col = Gene.Symbol, ...) {
+  # https://rdrr.io/bioc/limma/man/roast.html
+  require(limma)
+
+  data <- df %>%
+    select({ { gene_col } }, { { sample_col } }, { { score_col } }) %>%
+    drop_na() %>%
+    group_by({ { gene_col } }, { { sample_col } }) %>%
+    summarize(Score = mean({ { score_col } }), .groups = "drop") %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = Score, id_cols = { { gene_col } }) %>%
+    na.omit()
+
+  design <- df %>%
+    distinct({ { sample_col } }, { { group_col } }) %>%
+    filter({ { sample_col } } %in% colnames(data)) %>%
+    mutate(Group = as.integer({ { group_col } } == target_group),
+           Intercept = 1) %>%
+    arrange({ { sample_col } }) %>%
+    select(Intercept, Group) %>%
+    as.matrix()
+
+  index <- data %>%
+    mutate(InSet = { { gene_col } } %in% gene_set) %$%
+    which(InSet)
+
+  data_mat <- data %>%
+    select(-{ { gene_col } }) %>%
+    as.matrix()
+
+  roast(data_mat, index, design, contrast = 2, ...)
+}
+
+unfolded_gene_set <- hallmark_gene_set %>%
+  filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE") %>%
+  pull(Gene.Symbol)
+
+cellline_buf_procan %>%
+  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
+  filter(CellLine.Buffering.Group != "Center") %>%
+  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  single_gene_set_enrichment(unfolded_gene_set, Protein.Expression.Normalized,
+                             CellLine.Buffering.Group, "High", Model.ID, nrot = 5000)
