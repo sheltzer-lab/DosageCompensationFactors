@@ -7,6 +7,7 @@ library(readxl)
 library(assertr)
 library(purrr)
 library(readr)
+library(decoupleR)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -263,6 +264,26 @@ df_crispr <- df_crispr_eff %>%
   drop_na() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
+## Prepare Transcription Factor data
+net <- decoupleR::get_dorothea(levels = c("A", "B", "C", "D"))
+
+tf_count <- net %>%
+  mutate(Regulation = case_when(mor < 0 ~ "Transcription Factors (Repressor)",
+                                mor > 0 ~ "Transcription Factors (Activator)")) %>%
+  count(target, Regulation) %>%
+  pivot_wider(names_from = Regulation, values_from = n, id_cols = target, values_fill = 0)
+
+tf_mor <- net %>%
+  group_by(target) %>%
+  summarize(`Mean TF Regulation Mode` = mean(mor, na.rm = TRUE), .groups = "drop")
+
+df_tf <- tf_count %>%
+  inner_join(y = tf_mor, by = "target") %>%
+  rename(Gene.Symbol = "target") %>%
+  drop_na() %>%
+  updateGeneSymbols() %>%
+  id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
+
 # === Combine Factor Datasets ===
 
 ptm_factor_datasets <- list(
@@ -278,7 +299,7 @@ ptm_factor_datasets <- list(
 ppi_factor_datasets <- list(df_complexes, hippie_filtered)
 
 other_factor_datasets <- list(df_complexes, hippie_filtered, df_rates, half_life_avg, df_utr,
-                              df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr)
+                              df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr, df_tf)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = "Protein.Uniprot.Accession",
@@ -342,7 +363,7 @@ dev.off()
 
 # === Filter Factor Dataset by Missingness ===
 
-factor_na_share <- dc_factors %>%
+factor_na_share <- df_dc_factors %>%
   select(Protein.Uniprot.Accession, Gene.Symbol, all_of(dc_factor_cols)) %>%
   pivot_longer(all_of(dc_factor_cols), names_to = "Factor.Name", values_to = "Factor.Value") %>%
   group_by(Protein.Uniprot.Accession, Gene.Symbol) %>%
