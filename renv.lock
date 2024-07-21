@@ -1318,6 +1318,27 @@
       ],
       "Hash": "39b2e002522bfd258039ee4e889e0fd1"
     },
+    "decoupleR": {
+      "Package": "decoupleR",
+      "Version": "2.8.0",
+      "Source": "Bioconductor",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "broom",
+        "dplyr",
+        "magrittr",
+        "purrr",
+        "rlang",
+        "stats",
+        "stringr",
+        "tibble",
+        "tidyr",
+        "tidyselect",
+        "withr"
+      ],
+      "Hash": "235f7ace78637e656aabb0f7b6ab7a60"
+    },
     "diagram": {
       "Package": "diagram",
       "Version": "1.6.5",

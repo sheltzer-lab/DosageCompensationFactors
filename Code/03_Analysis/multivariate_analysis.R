@@ -166,7 +166,7 @@ analysis_conditions <- list(
 ## Training & Evaluation Loop
 ### Test robustness of models by excluding certain factors
 ### ToDo: Test this separately
-excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance")
+excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance", "Transcription Factors (Repressor)")
 
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(datasets) * length(analysis_conditions) * 3,

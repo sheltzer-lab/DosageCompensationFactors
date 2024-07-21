@@ -140,6 +140,77 @@ bind_rows(expr_buf_procan, expr_buf_depmap) %>%
   facet_wrap(~Dataset)
 
 # Buffering Classes
+## Correctness of classification (Gene-Level)
+prot_exp_dc_class <- expr_buf_depmap %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  drop_na(Buffering.GeneLevel.Class, Protein.Expression.Normalized) %>%
+  mutate(Gene.CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss"),
+         Buffering.GeneLevel.Class = factor(Buffering.GeneLevel.Class,
+                                            levels = c("Scaling", "Buffered", "Anti-Scaling"))) %>%
+  ggplot() +
+  aes(x = Buffering.GeneLevel.Class, y = Protein.Expression.Normalized, color = Buffering.GeneLevel.Class) +
+  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_signif(comparisons = list(c("Anti-Scaling", "Buffered"),
+                                 c("Buffered", "Scaling"),
+                                 c("Anti-Scaling", "Scaling")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = c(1.8, 1.8, 2.1),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  facet_grid(~Gene.CNV)
+
+prot_exp_dc_class %>%
+  save_plot("protein_expression_per_dc_class.png", width = 200, height = 170)
+
+## Illustration of Protein Expression Ratio upon gain and loss for each DC class
+dc_illustration <- expr_buf_depmap %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  filter(Gene.CopyNumber.Baseline == 2) %>%
+  filter(Gene.CopyNumber %in% c(1, 3, 4)) %>%
+  mutate(Gene.CopyNumber = as.factor(Gene.CopyNumber),
+         Buffering.GeneLevel.Class = factor(Buffering.GeneLevel.Class,
+                                            levels = c("Scaling", "Buffered", "Anti-Scaling"))) %>%
+  drop_na(Buffering.GeneLevel.Class, Protein.Expression.Normalized) %>%
+  group_by(Buffering.GeneLevel.Class, Gene.CopyNumber) %>%
+  summarize(Mean.Protein.Ratio = (mean(2^Protein.Expression.Normalized / 2^Protein.Expression.Baseline) - 1),
+            .groups = "drop") %>%
+  ggplot() +
+  aes(x = Buffering.GeneLevel.Class, y = Mean.Protein.Ratio,
+      group = Gene.CopyNumber, color = Gene.CopyNumber, label = Gene.CopyNumber) +
+  geom_hline(yintercept = 0, color = "darkgrey") +
+  geom_path() +
+  scale_y_continuous(limits = c(-1, 3), breaks = seq(-1, 3, 0.5), labels = paste0(seq(-1, 3, 0.5) * 100, "%")) +
+  scale_color_manual(values = c("1" = bidirectional_color_pal[1],
+                                "3" = bidirectional_color_pal[4],
+                                "4" = bidirectional_color_pal[5]))
+
+dc_illustration %>%
+  save_plot("dc_illustration.png", width = 250, height = 100)
+
+## Illustration of BR upon gain and loss across DC classes
+br_illustration <- expr_buf_depmap %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  filter(Gene.CopyNumber.Baseline == 2) %>%
+  filter(Gene.CopyNumber %in% c(1, 3, 4, 5)) %>%
+  mutate(Gene.CopyNumber = as.factor(Gene.CopyNumber),
+         Buffering.GeneLevel.Class = factor(Buffering.GeneLevel.Class,
+                                            levels = c("Scaling", "Buffered", "Anti-Scaling"))) %>%
+  drop_na(Buffering.GeneLevel.Class, Buffering.GeneLevel.Ratio) %>%
+  group_by(Buffering.GeneLevel.Class, Gene.CopyNumber) %>%
+  summarize(Mean.Buffering.Ratio = mean(Buffering.GeneLevel.Ratio), .groups = "drop") %>%
+  ggplot() +
+  aes(x = Buffering.GeneLevel.Class, y = Mean.Buffering.Ratio,
+      group = Gene.CopyNumber, color = Gene.CopyNumber, label = Gene.CopyNumber) +
+  geom_hline(yintercept = 0, color = "darkgrey") +
+  geom_path() +
+  scale_color_manual(values = c("1" = rev(brewer.pal(9, "RdBu"))[1],
+                                "3" = rev(brewer.pal(9, "RdBu"))[7],
+                                "4" = rev(brewer.pal(9, "RdBu"))[8],
+                                "5" = rev(brewer.pal(9, "RdBu"))[9]))
+
+br_illustration %>%
+  save_plot("Buffering_ratio_illustration.png", width = 250, height = 100)
+
+
 ## Similarity between Chromosome-Level Avg Log2FC classes and Gene-Level BR classes
 classes_chr_log2fc_avg <- expr_buf_depmap %>%
   filter(abs(ChromosomeArm.CNA) > 0) %>%
