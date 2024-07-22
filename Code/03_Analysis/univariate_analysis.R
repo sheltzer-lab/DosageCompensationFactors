@@ -597,6 +597,50 @@ bootstrap_heatmap <- bootstrap_auc %>%
   roc_auc_heatmap(rank_tests) %>%
   save_plot("roc-auc_comparison_heatmap.png", dir = procan_comparison_plots_dir, width = 400)
 
+# === Correlation Analysis between Buffering Ratio and Factors ===
+br_factor_cor <- bind_rows(expr_buf_procan, expr_buf_depmap, expr_buf_cptac) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+  mutate(Gene.CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  add_factors(dc_factors) %>%
+  select(UniqueId, Gene.CNV, Dataset, Buffering.GeneLevel.Ratio, all_of(dc_factor_cols)) %>%
+  pivot_longer(all_of(dc_factor_cols),
+               names_to = "DosageCompensation.Factor",
+               values_to = "DosageCompensation.Factor.Value") %>%
+  group_by(Gene.CNV, Dataset, DosageCompensation.Factor) %>%
+  rstatix::cor_test(Buffering.GeneLevel.Ratio, DosageCompensation.Factor.Value, method = "spearman") %>%
+  ungroup() %>%
+  mutate(p.adj = p.adjust(p, method = "BY"))
+
+br_factor_cor_heatmap <- br_factor_cor %>%
+  mutate(Label = map_signif(p.adj),
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(cor), .desc = TRUE)) %>%
+  distinct(DosageCompensation.Factor, Dataset, Gene.CNV, cor, Label) %>%
+  ggplot() +
+  aes(x = DosageCompensation.Factor, y = "", fill = cor, label = Label) +
+  geom_raster() +
+  geom_text(color = "black") +
+  ggh4x::facet_nested(Dataset + Gene.CNV ~ ., switch = "y") +
+  scale_fill_gradientn(colors = rev(bidirectional_color_pal), space = "Lab",
+                       limits = c(-0.3, 0.3), oob = scales::squish) +
+  labs(x = "Dosage Compensation Factor", y = "", fill = "Buffering Ratio Correlation") +
+  cowplot::theme_minimal_grid() +
+  theme(panel.spacing = unit(0, "lines"),
+        strip.background = element_rect(color = "lightgrey"),
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(16, "points"),
+        legend.key.width = unit(24, "points"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.margin = unit(c(5, 15, 5, 15), "mm"))
+
+save_plot(br_factor_cor_heatmap, "buffering_ratio_factor_correlation.png", width = 280, height = 150)
+
 # === Combine Plots for publishing ===
 # ToDo: Integrate corr plots
 rank_gain <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain.parquet"))
