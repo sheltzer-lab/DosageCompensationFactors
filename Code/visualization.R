@@ -84,14 +84,13 @@ beeswarm_plot <- function(df, x, y, color_col = NULL, cex = 2) {
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
-plot_correlation <- function(df, method = "spearman") {
-  cor_matrix <- psych::corr.test(df, method = method,
-                                 adjust = "none")
+plot_correlation <- function(df, method = "spearman", adjust = "none") {
+  cor_matrix <- psych::corr.test(df, method = method, adjust = adjust)
 
   corrplot(cor_matrix$r, p.mat = cor_matrix$p,
-         type = "upper", order = "hclust",
-         tl.col = "black", tl.srt = 45,
-         pch.cex = 1, pch.col = "darkgrey")
+           type = "upper", order = "hclust",
+           tl.col = "black", tl.srt = 45,
+           pch.cex = 1, pch.col = "darkgrey")
 }
 
 

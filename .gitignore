@@ -153,6 +153,7 @@ fabric.properties
 /Output/
 /Downloads/
 /Data/*
+/omnipathr-log/
 ~$*.xls*
 .Rproj.user
 .Rhistory

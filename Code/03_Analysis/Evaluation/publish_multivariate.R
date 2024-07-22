@@ -260,3 +260,27 @@ shap_heatmap_datasets <- shap_results %>%
         plot.margin = unit(c(5, 15, 5, 15), "mm"))
 
 save_plot(shap_heatmap_datasets, "shap_heatmap_datasets.png", width = 280, height = 150)
+
+## SHAP-Value Correlation Matrix
+### All conditions
+shap_results %>%
+  select(ID, Model.Variant, SHAP.Value, DosageCompensation.Factor) %>%
+  pivot_wider(values_from = SHAP.Value, names_from = DosageCompensation.Factor, id_cols = c(ID, Model.Variant)) %>%
+  select(everything(), -ID, -Model.Variant) %>%
+  plot_correlation(adjust = "BY")
+
+### Gain
+shap_results %>%
+  filter(Model.Condition == "Gain") %>%
+  select(ID, Model.Variant, SHAP.Value, DosageCompensation.Factor) %>%
+  pivot_wider(values_from = SHAP.Value, names_from = DosageCompensation.Factor, id_cols = c(ID, Model.Variant)) %>%
+  select(everything(), -ID, -Model.Variant) %>%
+  plot_correlation(adjust = "BY")
+
+### Loss
+shap_results %>%
+  filter(Model.Condition == "Loss") %>%
+  select(ID, Model.Variant, SHAP.Value, DosageCompensation.Factor) %>%
+  pivot_wider(values_from = SHAP.Value, names_from = DosageCompensation.Factor, id_cols = c(ID, Model.Variant)) %>%
+  select(everything(), -ID, -Model.Variant) %>%
+  plot_correlation(adjust = "BY")

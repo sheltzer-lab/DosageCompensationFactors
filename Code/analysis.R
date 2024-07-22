@@ -345,9 +345,11 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
   # Prepare the data for explanation
   if (is.null(model$datasets$test)) {
     x_small <- model$datasets$training %>%
+      tibble::rownames_to_column("ID") %>%
       group_by(buffered) %>%
       slice_sample(n = 2 * n_samples) %>%
       ungroup() %>%
+      tibble::column_to_rownames("ID") %>%
       split_train_test(training_set_ratio = 0.5)  # From preprocessing.R
 
     training_x_small <- x_small$training
@@ -359,9 +361,11 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
       ungroup() %>%
       select(-buffered)
     test_x_small <- model$datasets$test %>%
+      tibble::rownames_to_column("ID") %>%
       group_by(buffered) %>%
       slice_sample(n = n_samples) %>%
       ungroup() %>%
+      tibble::column_to_rownames("ID") %>%
       select(-buffered)
   }
 
@@ -379,6 +383,7 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
     explainer = explainer,
     prediction_zero = p
   )
+  explanation$x_test <- test_x_small
 
   return(explanation)
 }
@@ -388,12 +393,16 @@ shap2df <- function(explanation) {
   require(tidyr)
 
   factor_values <- explanation$x_test %>%
-    pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "DosageCompensation.Factor.Value")
+    tibble::rownames_to_column("ID") %>%
+    pivot_longer(c(everything(), -ID),
+                 names_to = "DosageCompensation.Factor",
+                 values_to = "DosageCompensation.Factor.Value")
 
   df_explanation <- explanation$dt %>%
     select(-none) %>%
     pivot_longer(everything(), names_to = "DosageCompensation.Factor", values_to = "SHAP.Value") %>%
-    mutate(Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
+    mutate(ID = factor_values$ID,
+           Factor.Value = factor_values$DosageCompensation.Factor.Value) %>%
     group_by(DosageCompensation.Factor) %>%
     mutate(Factor.Value.Relative = normalize_min_max(Factor.Value, na.rm = TRUE),
            SHAP.p25.Absolute = quantile(abs(SHAP.Value), probs = 0.25)[["25%"]],
@@ -410,7 +419,8 @@ shap2df <- function(explanation) {
 
   df_explanation <- df_explanation %>%
     left_join(y = df_corr, by = "DosageCompensation.Factor",
-              relationship = "many-to-one", unmatched = "error", na_matches = "never")
+              relationship = "many-to-one", unmatched = "error", na_matches = "never") %>%
+    select(ID, DosageCompensation.Factor, starts_with("Factor"), starts_with("SHAP"))
 
   return(df_explanation)
 }
