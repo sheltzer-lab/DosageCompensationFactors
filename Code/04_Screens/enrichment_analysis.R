@@ -36,6 +36,9 @@ dir.create(temp_dir, recursive = TRUE)
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 
+expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
+model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+
 # === Identify proteins with significant expression differences between cell lines with high and low buffering ===
 
 diff_exp <- cellline_buf_procan %>%
@@ -258,9 +261,47 @@ unfolded_gene_set <- hallmark_gene_set %>%
   filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE") %>%
   pull(Gene.Symbol)
 
-cellline_buf_procan %>%
-  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
-  filter(CellLine.Buffering.Group != "Center") %>%
-  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
-  single_gene_set_enrichment(unfolded_gene_set, Protein.Expression.Normalized,
-                             CellLine.Buffering.Group, "High", Model.ID, nrot = 5000)
+### ProCan
+mean_unfolded_procan <- expr_buf_procan %>%
+  # filter_cn_gain_abs() %>%
+  drop_na(Protein.Expression.Normalized) %>%
+  mutate(Unfolded.Gene.Set = Gene.Symbol %in% unfolded_gene_set) %>%
+  group_by(Model.ID) %>%
+  summarize(Unfolded.Protein.Mean = mean(Protein.Expression.Normalized[Unfolded.Gene.Set], na.rm = TRUE),
+            Background.Protein.Mean = mean(Protein.Expression.Normalized[!Unfolded.Gene.Set], na.rm = TRUE),
+            Unfolded.Protein.Response = Unfolded.Protein.Mean - Background.Protein.Mean) %>%
+  ungroup() %>%
+  inner_join(y = cellline_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
+
+mean_unfolded_procan %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_scatter_procan.png", height = 150, width = 150)
+
+mean_unfolded_procan %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                     quantile_low = "30%", quantile_high = "70%") %>%
+  signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_split_procan.png", width = 100, height = 150)
+
+### CPTAC
+mean_unfolded_cptac <- expr_buf_cptac %>%
+  # filter_cn_gain_abs() %>%
+  drop_na(Protein.Expression.Normalized) %>%
+  mutate(Unfolded.Gene.Set = Gene.Symbol %in% unfolded_gene_set) %>%
+  group_by(Model.ID) %>%
+  summarize(Unfolded.Protein.Mean = mean(Protein.Expression.Normalized[Unfolded.Gene.Set], na.rm = TRUE),
+            Background.Protein.Mean = mean(Protein.Expression.Normalized[!Unfolded.Gene.Set], na.rm = TRUE),
+            Unfolded.Protein.Response = Unfolded.Protein.Mean - Background.Protein.Mean) %>%
+  ungroup() %>%
+  inner_join(y = model_buf_cptac, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
+
+mean_unfolded_cptac %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_scatter_cptac.png", height = 150, width = 150)
+
+mean_unfolded_cptac %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                     quantile_low = "30%", quantile_high = "70%") %>%
+  signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_split_cptac.png", width = 100, height = 150)
+

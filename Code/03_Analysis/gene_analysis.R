@@ -191,7 +191,7 @@ low_var_buf_loss <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) 
   filter_cn_loss_abs() %>%
   analyze_low_br_variance()
 
-scatter_signif_buffered <- mean_var_buf_highlighted %>%
+scatter_signif_buffered <- low_var_buf %>%
   mutate(Label = if_else(Top10, Gene.Symbol, NA)) %>%
   filter(Dataset == "CPTAC") %>%
   arrange(Top50) %>%

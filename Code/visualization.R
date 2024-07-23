@@ -154,7 +154,7 @@ get_density <- function(x, y, ...) {
 
 # Source: https://rpubs.com/Bio-Geek/71339, https://slowkow.com/notes/ggplot2-color-by-density/
 scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL, x_lab = NULL, y_lab = NULL,
-                                    label_coords = NULL, title = NULL, point_size = 0.3) {
+                                    label_coords = NULL, title = NULL, point_size = 1) {
   x_col_name <- quo_name(enquo(x_col))
   y_col_name <- quo_name(enquo(y_col))
 
@@ -213,7 +213,7 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
 }
 
 scatter_plot_reg_corr <- function(df, x_col, y_col, color_col = NULL, cor_method = "spearman",
-                                  cor_symbol = utf8_rho, label_coords = NULL, point_size = 0.3,
+                                  cor_symbol = utf8_rho, label_coords = NULL, point_size = 1,
                                   x_lab = NULL, y_lab = NULL, title_prefix = NULL) {
   df_ <- df %>%
     rename(x = { { x_col } }, y = { { y_col } })
@@ -273,7 +273,7 @@ waterfall_plot <- function(df, value_col, rank_col, label_col, n = 5,
 }
 
 save_plot <- function(plot, filename, dir = plots_dir,
-                      height = 200, width = 200, dpi = 300) {
+                      height = 150, width = 150, dpi = 300) {
   ggsave(here(dir, filename), plot = plot,
        height = height, width = width, units = "mm", dpi = dpi)
   return(plot)
