@@ -58,11 +58,16 @@ evaluate_model <- function(model, test_set, dir, filename = NULL, cv_eval = FALS
         Prediction = factor(if_else(Buffered > 0.5, "Buffered", "Scaling"), levels = lvl),
         Response = factor(test_set$buffered, levels = lvl)
       )
-    model_roc["performanceMetrics"] <- list(
+
+    test_performance_metrics <- list(
       precision = precision(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response),
       recall = recall(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response),
       F1 = F_meas(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response)
     )
+
+    return(list(roc = model_roc,
+                predictedResponse = test_predicted_reponse,
+                performanceMetrics = test_performance_metrics))
   }
 
   if (is.null(filename))

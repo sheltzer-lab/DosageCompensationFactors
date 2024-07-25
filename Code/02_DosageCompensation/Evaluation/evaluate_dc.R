@@ -61,8 +61,6 @@ expr_buf_depmap <- add_debug_data(expr_buf_depmap)
   labs(x = "Gene Level Buffering Ratio", color = "Dataset")) %>%
   save_plot("buffering_ratio_distribution.png")
 
-# TODO: Visualize for DepMap
-
 plot_br_distributions <- function(dataset, dataset_name) {
     max_abs_br <- ceiling(max(abs(dataset$Buffering.GeneLevel.Ratio), na.rm = TRUE))
 
@@ -117,17 +115,21 @@ plot_br_distributions <- function(dataset, dataset_name) {
 
 plot_br_distributions(expr_buf_procan, "procan")
 plot_br_distributions(expr_buf_depmap, "depmap")
+plot_br_distributions(expr_buf_depmap, "cptac")
 
 ## Distribution of Confidence Score
 ### Per dataset
-bind_rows(expr_buf_cptac, expr_buf_procan, expr_buf_depmap) %>%
+confidence_plot_datasets <- bind_rows(expr_buf_cptac, expr_buf_procan, expr_buf_depmap) %>%
   ggplot() +
   aes(x = Buffering.GeneLevel.Ratio.Confidence, color = Dataset) +
   geom_density() +
   labs(x = "Gene Level Buffering Ratio (Confidence Score)", color = "Dataset")
 
+confidence_plot_datasets %>%
+  save_plot("buffering_ratio_confidence_datasets.png", width = 200)
+
 ### Per level & dataset
-bind_rows(expr_buf_procan, expr_buf_depmap) %>%
+confidence_plot_methods <- bind_rows(expr_buf_procan, expr_buf_depmap) %>%
   select(Dataset, Model.ID, Gene.Symbol,
          Buffering.GeneLevel.Ratio.Confidence, Buffering.ChrArmLevel.Ratio.Confidence) %>%
   pivot_longer(c("Buffering.GeneLevel.Ratio.Confidence", "Buffering.ChrArmLevel.Ratio.Confidence"),
@@ -138,6 +140,9 @@ bind_rows(expr_buf_procan, expr_buf_depmap) %>%
   geom_density() +
   labs(x = "Buffering Ratio Confidence Score", color = "Level") +
   facet_wrap(~Dataset)
+
+confidence_plot_methods%>%
+  save_plot("buffering_ratio_confidence_methods.png", width = 300)
 
 # Buffering Classes
 ## Correctness of classification (Gene-Level)
@@ -208,7 +213,7 @@ br_illustration <- expr_buf_depmap %>%
                                 "5" = rev(brewer.pal(9, "RdBu"))[9]))
 
 br_illustration %>%
-  save_plot("Buffering_ratio_illustration.png", width = 250, height = 100)
+  save_plot("buffering_ratio_illustration.png", width = 250, height = 100)
 
 
 ## Similarity between Chromosome-Level Avg Log2FC classes and Gene-Level BR classes

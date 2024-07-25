@@ -100,18 +100,20 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
                         trControl = train_control,
                         metric = "ROC")
 
-  # Save Model
-  model$datasets <- datasets  # Add datasets to model
-  saveRDS(model, here(models_dir, model_filename))
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
   # Evaluate Model
   explain_model(model, plots_dir, filename = paste0("importance_", model_name, ".png"))
-  model_roc <- evaluate_model(model, datasets$test, plots_dir,
-                              filename = paste0("ROC-Curve_", model_name, ".png"), cv_eval = cv_eval)
+  model_eval <- evaluate_model(model, datasets$test, plots_dir,
+                               filename = paste0("ROC-Curve_", model_name, ".png"), cv_eval = cv_eval)
   setTxtProgressBar(prog_bar, prog_bar$getVal() + 1)
 
-  return(list(modelFileName = model_filename, roc = model_roc))
+  # Save Model
+  model$datasets <- datasets  # Add datasets to model
+  model$evaluation <- model_eval
+  saveRDS(model, here(models_dir, model_filename))
+
+  return(list(modelFileName = model_filename, roc = model_eval$roc))
 }
 
 # === Build Models ===
@@ -166,7 +168,7 @@ analysis_conditions <- list(
 ## Training & Evaluation Loop
 ### Test robustness of models by excluding certain factors
 ### ToDo: Test this separately
-excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance", "Transcription Factors (Repressor)")
+excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance")
 
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(datasets) * length(analysis_conditions) * 3,

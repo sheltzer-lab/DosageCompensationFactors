@@ -337,14 +337,25 @@ standardized_mean <- function (df, value_col, group_col, id_col) {
 
 # === SHAP Analysis ===
 # Only override defaults if enough RAM available
-estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method = "ctree") {
+estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method = "ctree", remove_incorrect = TRUE) {
   require(shapr)
   require(dplyr)
 
-  set.seed(42)
+  test_set <- model$datasets$test
+  training_set <- model$datasets$training
+
+  # Remove incorrect predictions from test set
+  if (!is.null(test_set) && remove_incorrect) {
+    test_set <- test_set %>%
+      mutate(Prediction = model$evaluation$predictedResponse$Prediction) %>%
+      filter(buffered == Prediction) %>%
+      select(-Prediction)
+  }
+
   # Prepare the data for explanation
-  if (is.null(model$datasets$test)) {
-    x_small <- model$datasets$training %>%
+  set.seed(42)
+  if (is.null(test_set)) {
+    x_small <- training_set %>%
       tibble::rownames_to_column("ID") %>%
       group_by(buffered) %>%
       slice_sample(n = 2 * n_samples) %>%
@@ -355,12 +366,12 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
     training_x_small <- x_small$training
     test_x_small <- x_small$test
   } else {
-    training_x_small <- model$datasets$training %>%
+    training_x_small <- training_set %>%
       group_by(buffered) %>%
       slice_sample(n = n_samples) %>%
       ungroup() %>%
       select(-buffered)
-    test_x_small <- model$datasets$test %>%
+    test_x_small <- test_set %>%
       tibble::rownames_to_column("ID") %>%
       group_by(buffered) %>%
       slice_sample(n = n_samples) %>%

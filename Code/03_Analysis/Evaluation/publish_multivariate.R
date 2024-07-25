@@ -92,7 +92,7 @@ model_rocs <- shap_results %>%
   group_map(\(entry, group) {
     result <- list()
     model <- readRDS(here(models_base_dir, entry$Model.Filename))
-    result[[group$Model.Variant]] <- evaluate_model(model, model$datasets$test, plots_dir)
+    result[[group$Model.Variant]] <- evaluate_model(model, model$datasets$test, plots_dir)$roc
     return(result)
   })
 
@@ -139,7 +139,7 @@ model_rocs_gain <- df_gain_models %>%
   group_map(\(entry, group) {
     result <- list()
     model <- readRDS(here(models_base_dir, entry$Model.Filename))
-    result[[group$Model.Variant]] <- evaluate_model(model, model$datasets$test, plots_dir)
+    result[[group$Model.Variant]] <- evaluate_model(model, model$datasets$test, plots_dir)$roc
     return(result)
   }) %>%
   flatten() %>%
