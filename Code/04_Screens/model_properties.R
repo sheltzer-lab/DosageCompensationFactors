@@ -4,6 +4,8 @@ library(dplyr)
 library(arrow)
 library(stringr)
 library(magrittr)
+library(survival)
+library(survminer)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -481,9 +483,21 @@ df_cptac %>%
   save_plot("tumor_purity_cptac.png")
 
 ## Overall survival
+# TODO: facet by cancer type
 df_cptac %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, OS_days) %>%
   save_plot("overall_survival_cptac.png")
+
+df_cptac_split <- df_cptac %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                     quantile_high = "75%", quantile_low = "25%")
+
+fit <- survfit(Surv(OS_days, OS_event) ~ Model.Buffering.Group, data = df_cptac_split)
+ggsurvplot(fit, data = df_cptac_split, risk.table = TRUE)
+
+## Progression free survival
+fit <- survfit(Surv(PFS_days, PFS_event) ~ Model.Buffering.Group, data = df_cptac_split)
+ggsurvplot(fit, data = df_cptac_split, risk.table = TRUE)
 
 
 ## Misc
