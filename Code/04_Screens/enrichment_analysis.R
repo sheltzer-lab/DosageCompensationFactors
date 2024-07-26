@@ -257,6 +257,58 @@ single_gene_set_enrichment <- function(df, gene_set, score_col, group_col, targe
   roast(data_mat, index, design, contrast = 2, ...)
 }
 
+ssGSEA <- function(df, gene_sets, expr_col, sample_col,
+                   gene_col = Gene.Symbol, method = "ssGSEA") {
+  require(GSVA)
+  require(dplyr)
+  # https://bioconductor.org/packages/release/bioc/vignettes/GSVA/inst/doc/GSVA.html
+
+  paramFunc <- switch(method,
+                      "ssGSEA" = GSVA::ssgseaParam,
+                      "GSVA" = GSVA::gsvaParam,
+                      "PLAGE" = GSVA::plageParam,
+                      "zscore" = GSVA::zscoreParam)
+
+  data_mat <- df %>%
+    select({ { gene_col } }, { { sample_col } }, { { expr_col } }) %>%
+    drop_na() %>%
+    group_by({ { gene_col } }, { { sample_col } }) %>%
+    summarize(Score = mean({ { expr_col } }), .groups = "drop") %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = Score, id_cols = { { gene_col } }) %>%
+    na.omit() %>%
+    tibble::column_to_rownames(quo_name(enquo(gene_col))) %>%
+    as.matrix()
+
+  gseaPar <- paramFunc(data_mat, gene_sets)
+  gsea_result <- gsva(gseaPar)
+}
+
+gene_sets <- hallmark_gene_set %>%
+  group_by(gs_name) %>%
+  group_map(~list(.x$Gene.Symbol)) %>%
+  purrr::list_flatten()
+names(gene_sets) <- unique(hallmark_gene_set$gs_name)
+
+gsea_cptac <- expr_buf_cptac %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
+
+gsea_cptac %>%
+  t() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Model.ID") %>%
+  inner_join(y = model_buf_cptac, by = "Model.ID") %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE)
+
+gsea_procan <- expr_buf_procan %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
+
+gsea_procan %>%
+  t() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Model.ID") %>%
+  inner_join(y = cellline_buf_procan, by = "Model.ID") %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE)
+
 unfolded_gene_set <- hallmark_gene_set %>%
   filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE") %>%
   pull(Gene.Symbol)
