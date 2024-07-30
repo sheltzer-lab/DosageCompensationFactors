@@ -222,6 +222,28 @@ FAQ URL: https://www.deciphergenomics.org/about/faqs
 
 DOI: 10.1371/journal.pgen.1001154
 
+### Random Allelic Expression
+
+**URL:** https://ars.els-cdn.com/content/image/1-s2.0-S2211124722018460-mmc3.xlsx
+
+**Location:** `./Data/External/Factors/random_allelic_expression.xlsx`
+
+#### Citation
+
+Kravitz, Stephanie N., Elliott Ferris, Michael I. Love, Alun Thomas, Aaron R. Quinlan, and Christopher Gregg. “Random Allelic Expression in the Adult Human Body.” Cell Reports 42, no. 1 (January 2023): 111945. https://doi.org/10.1016/j.celrep.2022.111945.
+
+### Transcription Factors
+
+Obtained DoRothEA regulons using the `decoupleR` package in R.
+
+#### Citation
+Garcia-Alonso L, Holland C, Ibrahim M, Turei D, Saez-Rodriguez J (2019). “Benchmark and integration of resources for the estimation of human transcription factor activities.” Genome Research. doi:10.1101/gr.240663.118.
+
+Badia-i-Mompel P, Santiago JV, Braunger J, Geiss C, Dimitrov D, Müller-Dott S, Taus P, Dugourd A, Holland CH, Flores ROR, Saez-Rodriguez J (2022). “decoupleR: ensemble of computational methods to infer biological activities from omics data.” Bioinformatics Advances. doi:10.1093/bioadv/vbac016.
+
+Müller-Dott S, Tsirvouli E, Vázquez M, Flores ROR, Badia-i-Mompel P, Fallegger R, Lægreid A, Saez-Rodriguez J (2023). “Expanding the coverage of regulons from high-confidence prior knowledge for accurate estimation of transcription factor activities.” bioRxiv. doi:10.1101/2023.03.30.534849.
+
+
 ### CORUM
 
 Version: 210512

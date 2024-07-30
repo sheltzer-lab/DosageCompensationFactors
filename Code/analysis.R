@@ -435,3 +435,128 @@ shap2df <- function(explanation) {
 
   return(df_explanation)
 }
+
+# === Enrichment Analysis ===
+single_gene_set_enrichment <- function(df, gene_set, score_col, group_col, target_group, sample_col,
+                                       gene_col = Gene.Symbol, ...) {
+  # https://rdrr.io/bioc/limma/man/roast.html
+  require(limma)
+
+  data <- df %>%
+    select({ { gene_col } }, { { sample_col } }, { { score_col } }) %>%
+    drop_na() %>%
+    group_by({ { gene_col } }, { { sample_col } }) %>%
+    summarize(Score = mean({ { score_col } }), .groups = "drop") %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = Score, id_cols = { { gene_col } }) %>%
+    na.omit()
+
+  design <- df %>%
+    distinct({ { sample_col } }, { { group_col } }) %>%
+    filter({ { sample_col } } %in% colnames(data)) %>%
+    mutate(Group = as.integer({ { group_col } } == target_group),
+           Intercept = 1) %>%
+    arrange({ { sample_col } }) %>%
+    select(Intercept, Group) %>%
+    as.matrix()
+
+  index <- data %>%
+    mutate(InSet = { { gene_col } } %in% gene_set) %$%
+    which(InSet)
+
+  data_mat <- data %>%
+    select(-{ { gene_col } }) %>%
+    as.matrix()
+
+  roast(data_mat, index, design, contrast = 2, ...)
+}
+
+ssGSEA <- function(df, gene_sets, expr_col, sample_col,
+                   gene_col = Gene.Symbol, method = "ssGSEA") {
+  require(GSVA)
+  require(dplyr)
+  # https://bioconductor.org/packages/release/bioc/vignettes/GSVA/inst/doc/GSVA.html
+
+  paramFunc <- switch(method,
+                      "ssGSEA" = GSVA::ssgseaParam,
+                      "GSVA" = GSVA::gsvaParam,
+                      "PLAGE" = GSVA::plageParam,
+                      "zscore" = GSVA::zscoreParam)
+
+  data_mat <- df %>%
+    select({ { gene_col } }, { { sample_col } }, { { expr_col } }) %>%
+    drop_na() %>%
+    group_by({ { gene_col } }, { { sample_col } }) %>%
+    summarize(Score = mean({ { expr_col } }), .groups = "drop") %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = Score, id_cols = { { gene_col } }) %>%
+    na.omit() %>%
+    tibble::column_to_rownames(quo_name(enquo(gene_col))) %>%
+    as.matrix()
+
+  gseaPar <- paramFunc(data_mat, gene_sets)
+  gsea_result <- gsva(gseaPar)
+}
+
+create_string_network <- function(df, gene_col, logfc_col, string_db) {
+  require(STRINGdb)
+  require(dplyr)
+  require(magrittr)
+  require(scales)
+
+  max_val <- df %>% pull({ { logfc_col } }) %>% abs() %>% max()
+  domain <- c(-max_val, max_val)
+  color_func <- scales::col_numeric(palette = bidirectional_color_pal, domain = domain)
+
+  df_mapped <- df %>%
+    select({ { gene_col } }, { { logfc_col } }) %>%
+    as.data.frame() %>%
+    string_db$map(quo_name(enquo(gene_col)), removeUnmappedRows = TRUE) %>%
+    mutate(Color = color_func({ { logfc_col } }))
+
+  payload <- df_mapped %$%
+    string_db$post_payload(STRING_id, colors = Color)
+
+  df_mapped %$%
+    return(list(df_mapped = df_mapped,
+                payload = payload,
+                network = string_db$get_subnetwork(STRING_id),
+                link = string_db$get_link(STRING_id, payload_id = payload, required_score = 700)))
+}
+
+overrepresentation_analysis <- function(genes, ordered = TRUE, p_thresh = p_threshold, ref_background = NULL,
+                                        databases = c("GO:BP", "GO:MF", "KEGG", "REAC", "WP", "CORUM")) {
+  gost(query = genes,
+       organism = "hsapiens", ordered_query = ordered,
+       multi_query = FALSE, significant = TRUE, exclude_iea = FALSE,
+       measure_underrepresentation = FALSE, evcodes = FALSE,
+       user_threshold = p_thresh, correction_method = "g_SCS",
+       domain_scope = "annotated", custom_bg = ref_background,
+       numeric_ns = "", sources = databases, as_short_link = FALSE, highlight = TRUE)
+}
+
+ora_webgestalt <- function(genes, ref_background, p_thresh = p_threshold,
+                           databases = c("pathway_KEGG", "pathway_Reactome", "pathway_Wikipathway_cancer",
+                                         "geneontology_Biological_Process", "geneontology_Molecular_Function")) {
+  WebGestaltR(enrichMethod = "ORA", organism = "hsapiens", enrichDatabase = databases,
+              interestGene = as.vector(genes), interestGeneType = "genesymbol",
+              referenceGene = as.vector(ref_background), referenceGeneType = "genesymbol",
+              fdrThr = p_thresh, isOutput = FALSE)
+}
+
+plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", "GO:MF", "GO:BP"),
+                       terms_per_source = 5, p_thresh = p_threshold) {
+  ora$result %>%
+    filter(p_value < p_thresh) %>%
+    filter(source %in% selected_sources) %>%
+    group_by(source) %>%
+    slice_min(p_value, n = terms_per_source) %>%
+    ungroup() %>%
+    mutate(`-log10(p)` = -log10(p_value),
+           term_name = fct_reorder(str_trunc(term_name, 50), p_value, .desc = TRUE)) %>%
+    vertical_bar_chart(term_name, `-log10(p)`, color_col = source, color_discrete = TRUE,
+                       value_range = c(1, max(.$`-log10(p)`)),
+                       line_intercept = 0, bar_label_shift = 0.18, break_steps = 2,
+                       category_lab = "Enriched Term", value_lab = "Significance (-log10(p))") +
+    facet_wrap(~source, scales = "free", ncol = 1) +
+    theme(legend.position = "none")
+}
+
