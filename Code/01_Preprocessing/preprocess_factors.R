@@ -65,6 +65,9 @@ hi_scores <- read_table(here(factor_data_dir, "HI_Predictions_Version3.bed.gz"),
 # DepMap Achilles
 crispr_effects <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv"))
 crispr_deps <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneDependency.csv"))
+# DOI: 10.1016/j.celrep.2022.111945, URL: https://ars.els-cdn.com/content/image/1-s2.0-S2211124722018460-mmc3.xlsx
+rae <- read_excel(here(factor_data_dir, "random_allelic_expression.xlsx"), sheet = "hc-RAE (all tissues)")
+bae <- read_excel(here(factor_data_dir, "random_allelic_expression.xlsx"), sheet = "hc-Biallelic (all tissues)")
 
 # === Prepare Factor Datasets ===
 ## Prepare PhosphoSitePlus data by counting occurrance of PTM and regulatory sites for each gene
@@ -284,6 +287,20 @@ df_tf <- tf_count %>%
   updateGeneSymbols() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
+# Prepare random allelic expression data
+df_rae <- bind_rows(rae, bae) %>%
+  group_by(gene_id) %>%
+  mutate(`Random Allelic Expression` = mean(c(z_score_male, z_score_female), na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(Gene.ENSEMBL.Id = sub("\\.\\d+$", "", gene_id)) %>%
+  select(Gene.ENSEMBL.Id, `Random Allelic Expression`) %>%
+  mapIds("ENSEMBL", "SYMBOL",
+         "Gene.ENSEMBL.Id", "Gene.Symbol") %>%
+  id2uniprot_acc("Gene.ENSEMBL.Id", "ensembl_gene_id") %>%
+  drop_na(Gene.Symbol, Protein.Uniprot.Accession) %>%
+  updateGeneSymbols() %>%
+  select(-Gene.ENSEMBL.Id)
+
 # === Combine Factor Datasets ===
 
 ptm_factor_datasets <- list(
@@ -299,7 +316,7 @@ ptm_factor_datasets <- list(
 ppi_factor_datasets <- list(df_complexes, hippie_filtered)
 
 other_factor_datasets <- list(df_complexes, hippie_filtered, df_rates, half_life_avg, df_utr,
-                              df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr, df_tf)
+                              df_mobidb, df_ned, df_decay, df_agg, df_hi, df_crispr, df_tf, df_rae)
 
 df_dc_factors_ptm <- ptm_factor_datasets %>%
   reduce(full_join, by = "Protein.Uniprot.Accession",
@@ -324,7 +341,8 @@ df_dc_factors_other <- other_factor_datasets %>%
 df_dc_factors <- df_dc_factors_ptm %>%
   full_join(y = df_dc_factors_other, by = c("Protein.Uniprot.Accession", "Gene.Symbol"),
             relationship = "many-to-one") %>%
-  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)"), ~replace_na(., 0))
+  mutate_at(c("Protein-Protein Interactions", "Protein Complexes (CORUM)", "Random Allelic Expression"),
+            ~replace_na(., 0))
 
 # === Quality Control ===
 # Check for unmatched and ambiguous rows

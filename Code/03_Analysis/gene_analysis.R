@@ -32,6 +32,7 @@ expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_proc
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, "expression_buffering_p0211.parquet"))
+dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
 
 # === Plot Buffering in Genes on Rtr13 and RM13 (P0211) ===
 ## ChrArm Buffering Ratio by Sample
@@ -243,3 +244,44 @@ low_var_buf_loss %>%
 ## VCP occurs consistently (gain/loss/all)
 ### Potential target for cancer therapy drugs (Eerl, CB-5083)
 ### VCP inhibitors synergize with proteasome inhibitors (Bortezomib)
+
+# Random Allelic Expression
+rae_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  add_factors(df_factors = dc_factors) %>%
+  select(Model.ID, Protein.Uniprot.Accession, Gene.Symbol, Dataset,
+         Gene.CopyNumber, Gene.CopyNumber.Baseline, Protein.Expression.Normalized,
+         Buffering.GeneLevel.Ratio, Buffering.GeneLevel.Class, `Random Allelic Expression`) %>%
+  drop_na() %>%
+  mutate(`Random Allelic Expression` = `Random Allelic Expression` > 0)
+
+rae_buf_plot_gain <- rae_buf %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+  filter_cn_gain_abs() %>%
+  ggplot() +
+  aes(x = `Random Allelic Expression`, y = Buffering.GeneLevel.Ratio, color = `Random Allelic Expression`) +
+  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_signif(comparisons = list(c("FALSE", "TRUE")), test = t.test,
+              map_signif_level = print_signif, y_position = 1.5,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c("FALSE" = default_color, "TRUE" = highlight_color), guide = "none") +
+  scale_y_continuous(limits = c(-2.5, 2.5), breaks = seq(-2, 2, 1)) +
+  facet_grid(~Dataset)
+
+rae_buf_plot_gain %>%
+  save_plot("random_allelic_expression_cn-gain.png")
+
+rae_buf_plot_loss <-rae_buf %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+  filter_cn_loss_abs() %>%
+  ggplot() +
+  aes(x = `Random Allelic Expression`, y = Buffering.GeneLevel.Ratio, color = `Random Allelic Expression`) +
+  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_signif(comparisons = list(c("FALSE", "TRUE")), test = t.test,
+              map_signif_level = print_signif, y_position = 1.5,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c("FALSE" = default_color, "TRUE" = highlight_color), guide = "none") +
+  scale_y_continuous(limits = c(-2.5, 2.5), breaks = seq(-2, 2, 1)) +
+  facet_grid(~Dataset)
+
+rae_buf_plot_loss %>%
+  save_plot("random_allelic_expression_cn-loss.png")

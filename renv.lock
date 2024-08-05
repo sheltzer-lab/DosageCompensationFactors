@@ -2353,6 +2353,27 @@
       ],
       "Hash": "ac107251d9d9fd72f0ca8049988f1d7f"
     },
+    "httr2": {
+      "Package": "httr2",
+      "Version": "1.0.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "R6",
+        "cli",
+        "curl",
+        "glue",
+        "lifecycle",
+        "magrittr",
+        "openssl",
+        "rappdirs",
+        "rlang",
+        "vctrs",
+        "withr"
+      ],
+      "Hash": "320c8fe23fcb25a6690ef7bdb6a3a705"
+    },
     "igraph": {
       "Package": "igraph",
       "Version": "2.0.3",
@@ -2840,6 +2861,26 @@
         "tidyselect"
       ],
       "Hash": "2def1d52dfe1044f82e75d25fb5dd2e5"
+    },
+    "mskcc.oncotree": {
+      "Package": "mskcc.oncotree",
+      "Version": "0.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "dplyr",
+        "glue",
+        "httr2",
+        "magrittr",
+        "memoise",
+        "purrr",
+        "readr",
+        "rlang",
+        "tibble",
+        "tidyjson",
+        "tidyr"
+      ],
+      "Hash": "b54175d60fc5455ab6c260423cde9f12"
     },
     "munsell": {
       "Package": "munsell",
@@ -3911,6 +3952,24 @@
         "vctrs"
       ],
       "Hash": "a84e2cc86d07289b3b6f5069df7a004c"
+    },
+    "tidyjson": {
+      "Package": "tidyjson",
+      "Version": "0.3.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "assertthat",
+        "dplyr",
+        "jsonlite",
+        "magrittr",
+        "purrr",
+        "rlang",
+        "tibble",
+        "tidyr"
+      ],
+      "Hash": "96d26a49276e30e09b6288d8ae406083"
     },
     "tidyr": {
       "Package": "tidyr",
