@@ -48,7 +48,7 @@ hippie <- read_excel(here(factor_data_dir, "HIPPIE-v2.3.xlsx"))
 # URL: https://genome.ucsc.edu/cgi-bin/hgTables, genome: Human, assembly: Dec. 2013 (GRCh38/hg38), track: NCBI RefSeq
 ref_seq <- read_tsv_arrow(here(factor_data_dir, "NCBI.Human.RefSeq.GRCH38.tsv"))
 # DOI: https://doi.org/10.1038/s41467-018-03106-1, Supplementary Table 2
-half_life <- read_excel(here(factor_data_dir, "41467_2018_3106_MOESM5_ESM.xlsx"))
+half_life <- read_excel(here(factor_data_dir, "41467_2018_3106_MOESM5_ESM.xlsx"), sheet = "protein half lives high qual")
 # CORUM, version 210512, DOI: 10.1093/nar/gkm936
 corum <- read_tsv_arrow(here(factor_data_dir, "CORUMallComplexes.tsv"))
 # URL: https://mobidb.bio.unipd.it/browse?proteome=UP000005640&limit=10&skip=0&projection=acc,name,organism,reviewed,prediction-disorder-mobidblite.contentfraction,gene,length
@@ -108,10 +108,12 @@ hippie_filtered <- hippie %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
 
 ## Prepare Protein half-life data
-half_life_sample_cols <- c("Bcells replicate 1 half_life", "Bcells replicate 2 half_life",
-                           "NK cells replicate 1 half_life", "NK cells replicate 2 half_life",
-                           "Monocytes replicate 1 half_life", "Monocytes replicate 2 half_life",
-                           "Mouse Neurons, replicate 3 half_life", "Mouse Neurons, replicate 4 half_life")
+half_life_sample_cols <- c(
+  "Bcells replicate 1 half_life", "Bcells replicate 2 half_life",
+  "NK cells replicate 1 half_life", "NK cells replicate 2 half_life",
+  "Monocytes replicate 1 half_life", "Monocytes replicate 2 half_life"
+  # "Mouse Neurons, replicate 3 half_life", "Mouse Neurons, replicate 4 half_life"
+)
 
 half_life_avg <- half_life %>%
   select("gene_name", all_of(half_life_sample_cols)) %>%
@@ -120,7 +122,7 @@ half_life_avg <- half_life %>%
   updateGeneSymbols() %>%
   pivot_longer(all_of(half_life_sample_cols), names_to = "sample", values_to = "half_life_values") %>%
   group_by(Gene.Symbol) %>%
-  summarize(`Protein Half-Life` = mean(half_life_values, na.rm = TRUE)) %>%
+  summarize(`Protein Half-Life` = median(half_life_values, na.rm = TRUE)) %>%
   mutate_all(~ifelse(is.nan(.), NA, .)) %>%
   drop_na() %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol")
