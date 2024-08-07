@@ -33,7 +33,8 @@ temp_base_dir <- here("Output", "Temp")
 downloads_base_dir <- here("Downloads")
 
 # === Theme Defaults ===
-default_theme <- theme_light(base_size = 14)
+base_size <- 14
+default_theme <- theme_light(base_size = base_size)
 theme_set(default_theme)
 default_color <- "darkgrey"
 highlight_color <- "#66CCB4"

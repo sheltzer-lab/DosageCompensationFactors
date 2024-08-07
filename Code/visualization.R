@@ -186,7 +186,9 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
   y_range <- c(min(df[[y_col_name]]), max(df[[y_col_name]]))
 
   if (is.null(label_coords)) {
-    label_coords <- c(mean(x_range), y_range[1] + 0.05 * abs(y_range[2] - y_range[1]))
+    label_coords <- list(x = mean(x_range),
+                         y = c(y_range[1] + 0.05 * abs(y_range[2] - y_range[1]),
+                               y_range[1] + 0.01 * abs(y_range[2] - y_range[1])))
   }
 
   regression_plot <- df %>%
@@ -199,11 +201,9 @@ scatter_plot_regression <- function(df, x_col, y_col, formula, color_col = NULL,
     stat_smooth(method = lm, color = "blue") +
     geom_line(aes(y = lwr), color = "red", linetype = "dashed") +
     geom_line(aes(y = upr), color = "red", linetype = "dashed") +
-    ggplot2::annotate("text", x = label_coords[1], y = label_coords[2], color = "blue",
-                      label = paste0("y = ", signif(slope, 2),
-                                    "x+", signif(intercept, 2),
-                                    ", R2 =", signif(regression_summary$r.squared, 2)
-                      )) +
+    annotate("text", x = label_coords$x, y = label_coords$y, color = "blue", parse = TRUE,
+             label = c(paste0("y == ", signif(slope, 2), " * x + ", signif(intercept, 2)),
+                       paste0("R^{2} == ", signif(regression_summary$r.squared, 2)))) +
     {
       if (quo_is_null(enquo(color_col))) scale_colour_viridis_c(option = "D", direction = 1)
     } +

@@ -4,12 +4,22 @@ library(dplyr)
 library(tidyr)
 library(forcats)
 library(ggplot2)
+library(ggpubr)
 library(viridisLite)
 library(mskcc.oncotree)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "visualization.R"))
+
+color_palettes <- list(
+  BufferingRatio = "viridis",
+  AneuploidyScore = "rocket",
+  Missing = default_color,
+  WGD = c("WGD" = categorical_color_pal[4],
+          "Non-WGD" = categorical_color_pal[8])
+)
 
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
@@ -44,21 +54,24 @@ df_model_depmap <- read_csv_arrow(here(depmap_cn_data_dir, "Model.csv")) %>%
 
 df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 
-intersect(unique(df_model_depmap$OncotreeCode), unique(df_cptac$Model.CancerType))
-intersect(unique(tumor_types$oncotree_code), unique(df_cptac$Model.CancerType))
+intersect(unique(df_model_depmap$OncotreeCode), unique(df_model_cptac$Model.CancerType))
+intersect(unique(tumor_types$oncotree_code), unique(df_model_cptac$Model.CancerType))
 
 df_depmap <- cellline_buf_depmap %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never")
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
 df_procan <- cellline_buf_procan %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never")
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
 df_cptac <- cellline_buf_cptac %>%
   inner_join(y = df_model_cptac, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
-  rename(OncotreeCode = Model.CancerType)
+  rename(OncotreeCode = Model.CancerType) %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
 get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target_level = 3) {
   require(mskcc.oncotree)
@@ -77,9 +90,10 @@ get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target
   else get_oncotree_parent(df_tumor_types, current$parent, target_level)
 }
 
+# === Cancer Types Panel ===
+
 # TODO: Control for aneuploidy score
 df_cancer_heatmap <- bind_rows(df_depmap, df_procan, df_cptac) %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
   mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 1))) %>%
   group_by(Dataset, OncotreeCode) %>%
   summarize(Mean.BR = mean(Model.Buffering.Ratio, na.rm = TRUE),
@@ -94,8 +108,8 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
   aes(y = Dataset, x = OncotreeCode, fill = Mean.BR) +
   geom_tile(aes(color = Mean.AS), alpha = 0) +
   geom_tile() +
-  scale_color_viridis_c(na.value = default_color, option = "rocket") +
-  scale_fill_viridis_c(na.value = default_color) +
+  scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore) +
+  scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$BufferingRatio) +
   scale_x_discrete(position = "top") +
   theme_void() +
   labs(x = NULL, fill = "Mean Buffering Ratio", color = "Mean Aneuploidy") +
@@ -113,7 +127,7 @@ cancer_heatmap_as <- df_cancer_heatmap %>%
   ggplot() +
   aes(y = Dataset, x = OncotreeCode, fill = Mean.AS) +
   geom_tile() +
-  scale_fill_viridis_c(na.value = default_color, option = "rocket") +
+  scale_fill_viridis_c(na.value = color_palettes$missing, option = color_palettes$AneuploidyScore) +
   theme_void() +
   labs(x = NULL, y = NULL) +
   theme(axis.text.y = element_blank(),
@@ -123,3 +137,75 @@ cancer_heatmap_as <- df_cancer_heatmap %>%
 cowplot::plot_grid(cancer_heatmap_br, cancer_heatmap_as,
                    nrow = 2, ncol = 1, align = "v", axis = "tb",
                    rel_heights = c(1, 0.2))
+
+# === WGD & Aneuploidy Score ===
+print_corr(cor_as_test$estimate)
+
+df_procan_wgd <- df_procan %>%
+  distinct(Model.ID, Model.Buffering.Ratio, CellLine.WGD, CellLine.AneuploidyScore) %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
+
+cor_as_test <- cor.test(df_procan$CellLine.AneuploidyScore,
+                        df_procan$Model.Buffering.Ratio, method = "spearman")
+
+wgd_base_panel <- df_procan_wgd %>%
+  ggplot() +
+  aes(x = CellLine.AneuploidyScore, y = Model.Buffering.Ratio, color = WGD) +
+  geom_point(size = 2) +
+  stat_smooth(method = lm, color = "dimgrey") +
+  annotate("text", x = 0, y = 1.8, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_as_test$estimate), ", p = ", formatC(cor_as_test$p.value, format = "e", digits = 2))) +
+  # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
+  scale_color_manual(values = color_palettes$WGD) +
+  labs(x = "Aneuploidy Score", y = "Model Buffering Ratio") +
+  theme(legend.position = c("left", "top"),
+        legend.position.inside = c(0.01, 0.90),
+        legend.justification = c("left", "top"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = base_size))
+
+wgd_br_test <- wilcox.test(Model.Buffering.Ratio ~ WGD, data = df_procan_wgd)
+wgd_as_test <- wilcox.test(CellLine.AneuploidyScore ~ WGD, data = df_procan_wgd)
+
+wgd_median <- df_procan_wgd %>%
+  group_by(WGD) %>%
+  summarize_if(is.numeric, median)
+
+as_median_range <- as.matrix(dist(wgd_median$CellLine.AneuploidyScore))[1,2]
+br_median_range <- as.matrix(dist(wgd_median$Model.Buffering.Ratio))[1,2]
+
+as_density_panel <- df_procan_wgd %>%
+  ggplot() +
+  aes(x = CellLine.AneuploidyScore, color = WGD, fill = WGD) +
+  geom_density(alpha = 1 / 4) +
+  geom_vline(data = wgd_median, aes(xintercept = CellLine.AneuploidyScore, color = WGD), linetype = "dashed") +
+  geom_segment(aes(x = wgd_median$CellLine.AneuploidyScore[1] + as_median_range * 0.1,
+                   xend = wgd_median$CellLine.AneuploidyScore[2] - as_median_range * 0.1,
+                   y = 0.08, yend = 0.08), color = "black") +
+  geom_label(data = data.frame(x = mean(wgd_median$CellLine.AneuploidyScore), y = 0.08), aes(x = x, y = y),
+             label = paste0("p = ", formatC(wgd_as_test$p.value, format = "e", digits = 2)),
+             label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, vjust = 1) +
+  scale_color_manual(values = color_palettes$WGD) +
+  theme_void() +
+  theme(legend.position = "none")
+
+br_density_panel <- df_procan_wgd %>%
+  ggplot() +
+  aes(x = Model.Buffering.Ratio, color = WGD, fill = WGD) +
+  geom_density(alpha = 1 / 4) +
+  geom_vline(data = wgd_median, aes(xintercept = Model.Buffering.Ratio, color = WGD), linetype = "dashed") +
+  geom_segment(aes(x = wgd_median$Model.Buffering.Ratio[1] + br_median_range * 0.1,
+                   xend = wgd_median$Model.Buffering.Ratio[2] - br_median_range * 0.1,
+                   y = 2.8, yend = 2.8), color = "black") +
+  geom_label(data = data.frame(x = mean(wgd_median$Model.Buffering.Ratio), y = 2.8), aes(x = x, y = y),
+             label = paste0("p = ", formatC(wgd_br_test$p.value, format = "e", digits = 2)),
+             label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, angle = -90, vjust = 1) +
+  scale_color_manual(values = color_palettes$WGD) +
+  theme_void() +
+  theme(legend.position = "none") +
+  coord_flip()
+
+wgd_panel_pre <- cowplot::insert_xaxis_grob(wgd_base_panel, as_density_panel, position = "top")
+wgd_panel <- cowplot::insert_yaxis_grob(wgd_panel_pre, br_density_panel, position = "right")
+
+cowplot::ggdraw(wgd_panel)
