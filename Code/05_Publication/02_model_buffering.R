@@ -37,6 +37,7 @@ df_celllines <- read_parquet(here(output_data_dir, 'celllines.parquet'))
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 cellline_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
@@ -71,6 +72,11 @@ df_cptac <- cellline_buf_cptac %>%
   inner_join(y = df_model_cptac, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   rename(OncotreeCode = Model.CancerType) %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
+
+df_agg <- cellline_buf_agg %>%
+  inner_join(y = df_model_depmap, by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
 get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target_level = 3) {
@@ -179,13 +185,14 @@ as_density_panel <- df_procan_wgd %>%
   aes(x = CellLine.AneuploidyScore, color = WGD, fill = WGD) +
   geom_density(alpha = 1 / 4) +
   geom_vline(data = wgd_median, aes(xintercept = CellLine.AneuploidyScore, color = WGD), linetype = "dashed") +
-  geom_segment(aes(x = wgd_median$CellLine.AneuploidyScore[1] + as_median_range * 0.1,
-                   xend = wgd_median$CellLine.AneuploidyScore[2] - as_median_range * 0.1,
-                   y = 0.08, yend = 0.08), color = "black") +
   geom_label(data = data.frame(x = mean(wgd_median$CellLine.AneuploidyScore), y = 0.08), aes(x = x, y = y),
              label = paste0("p = ", formatC(wgd_as_test$p.value, format = "e", digits = 2)),
-             label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, vjust = 1) +
+             label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, vjust = 0) +
+  geom_segment(aes(x = wgd_median$CellLine.AneuploidyScore[1] + as_median_range * 0.1,
+                   xend = wgd_median$CellLine.AneuploidyScore[2] - as_median_range * 0.1,
+                   y = 0.08, yend = 0.08), color = "black", linewidth = 0.3) +
   scale_color_manual(values = color_palettes$WGD) +
+  ylim(c(0, 0.12)) +
   theme_void() +
   theme(legend.position = "none")
 
@@ -194,13 +201,14 @@ br_density_panel <- df_procan_wgd %>%
   aes(x = Model.Buffering.Ratio, color = WGD, fill = WGD) +
   geom_density(alpha = 1 / 4) +
   geom_vline(data = wgd_median, aes(xintercept = Model.Buffering.Ratio, color = WGD), linetype = "dashed") +
+  geom_label(data = data.frame(x = mean(wgd_median$Model.Buffering.Ratio), y = 3), aes(x = x, y = y),
+             label = paste0("p = ", formatC(wgd_br_test$p.value, format = "e", digits = 2)),
+             label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, angle = -90, vjust = 0) +
   geom_segment(aes(x = wgd_median$Model.Buffering.Ratio[1] + br_median_range * 0.1,
                    xend = wgd_median$Model.Buffering.Ratio[2] - br_median_range * 0.1,
-                   y = 2.8, yend = 2.8), color = "black") +
-  geom_label(data = data.frame(x = mean(wgd_median$Model.Buffering.Ratio), y = 2.8), aes(x = x, y = y),
-             label = paste0("p = ", formatC(wgd_br_test$p.value, format = "e", digits = 2)),
-             label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, angle = -90, vjust = 1) +
+                   y = 3, yend = 3), color = "black", linewidth = 0.2) +
   scale_color_manual(values = color_palettes$WGD) +
+  ylim(c(0, 4.5)) +
   theme_void() +
   theme(legend.position = "none") +
   coord_flip()
@@ -209,3 +217,35 @@ wgd_panel_pre <- cowplot::insert_xaxis_grob(wgd_base_panel, as_density_panel, po
 wgd_panel <- cowplot::insert_yaxis_grob(wgd_panel_pre, br_density_panel, position = "right")
 
 cowplot::ggdraw(wgd_panel)
+
+# === Proliferation ===
+df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
+  select(Model.ID, CellLine.GrowthRatio)
+
+df_prolif <- df_agg %>%
+  select(Model.ID, Model.Buffering.MeanNormRank, CellLine.WGD) %>%
+  inner_join(y = df_growth, by = "Model.ID") %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
+
+cor_prolif <- cor.test(df_prolif$Model.Buffering.MeanNormRank,
+                       df_prolif$CellLine.GrowthRatio, method = "spearman")
+
+prolif_base_panel <- df_prolif %>%
+  ggplot() +
+  aes(x = Model.Buffering.MeanNormRank, y = CellLine.GrowthRatio, color = WGD) +
+  geom_point(size = 2) +
+  stat_smooth(method = lm, color = "dimgrey") +
+  annotate("text", x = 0, y = 15, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_prolif$estimate), ", ", print_signif(cor_prolif$p.value))) +
+  # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
+  scale_color_manual(values = color_palettes$WGD) +
+  labs(x = "Mean Normalized Buffering Ranks", y = "Growth Ratio (Day4/Day1)") +
+  theme(legend.position = c("left", "top"),
+        legend.position.inside = c(0.01, 0.90),
+        legend.justification = c("left", "top"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = base_size))
+
+# TODO: Mention adjusted BR
+
+# TODO: Why are more samples in df_agg than in df_procan and df_depmap?
