@@ -2,6 +2,7 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(arrow)
+library(vroom)
 library(stringr)
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -19,8 +20,6 @@ dir.create(plots_dir, recursive = TRUE)
 
 df_celllines <- read_parquet(here(output_data_dir, "celllines.parquet"))
 
-# ToDo: Add sources
-
 # ToDo: NOTE! Chromosomes 13p, 14p, 15p, 21p, 22p, X, Y missing!
 df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv")) %>%
   rename(CellLine.DepMapModelId = 1) %>%
@@ -28,40 +27,43 @@ df_arm_level_cna <- read_csv_arrow(here(copynumber_data_dir, "Arm-level_CNAs.csv
                names_to = "Gene.ChromosomeArm", values_to = "ChromosomeArm.CNA") %>%
   mutate(ChromosomeArm.CNA = as.integer(ChromosomeArm.CNA))
 
-df_aneuploidy <- read_csv_arrow(here(copynumber_data_dir, "Aneuploidy.csv")) %>%
+df_signatures <- read_csv_arrow(here(copynumber_data_dir, "OmicsSignatures.csv")) %>%
   rename(CellLine.DepMapModelId = 1,
-         CellLine.AneuploidyScore = "Aneuploidy score",
+         CellLine.AneuploidyScore = "Aneuploidy",
          CellLine.Ploidy = "Ploidy",
-         CellLine.WGD = "Genome doublings")
+         CellLine.WGD = "WGD",                  # ToDo: Refactor - mutate(CellLine.WGD = as.logical(CellLine.WGD))
+         CellLine.LoHFraction = "LoHFraction",
+         CellLine.CIN = "CIN",
+         CellLine.MSIScore = "MSIScore")
 
-copy_number_absolute <- read.csv(
-  here(copynumber_data_dir, "Copy_Number_(Absolute).csv"),
-  row.names = 1,
-  check.names = FALSE
-) %>%
-  as.matrix() %>%
-  as.table() %>%
-  as.data.frame() %>%
-  setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber"))
+regex_parentheses <- "(.*)\\s+\\((.*)\\)"
 
-copy_number <- read.csv(
-  here(copynumber_data_dir, "Copy_Number_Public_23Q2.csv"),
-  row.names = 1,
-  check.names = FALSE
-) %>%
-  as.matrix() %>%
-  as.table() %>%
-  as.data.frame() %>%
-  setNames(c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.CopyNumber.Relative")) %>%
-  inner_join(y = copy_number_absolute, by = c("CellLine.DepMapModelId", "Gene.Symbol"),
+copy_number_absolute <- vroom::vroom(here(copynumber_data_dir, "OmicsAbsoluteCNGene.csv")) %>%
+  reshape2::melt(id.vars = "...1") %>%
+  mutate(Gene.Symbol = str_extract(variable, regex_parentheses, group = 1),
+         Gene.EntrezID = str_extract(variable, regex_parentheses, group = 2)) %>%
+  rename(CellLine.DepMapModelId = 1,
+         Gene.CopyNumber = "value") %>%
+  select(CellLine.DepMapModelId, Gene.EntrezID, Gene.Symbol, Gene.CopyNumber)
+
+copy_number_ratio <- vroom::vroom(here(copynumber_data_dir, "OmicsCNGene.csv")) %>%
+  reshape2::melt(id.vars = "...1") %>%
+  mutate(Gene.Symbol = str_extract(variable, regex_parentheses, group = 1),
+         Gene.EntrezID = str_extract(variable, regex_parentheses, group = 2)) %>%
+  rename(CellLine.DepMapModelId = 1,
+         Gene.CopyNumber.Ratio = "value") %>%
+  select(CellLine.DepMapModelId, Gene.EntrezID, Gene.Symbol, Gene.CopyNumber.Ratio)
+
+copy_number <- copy_number_absolute %>%
+  left_join(y = copy_number_ratio, by = c("CellLine.DepMapModelId", "Gene.Symbol", "Gene.EntrezID"),
              na_matches = "never", relationship = "one-to-one") %>%
   inner_join(y = df_celllines, by = "CellLine.DepMapModelId",
              na_matches = "never", relationship = "many-to-one") %>%
   get_chromosome_arms() %>%
   # ToDo: Consider Left Join
-  inner_join(y = df_arm_level_cna, by = c("CellLine.DepMapModelId", "Gene.ChromosomeArm"),
+  left_join(y = df_arm_level_cna, by = c("CellLine.DepMapModelId", "Gene.ChromosomeArm"),
              na_matches = "never", relationship = "many-to-one") %>%
-  inner_join(y = df_aneuploidy, by = "CellLine.DepMapModelId",
+  left_join(y = df_signatures, by = "CellLine.DepMapModelId",
              na_matches = "never", relationship = "many-to-one") %>%
   # filter(CellLine.Ploidy < 3.5) %>%     # Removing near-tetraploid cell lines is detrimental for factor prediction
   updateGeneSymbols() %>%
@@ -123,6 +125,7 @@ copy_number %>%
 
 ### Gain/Loss Correlation
 corr_matrix <- copy_number %>%
+  drop_na(ChromosomeArm.CNA) %>%
   distinct(Gene.Chromosome, Gene.ChromosomeArm, ChromosomeArm.CNA, Model.ID) %>%
   mutate(Gene.ChromosomeArm = fct_reorder(Gene.ChromosomeArm, as.integer(Gene.Chromosome))) %>%
   arrange(Gene.ChromosomeArm) %>%
@@ -144,12 +147,13 @@ corrplot(corr_matrix$r, p.mat = corr_matrix$p,
 
 ## Copy Number distribution per WGD and Ploidy
 copy_number %>%
-  violin_plot(as.factor(CellLine.WGD), Gene.CopyNumber.Relative)
+  violin_plot(as.factor(CellLine.WGD), Gene.CopyNumber.Ratio)
 copy_number %>%
   violin_plot(as.factor(CellLine.WGD), Gene.CopyNumber)
 
 ## Aneuploidy Score Histogramm
-df_aneuploidy %>%
+copy_number %>%
+  distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD) %>%
   ggplot() +
   aes(x = CellLine.AneuploidyScore, fill = as.factor(CellLine.WGD)) +
   geom_histogram(position = "dodge")
@@ -161,7 +165,6 @@ df_aneuploidy %>%
 copy_number_derived <- copy_number %>%
   mutate(CellLine.WGD = as.factor(CellLine.WGD),
          CellLine.Ploidy.Rounded = as.integer(round(CellLine.Ploidy)),
-         Gene.CopyNumber.Ratio = (2^Gene.CopyNumber.Relative) - 1,
          Gene.CopyNumber.Derived = Gene.CopyNumber.Ratio * CellLine.Ploidy.Rounded)
 
 copy_number_derived %>%
