@@ -61,7 +61,7 @@ mrna_decay <- read_excel(here(factor_data_dir, "Yang.2003.mRNADecay.Rates.xlsx")
 # DOI: 10.1016/j.celrep.2013.09.043, Supplementary Table 2: Supersaturation Database.
 agg_score <- read_excel(here(factor_data_dir, "AggregationScore.xlsx"), skip = 18254)
 # DOI: 10.1371/journal.pgen.1001154, URL: https://www.deciphergenomics.org/about/downloads/data
-hi_scores <- read_table(here(factor_data_dir, "HI_Predictions_Version3.bed.gz"), skip = 1, col_names = FALSE, show_col_types = FALSE)
+pHaplo <- read_excel(here(factor_data_dir, "1-s2.0-S0092867422007887-mmc7.xlsx"))
 # DepMap Achilles
 crispr_effects <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneEffect.csv"))
 crispr_deps <- read_csv_arrow(here(screens_data_dir, "CRISPRGeneDependency.csv"))
@@ -231,14 +231,17 @@ df_agg <- agg_score %>%
 
 
 ## Prepare Haploinsufficiency data
-df_hi <- hi_scores %>%
-  select(X4, X5) %>%
-  separate_wider_delim(X4, delim = "|", names = c("Gene.Symbol", "HI.Score", "HI.Percentile")) %>%
-  select(-HI.Score, -HI.Percentile) %>%
+df_hi <- pHaplo %>%
+  rename(Gene.Symbol = "Gene",
+         Haploinsufficiency = "pHaplo",
+         Triplosensitivity = "pTriplo") %>%
+  select(Gene.Symbol, Haploinsufficiency, Triplosensitivity) %>%
   drop_na() %>%
   updateGeneSymbols() %>%
+  separate_longer_delim(Gene.Symbol, "///") %>%
   group_by(Gene.Symbol) %>%
-  summarize(`Haploinsufficiency Score` = mean(X5, na.rm = TRUE)) %>%
+  summarize(Haploinsufficiency = max(Haploinsufficiency, na.rm = TRUE),
+            Triplosensitivity = max(Triplosensitivity, na.rm = TRUE), .groups = "drop") %>%
   id2uniprot_acc("Gene.Symbol", "hgnc_symbol") %>%
   drop_na()
 
@@ -276,7 +279,8 @@ tf_count <- net %>%
   mutate(Regulation = case_when(mor < 0 ~ "Transcription Factors (Repressor)",
                                 mor > 0 ~ "Transcription Factors (Activator)")) %>%
   count(target, Regulation) %>%
-  pivot_wider(names_from = Regulation, values_from = n, id_cols = target, values_fill = 0)
+  pivot_wider(names_from = Regulation, values_from = n, id_cols = target, values_fill = 0) %>%
+  mutate(`Transcription Factors` = `Transcription Factors (Repressor)` + `Transcription Factors (Activator)`)
 
 tf_mor <- net %>%
   group_by(target) %>%

@@ -212,15 +212,15 @@ DOI: 10.1016/j.celrep.2013.09.043
 
 * Supplementary Table 2: Supersaturation Database.
 
-### Haploinsufficiency Scores
+### Haploinsufficiency & Triplosensitivity
 
-High ranks (e.g. 0-10%) indicate a gene which is more likely to exhibit the features of haploinsufficient genes, low ranks (e.g. 90-100%) indicate a gene is more likely to NOT exhibit haploinsufficiency. The manuscript describing the generation and validation of these haploinsufficiency predictions (Huang et al., 2010) is published in PLoS Genetics. Updated predictions of haploinsufficiency can be downloaded from our data download page.
+**URL:** https://www.sciencedirect.com/science/article/pii/S0092867422007887?via%3Dihub#mmc7
 
-Download URL: https://www.deciphergenomics.org/about/downloads/data
+**Location:** `./Data/External/Factors/1-s2.0-S0092867422007887-mmc7.xlsx`
 
-FAQ URL: https://www.deciphergenomics.org/about/faqs
+**DOI:** [10.1016/j.cell.2022.06.036](https://doi.org/10.1016/j.cell.2022.06.036)
 
-DOI: 10.1371/journal.pgen.1001154
+Table S7. Haploinsufficiency and triplosensitivity predictions for all autosomal protein-coding genes, related to Figure 6.
 
 ### Random Allelic Expression
 
