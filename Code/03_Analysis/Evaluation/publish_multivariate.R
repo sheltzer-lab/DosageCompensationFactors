@@ -163,6 +163,7 @@ dev.off()
 # === Draft Area ===
 heatmap_shap_depmap <- shap_results %>%
   filter(Model.Dataset == "DepMap") %>%
+  filter(!grepl("Log2FC", Model.Variant) & !grepl("Average", Model.Variant)) %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
   distinct(DosageCompensation.Factor, Model.Variant, Model.Subset,
@@ -194,6 +195,7 @@ heatmap_shap_depmap %>%
 
 heatmap_shap_wgd <- shap_results %>%
   filter(Model.Subset %in% c("WGD", "Non-WGD") & Model.Condition == "Loss") %>%
+  filter(!grepl("Log2FC", Model.Variant) & !grepl("Average", Model.Variant)) %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(SHAP.Factor.Corr), .desc = TRUE)) %>%
   distinct(DosageCompensation.Factor, Model.Variant, Model.Subset,
