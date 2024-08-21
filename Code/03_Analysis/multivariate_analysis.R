@@ -50,9 +50,9 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
 
   # Filter and clean dataset before training
   df_prep <- dataset %>%
-    filter_func() %>%
     add_factors(df_factors, factor_cols = factor_cols) %>%
     normalize_features(method = "min-max", factor_cols = factor_cols) %>%
+    filter_func() %>%
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
     # ToDo: Only use imputation on training set
     impute_na() %>%
@@ -169,7 +169,8 @@ analysis_conditions <- list(
 ### Test robustness of models by excluding certain factors
 ### ToDo: Test this separately
 excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance",
-                      "Transcription Factors (Repressor)", "Transcription Factors (Activator)")
+                      "Transcription Factors (Repressor)", "Transcription Factors (Activator)",
+                      "Triplosensitivity")
 
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(datasets) * length(analysis_conditions) * 3,
@@ -260,8 +261,15 @@ for (dataset in datasets) {
 }
 close(pb)
 
+### Create mapping for cleaned names
+dc_factor_cols_mapping <- dc_factor_cols
+names(dc_factor_cols_mapping) <- janitor::make_clean_names(dc_factor_cols)
+
 ### Write results to disk
-shap_results %>%
+shap_results <- shap_results %>%
   bind_rows() %>%
+  rename(DosageCompensation.Factor.ID = DosageCompensation.Factor) %>%
+  mutate(DosageCompensation.Factor = sapply(DosageCompensation.Factor.ID, \(x) dc_factor_cols_mapping[[x]])) %>%
   write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
   write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)
+
