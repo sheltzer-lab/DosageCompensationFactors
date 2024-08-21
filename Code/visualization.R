@@ -782,3 +782,29 @@ shap_plot_arrows <- function(df_shap, show_legend = TRUE, title = NULL,
   cowplot::plot_grid(plot_shap, plot_arrows,
                      labels = NULL, ncol = 1, align = "v", axis = "lr", rel_heights = c(1, 0.05))
 }
+
+nested_shap_heatmap <- function(df, nesting_formula) {
+  df %>%
+    ggplot() +
+    aes(x = DosageCompensation.Factor, y = "", fill = SHAP.Factor.Corr, label = Label) +
+    geom_raster() +
+    geom_text(color = "black") +
+    ggh4x::facet_nested(nesting_formula, switch = "y") +
+    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                         limits = c(-1, 1), oob = scales::squish) +
+    labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
+    cowplot::theme_minimal_grid() +
+    theme(panel.spacing = unit(0, "lines"),
+          strip.background = element_rect(color = "lightgrey"),
+          axis.ticks.y = element_blank(),
+          legend.key.size = unit(16, "points"),
+          legend.key.width = unit(24, "points"),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10),
+          legend.position = "top",
+          legend.direction = "horizontal",
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          plot.margin = unit(c(5, 15, 5, 15), "mm"))
+}
