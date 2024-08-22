@@ -425,60 +425,57 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
-## Create Cluster & run analysis
+## Create cluster & run bootstrap analysis
 cl <- makeCluster(getOption("cl.cores", max(1, detectCores() - 2)))
 clusterExport(cl = cl, c("reshape_factors", "determine_rocs", "summarize_roc_auc", "dc_factor_cols",
                          "roc_silent", "auc_na", "factor_roc_auc_base_pipeline", "sample_func"),
               envir = environment())
 
-bootstrap_chr_gain <- expr_buf_procan %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
-                            filter_func = filter_arm_gain, cluster = cl,
-                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
-  mutate(Condition = "Chromosome Arm Gain")
+datasets_bootstrap <- list(
+  list(dataset = expr_buf_procan, name = "ProCan"),
+  list(dataset = expr_buf_depmap, name = "DepMap")
+)
 
-bootstrap_chr_loss <- expr_buf_procan %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.ChrArmLevel.Log2FC.Class,
-                            filter_func = filter_arm_loss, cluster = cl,
-                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
-  mutate(Condition = "Chromosome Arm Loss")
+conditions_bootstrap <- list(
+  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_gain, level = "Gene Copy Number", event = "Gain"),
+  list(buffering = "Buffering.GeneLevel.Class", filter = filter_cn_loss, level = "Gene Copy Number", event = "Loss"),
+  list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain, level = "Chromosome Arm", event = "Gain"),
+  list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss, level = "Chromosome Arm", event = "Loss")
+)
 
-bootstrap_cn_gain <- expr_buf_procan %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
-                            filter_func = filter_cn_gain, cluster = cl,
-                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
-  mutate(Condition = "Gene Copy Number Gain")
+bootstrap_results <- NULL
+pb <- txtProgressBar(min = 0, max = length(datasets_bootstrap) * length(conditions_bootstrap), style = 3)
+for (dataset in datasets_bootstrap) {
+  for (condition in conditions_bootstrap) {
+    result <- dataset$dataset %>%
+      run_bootstrapped_analysis(buffering_class_col = get(condition$buffering),
+                                filter_func = condition$filter, cluster = cl,
+                                n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
+      mutate(Condition = paste(condition$level, condition$event),
+             Level = condition$level,
+             Event = condition$event,
+             Dataset = dataset$name)
 
-bootstrap_cn_loss <- expr_buf_procan %>%
-  run_bootstrapped_analysis(buffering_class_col = Buffering.GeneLevel.Class,
-                            filter_func = filter_cn_loss, cluster = cl,
-                            n = bootstrap_n, sample_prop = bootstrap_sample_prop) %>%
-  mutate(Condition = "Gene Copy Number Loss")
-
+    bootstrap_results <- bind_rows(bootstrap_results, result)
+    setTxtProgressBar(pb, pb$getVal() + 1)
+  }
+}
+close(pb)
 stopCluster(cl)
 
 ## Checkpoint: Save and load bootstrapped results before continuing
-write_parquet(bootstrap_chr_gain, here(output_data_dir, 'bootstrap_univariate_procan_chrgain.parquet'),
-              version = "2.6") %>%
-  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_chr_gain.xlsx"),
-             colNames = TRUE)
-write_parquet(bootstrap_chr_loss, here(output_data_dir, 'bootstrap_univariate_procan_chrloss.parquet'),
-              version = "2.6") %>%
-  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_chr_loss.xlsx"),
-             colNames = TRUE)
-write_parquet(bootstrap_cn_gain, here(output_data_dir, 'bootstrap_univariate_procan_cngain.parquet'),
-              version = "2.6") %>%
-  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_gene-cn_gain.xlsx"),
-             colNames = TRUE)
-write_parquet(bootstrap_cn_loss, here(output_data_dir, 'bootstrap_univariate_procan_cnloss.parquet'),
-              version = "2.6") %>%
-  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap_gene-cn_loss.xlsx"),
+bootstrap_results %>%
+  write_parquet(here(output_data_dir, 'bootstrap_univariate.parquet'),
+                version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap.xlsx"),
              colNames = TRUE)
 
-bootstrap_chr_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_chrgain.parquet"))
-bootstrap_chr_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_chrloss.parquet"))
-bootstrap_cn_gain <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_cngain.parquet"))
-bootstrap_cn_loss <- read_parquet(here(output_data_dir, "bootstrap_univariate_procan_cnloss.parquet"))
+bootstrap_results <- read_parquet(here(output_data_dir, 'bootstrap_univariate.parquet'))
+
+bootstrap_chr_gain <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Chromosome Arm" & Event == "Gain")
+bootstrap_chr_loss <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Chromosome Arm" & Event == "Loss")
+bootstrap_cn_gain <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Gene Copy Number" & Event == "Gain")
+bootstrap_cn_loss <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Gene Copy Number" & Event == "Loss")
 
 ## Compare statistical results between conditions
 ### Chr Gain vs. Chr Loss
@@ -512,7 +509,7 @@ ggsave(here(procan_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"
 ## Investigate correlation of ROC AUC of factors
 png(here(procan_comparison_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_gain <- bootstrap_chr_gain %>%
-  select(-DosageCompensation.Factor.Observations) %>%
+  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -520,7 +517,7 @@ dev.off()
 
 png(here(procan_comparison_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_chr_loss <- bootstrap_chr_loss %>%
-  select(-DosageCompensation.Factor.Observations) %>%
+  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -528,7 +525,7 @@ dev.off()
 
 png(here(procan_comparison_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_gain <- bootstrap_cn_gain %>%
-  select(-DosageCompensation.Factor.Observations) %>%
+  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -536,7 +533,7 @@ dev.off()
 
 png(here(procan_comparison_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
 corrplot_cn_loss <- bootstrap_cn_loss %>%
-  select(-DosageCompensation.Factor.Observations) %>%
+  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
   pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
   select(-Condition, -Bootstrap.Sample) %>%
   plot_correlation()
@@ -640,33 +637,3 @@ br_factor_cor_heatmap <- br_factor_cor %>%
         plot.margin = unit(c(5, 15, 5, 15), "mm"))
 
 save_plot(br_factor_cor_heatmap, "buffering_ratio_factor_correlation.png", width = 280, height = 150)
-
-# === Combine Plots for publishing ===
-# ToDo: Integrate corr plots
-rank_gain <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain.parquet"))
-rank_loss <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss.parquet"))
-rank_loss_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_WGD.parquet"))
-rank_loss_no_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.parquet"))
-
-rank_univariate <- bind_rows(rank_gain %>% mutate(Condition = "Gain"),
-                             rank_loss %>% mutate(Condition = "Loss"))
-rank_wgd <- bind_rows(rank_loss_wgd %>% mutate(Condition = "Loss, WGD"),
-                      rank_loss_no_wgd %>% mutate(Condition = "Loss, Non-WGD"))
-
-rank_heatmap <- rank_univariate %>%
-  unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
-  theme(legend.position = "right", legend.direction = "vertical")
-rank_wgd_heatmap <- rank_wgd %>%
-  unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
-  theme(legend.position = "right", , legend.direction = "vertical")
-
-rank_plots <- cowplot::plot_grid(rank_heatmap + coord_flip(),
-                                 rank_wgd_heatmap + coord_flip(),
-                                 ncol = 2, labels = c("A", "B"))
-
-plot_publish <- cowplot::plot_grid(rank_plots, bootstrap_heatmap,
-                                   nrow = 2, rel_heights = c(2, 1.25), labels = c("", "C"))
-
-cairo_pdf(here(plots_dir, "univariate_publish.pdf"), height = 13, width = 13)
-plot_publish
-dev.off()

@@ -432,6 +432,59 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
            breaks = breaks, color = color)
 }
 
+simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
+                           x_lab = NULL, y_lab = NULL, legend_lab = NULL) {
+  theme_settings <- theme(legend.key.size = unit(16, "points"),
+                          legend.key.width = unit(24, "points"),
+                          legend.title = element_text(size = 12),
+                          legend.text = element_text(size = 10),
+                          legend.position = "top",
+                          legend.direction = "horizontal",
+                          axis.text.x = element_text(angle = 45, hjust = 1))
+
+  df %>%
+    distinct({ { x_col } }, { { y_col } }, { { color_col } }, { { label_col } }) %>%
+    ggplot() +
+    aes(x = { { x_col } }, y = { { y_col } }, fill = { { color_col } }, label = { { label_col } }) +
+    geom_tile() +
+    geom_text(color = "black") +
+    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                         limits = c(-1, 1), oob = scales::squish) +
+    labs(x = x_lab, y = y_lab, fill = legend_lab) +
+    cowplot::theme_minimal_grid() +
+    theme_settings
+}
+
+unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FALSE) {
+  theme_settings <- theme(legend.key.size = unit(16, "points"),
+                        legend.key.width = unit(24, "points"),
+                        legend.title = element_text(size = 12),
+                        legend.text = element_text(size = 10),
+                        legend.position = "top",
+                        legend.direction = "horizontal",
+                        axis.text.x = element_text(angle = 45, hjust = 1),
+                        axis.title.x = element_blank(),
+                        axis.title.y = element_blank())
+
+  color_col_name <- quo_name(enquo(color_col))
+  x_col_name <- quo_name(enquo(x_col))
+
+  max_value <- round(max(df[[color_col_name]]), digits = 1)
+
+  df %>%
+    group_by({ { x_col } }, { { y_col } }) %>%
+    summarize(!!color_col_name := median({ { color_col } }, na.rm = TRUE), .groups = "drop") %>%
+    mutate(!!x_col_name := fct_reorder({ { x_col } }, { { color_col } }, .desc = order_desc)) %>%
+    ggplot() +
+    aes(x = { { x_col } }, y = { { y_col } },
+        fill = { { color_col } }, label = format(round({ { color_col } }, 2), nsmall = 2, scientific = FALSE)) +
+    geom_tile() +
+    geom_text(color = "white") +
+    scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9,
+                         limits = c(0.5, max_value), oob = scales::squish) +
+    cowplot::theme_minimal_grid() +
+    theme_settings
+}
 
 bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
                                   threshold_low = NULL, threshold_high = NULL,
@@ -637,60 +690,6 @@ gradient_violin_plot <- function(df, group_col, value_col, color_col, p = 2) {
          y = quo_name(enquo(value_col)),
          color = quo_name(enquo(color_col))) +
     theme(legend.position = "bottom")
-}
-
-simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
-                           x_lab = NULL, y_lab = NULL, legend_lab = NULL) {
-  theme_settings <- theme(legend.key.size = unit(16, "points"),
-                          legend.key.width = unit(24, "points"),
-                          legend.title = element_text(size = 12),
-                          legend.text = element_text(size = 10),
-                          legend.position = "top",
-                          legend.direction = "horizontal",
-                          axis.text.x = element_text(angle = 45, hjust = 1))
-
-  df %>%
-    distinct({ { x_col } }, { { y_col } }, { { color_col } }, { { label_col } }) %>%
-    ggplot() +
-    aes(x = { { x_col } }, y = { { y_col } }, fill = { { color_col } }, label = { { label_col } }) +
-    geom_raster() +
-    geom_text(color = "black") +
-    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
-                         limits = c(-1, 1), oob = scales::squish) +
-    labs(x = x_lab, y = y_lab, fill = legend_lab) +
-    cowplot::theme_minimal_grid() +
-    theme_settings
-}
-
-unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FALSE) {
-  theme_settings <- theme(legend.key.size = unit(16, "points"),
-                        legend.key.width = unit(24, "points"),
-                        legend.title = element_text(size = 12),
-                        legend.text = element_text(size = 10),
-                        legend.position = "top",
-                        legend.direction = "horizontal",
-                        axis.text.x = element_text(angle = 45, hjust = 1),
-                        axis.title.x = element_blank(),
-                        axis.title.y = element_blank())
-
-  color_col_name <- quo_name(enquo(color_col))
-  x_col_name <- quo_name(enquo(x_col))
-
-  max_value <- round(max(df[[color_col_name]]), digits = 1)
-
-  df %>%
-    group_by({ { x_col } }, { { y_col } }) %>%
-    summarize(!!color_col_name := median({ { color_col } }, na.rm = TRUE), .groups = "drop") %>%
-    mutate(!!x_col_name := fct_reorder({ { x_col } }, { { color_col } }, .desc = order_desc)) %>%
-    ggplot() +
-    aes(x = { { x_col } }, y = { { y_col } },
-        fill = { { color_col } }, label = format(round({ { color_col } }, 2), nsmall = 2, scientific = FALSE)) +
-    geom_raster() +
-    geom_text(color = "white") +
-    scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9,
-                         limits = c(0.5, max_value), oob = scales::squish) +
-    cowplot::theme_minimal_grid() +
-    theme_settings
 }
 
 # === SHAP-Plots ===

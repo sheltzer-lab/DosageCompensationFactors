@@ -121,6 +121,8 @@ grid_search <- function(func, param_range) {
 
 # Convert list of ROC objects to data frame
 rocs_to_df <- function(rocs) {
+  require(pROC)
+
   df_rocs <- data.frame()
   # Extract relevant information from ROC objects into data frame
   for (name in names(rocs)) {

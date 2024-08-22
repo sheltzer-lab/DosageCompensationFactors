@@ -175,7 +175,6 @@ excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance",
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(datasets) * length(analysis_conditions) * 3,
                      style = 3)
-i <- 0
 for (model in models) {
   for (dataset in datasets) {
     analysis_results <- list()
@@ -246,7 +245,9 @@ for (dataset in datasets) {
                                       TRUE ~ "All"),
              Model.Condition = if_else(grepl("Gain", Model.Variant), "Gain", "Loss"),
              Model.Level = if_else(grepl("Gene", Model.Variant), "Gene", "Chromosome Arm"),
-             Model.BufferingMethod = if_else(grepl("Log2FC", Model.Variant), "Log2FC", "BR"))
+             Model.Samples = if_else(grepl("Average", Model.Variant), "Averaged", "Unaveraged"),
+             Model.BufferingMethod = if_else(grepl("Log2FC", Model.Variant) | grepl("Average", Model.Variant),
+                                             "Log2FC", "BR"))
 
     df_explanation %>%
       shap_plot() %>%
