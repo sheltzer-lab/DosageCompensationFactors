@@ -10,14 +10,6 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 
-color_palettes <- list(
-  BufferingRatio = "viridis",
-  AneuploidyScore = "rocket",
-  Missing = default_color,
-  WGD = c("WGD" = categorical_color_pal[4],
-          "Non-WGD" = categorical_color_pal[8])
-)
-
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
 

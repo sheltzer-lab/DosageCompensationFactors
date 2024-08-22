@@ -13,14 +13,6 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 
-color_palettes <- list(
-  BufferingRatio = "viridis",
-  AneuploidyScore = "rocket",
-  Missing = default_color,
-  WGD = c("WGD" = categorical_color_pal[4],
-          "Non-WGD" = categorical_color_pal[8])
-)
-
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")

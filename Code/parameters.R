@@ -44,6 +44,14 @@ bidirectional_color_pal_viridis <- viridis(n = 5, option = "D", direction = 1)
 categorical_color_pal <- brewer.pal(12, "Paired")
 two_class_color_pal <- c(categorical_color_pal[4], categorical_color_pal[8])
 
+color_palettes <- list(
+  BufferingRatio = "viridis",
+  AneuploidyScore = "rocket",
+  Missing = default_color,
+  WGD = c("WGD" = categorical_color_pal[4],
+          "Non-WGD" = categorical_color_pal[8])
+)
+
 # === Dosage Compensation Factors ===
 dc_factor_cols <- c(
   "Protein-Protein Interactions", "Protein Half-Life", "Protein Complexes (CORUM)",
