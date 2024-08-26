@@ -294,6 +294,60 @@ bootstrap_dataframe <- function (df, cluster, n, sample_prop, func, ...) {
   return(bind_rows(results))
 }
 
+# === Statistically compare bootstrapped results between conditions ===
+# Notes for Statistical Tests and Multiple Testing Correction
+# * Bootstrapping values independently samples values from the same distribution (with replacement) => iid.
+# * However: ROC AUC of factors may be correlated -> Not independent!
+compare_conditions <- function(df_condition1, df_condition2) {
+  require(dplyr)
+  require(tidyr)
+  require(skimr)
+  require(assertr)
+
+  # Merge dataframes for unified handling
+  df_merged <- df_condition1 %>%
+    bind_rows(df_condition2) %>%
+    assertr::verify(length(unique(Condition)) == 2)
+
+  conditions <- unique(df_merged$Condition)
+
+  # Compare statistical significance between each factor
+  df_factor_test <- df_merged %>%
+    pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
+                names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    group_by(DosageCompensation.Factor) %>%
+    summarize(Wilcoxon.p.value = wilcox.test(get(conditions[1]), get(conditions[2]), paired = TRUE)$p.value) %>%
+    mutate(Wilcoxon.p.adjusted = p.adjust(Wilcoxon.p.value, method = "BY")) %>%
+    mutate(Wilcoxon.significant = map_signif(Wilcoxon.p.adjusted))
+
+  # Calculate summary statistics for each factor in each condition
+  df_stat <- df_merged %>%
+    pivot_wider(id_cols = c(DosageCompensation.Factor, Bootstrap.Sample),
+                names_from = Condition, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    group_by(DosageCompensation.Factor) %>%
+    skimr::skim(conditions[1], conditions[2]) %>%
+    rename(Condition = skim_variable) %>%
+    ungroup()
+
+  # Compare statistical significance between ranks of median values of factors
+  df_rank_test <- df_stat %>%
+    # Introduce perturbation to avoid equal ranks, otherwise p-value can't be calculated accurately
+    mutate(RankValue = numeric.p50 + runif(length(numeric.p50), min = -1e-10, max = 1e-10)) %>%
+    group_by(Condition) %>%
+    mutate(DosageCompensation.Factor.Rank = as.integer(rank(-RankValue))) %>%
+    select(Condition, DosageCompensation.Factor, DosageCompensation.Factor.Rank) %>%
+    pivot_wider(id_cols = DosageCompensation.Factor,
+                names_from = Condition, values_from = DosageCompensation.Factor.Rank)
+
+  rank_test <- cor.test(df_rank_test[[conditions[1]]],
+                        df_rank_test[[conditions[2]]],
+                        method = "kendall")
+
+  return(list(factor_test = df_factor_test,
+              rank_test = rank_test,
+              stat_summary = df_stat))
+}
+
 # === Aggregation & Consensus Methods ===
 
 mean_norm_rank <- function(df, value_col, group_col, id_col) {

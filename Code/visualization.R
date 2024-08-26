@@ -486,6 +486,28 @@ unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FAL
     theme_settings
 }
 
+roc_auc_heatmap <- function(df, rank_tests) {
+  heatmap_boot_auc <- df %>%
+    unidirectional_heatmap(DosageCompensation.Factor, Condition, DosageCompensation.Factor.ROC.AUC, order_desc = TRUE)
+
+  signif_bars <- data.frame(Condition = unique(df$Condition), y = c(2, 2, 2, 2)) %>%
+    ggplot() +
+    aes(x = Condition, y = y) +
+    geom_signif(comparisons = rank_tests$comparisons,
+                annotations = rank_tests$annotations,
+                y_position = rank_tests$y_position,
+                size = 1, textsize = 4, vjust = -0.5
+    ) +
+    cowplot::theme_nothing() +
+    coord_flip(ylim = c(1, 2.5))
+
+  cowplot::plot_grid(
+    heatmap_boot_auc, signif_bars,
+    labels = NULL, nrow = 1, align = "h", axis = "tb",
+    rel_widths = c(15, 1)
+  )
+}
+
 bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
                                   threshold_low = NULL, threshold_high = NULL,
                                   highlight_buckets = NULL, x_lab = NULL, title = element_blank()) {
