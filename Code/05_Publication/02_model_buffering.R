@@ -12,6 +12,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
+source(here("Code", "analysis.R"))
 
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
@@ -26,10 +27,12 @@ tumor_types <- get_tumor_types()
 
 df_celllines <- read_parquet(here(output_data_dir, 'celllines.parquet'))
 
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
-cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
-cellline_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
-cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
+model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
+
+expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
@@ -50,23 +53,23 @@ df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 intersect(unique(df_model_depmap$OncotreeCode), unique(df_model_cptac$Model.CancerType))
 intersect(unique(tumor_types$oncotree_code), unique(df_model_cptac$Model.CancerType))
 
-df_depmap <- cellline_buf_depmap %>%
+df_depmap <- model_buf_depmap %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
-df_procan <- cellline_buf_procan %>%
+df_procan <- model_buf_procan %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
-df_cptac <- cellline_buf_cptac %>%
+df_cptac <- model_buf_cptac %>%
   inner_join(y = df_model_cptac, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   rename(OncotreeCode = Model.CancerType) %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
 
-df_agg <- cellline_buf_agg %>%
+df_agg <- model_buf_agg %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
@@ -88,18 +91,63 @@ get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target
   else get_oncotree_parent(df_tumor_types, current$parent, target_level)
 }
 
-# === Cancer Types Panel ===
+# === Cell Lines Panel ===
+waterfall_procan <- model_buf_procan %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name)
+waterfall_depmap <- model_buf_depmap %>%
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name)
 
-# TODO: Control for aneuploidy score
+model_buf_celllines <- model_buf_procan %>%
+  bind_rows(model_buf_depmap) %>%
+  arrange(CellLine.Name) %>%
+  pivot_wider(names_from = "Dataset", values_from = "Model.Buffering.Ratio", id_cols = "Model.ID")
+
+cellline_pearson_gene <- cor.test(x = model_buf_celllines$ProCan,
+                                  y = model_buf_celllines$DepMap,
+                                  method = "pearson")
+
+plot_agg_top <- model_buf_agg %>%
+  slice_max(Model.Buffering.MeanNormRank, n = 10) %>%
+  vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
+                     default_fill_color = head(bidirectional_color_pal, n = 1),
+                     text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
+
+plot_agg_bot <- model_buf_agg %>%
+  slice_min(Model.Buffering.MeanNormRank, n = 10) %>%
+  vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
+                     default_fill_color = tail(bidirectional_color_pal, n = 1),
+                     text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
+
+plot_bracket <- plot_corr_bracket(cellline_pearson_gene)
+plot_stack1 <- cowplot::plot_grid(waterfall_procan, waterfall_depmap + ylab(NULL),
+                                  nrow = 1, ncol = 2, align = "hv", axis = "tblr", labels = c("ProCan", "DepMap"),
+                                  label_y = 0.98, label_x = 0.1, rel_widths = c(1, 1))
+panel_celllines <- cowplot::plot_grid(plot_bracket, plot_stack1,
+                                      nrow = 2, ncol = 1,
+                                      rel_heights = c(0.1, 1))
+
+panel_agg <- cowplot::plot_grid(plot_agg_top + ylab(NULL) + cowplot::theme_minimal_vgrid()
+                                 + theme(axis.text.x = element_blank()),
+                                plot_agg_bot + cowplot::theme_minimal_vgrid(),
+                                nrow = 2, ncol = 1, align = "v", axis = "lr")
+
+panel_celllines_agg <- cowplot::plot_grid(panel_celllines, panel_agg,
+                                          nrow = 1, ncol = 2, labels = c("A", "B"),
+                                          rel_widths = c(1.75, 1))
+
+# === Cancer Types Panel ===
 df_cancer_heatmap <- bind_rows(df_depmap, df_procan, df_cptac) %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 1))) %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
   group_by(Dataset, OncotreeCode) %>%
   summarize(Mean.BR = mean(Model.Buffering.Ratio, na.rm = TRUE),
             Mean.AS = mean(CellLine.AneuploidyScore, na.rm = TRUE),
             .groups = "drop") %>%
   mutate(OncotreeCode = fct_reorder(OncotreeCode, Mean.BR)) %>%
   drop_na(OncotreeCode) %>%
-  complete(Dataset, OncotreeCode)
+  complete(Dataset, OncotreeCode) %>%
+  mutate_all(~if_else(is.nan(.), NA, .))
 
 cancer_heatmap_br <- df_cancer_heatmap %>%
   ggplot() +
@@ -125,20 +173,65 @@ cancer_heatmap_as <- df_cancer_heatmap %>%
   ggplot() +
   aes(y = Dataset, x = OncotreeCode, fill = Mean.AS) +
   geom_tile() +
-  scale_fill_viridis_c(na.value = color_palettes$missing, option = color_palettes$AneuploidyScore) +
+  scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore) +
   theme_void() +
   labs(x = NULL, y = NULL) +
   theme(axis.text.y = element_blank(),
         axis.text.x = element_blank(),
         legend.position = "none")
 
-cowplot::plot_grid(cancer_heatmap_br, cancer_heatmap_as,
-                   nrow = 2, ncol = 1, align = "v", axis = "tb",
-                   rel_heights = c(1, 0.2))
+panel_types <- cowplot::plot_grid(cancer_heatmap_br, cancer_heatmap_as,
+                                  nrow = 2, ncol = 1, align = "v", axis = "tb",
+                                  rel_heights = c(1, 0.2))
+
+# == Lymphoma Leukemia Panel ===
+leukemia_codes <- c("MNM", "LNM")
+
+df_leuk <- df_depmap %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
+  filter(OncotreeCode %in% leukemia_codes)
+
+min_aneuploidy <- min(df_depmap$CellLine.AneuploidyScore)
+max_aneuploidy <- max(df_depmap$CellLine.AneuploidyScore)
+max_aneuploidy_leuk <- round(quantile(df_leuk$CellLine.AneuploidyScore, probs = 0.9))
+
+leuk_plot <- df_depmap %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
+  mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
+  signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test)
+
+leuk_plot_low <- df_depmap %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
+  mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
+  signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test)
+
+leuk_poster <- leuk_plot +
+  theme_light(base_size = 20) +
+  theme(legend.position = "top") +
+  labs(color = NULL, y = "Mean Buffering Ratio") +
+  scale_colour_viridis_c(option = "D", direction = 1,
+                         limits = c(min_aneuploidy, max_aneuploidy),
+                         breaks = c(min_aneuploidy, max_aneuploidy))
+
+leuk_poster_low <- leuk_plot_low +
+  theme_light(base_size = 20) +
+  theme(legend.position = "top") +
+  labs(color = NULL, y = NULL) +
+  scale_colour_viridis_c(option = "D", direction = 1,
+                         limits = c(min_aneuploidy, max_aneuploidy),
+                         breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),
+                         labels = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy))
+
+panel_leuk <- cowplot::plot_grid(leuk_poster,
+                                 leuk_poster_low,
+                                 nrow = 1, ncol = 2)
 
 # === WGD & Aneuploidy Score ===
-print_corr(cor_as_test$estimate)
-
 df_procan_wgd <- df_procan %>%
   distinct(Model.ID, Model.Buffering.Ratio, CellLine.WGD, CellLine.AneuploidyScore) %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
@@ -206,9 +299,9 @@ br_density_panel <- df_procan_wgd %>%
   coord_flip()
 
 wgd_panel_pre <- cowplot::insert_xaxis_grob(wgd_base_panel, as_density_panel, position = "top")
-wgd_panel <- cowplot::insert_yaxis_grob(wgd_panel_pre, br_density_panel, position = "right")
+panel_wgd <- cowplot::insert_yaxis_grob(wgd_panel_pre, br_density_panel, position = "right")
 
-cowplot::ggdraw(wgd_panel)
+cowplot::ggdraw(panel_wgd)
 
 # === Proliferation ===
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
@@ -222,7 +315,7 @@ df_prolif <- df_agg %>%
 cor_prolif <- cor.test(df_prolif$Model.Buffering.MeanNormRank,
                        df_prolif$CellLine.GrowthRatio, method = "spearman")
 
-prolif_base_panel <- df_prolif %>%
+panel_prolif_base <- df_prolif %>%
   ggplot() +
   aes(x = Model.Buffering.MeanNormRank, y = CellLine.GrowthRatio, color = WGD) +
   geom_point(size = 2) +
@@ -239,5 +332,46 @@ prolif_base_panel <- df_prolif %>%
         legend.text = element_text(size = base_size))
 
 # TODO: Mention adjusted BR
-
 # TODO: Why are more samples in df_agg than in df_procan and df_depmap?
+
+# === Proteotoxic Stress Panel ===
+library(msigdbr)
+hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
+  rename(Gene.Symbol = "gene_symbol")
+
+gene_sets <- hallmark_gene_set %>%
+  group_by(gs_name) %>%
+  group_map(~list(.x$Gene.Symbol)) %>%
+  purrr::list_flatten()
+names(gene_sets) <- unique(hallmark_gene_set$gs_name)
+
+gsea_cptac <- expr_buf_cptac %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
+  t() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Model.ID") %>%
+  inner_join(y = model_buf_cptac, by = "Model.ID")
+
+panel_proteotox <- gsea_cptac %>%
+  ggplot() +
+  aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE) +
+  geom_point(size = 2) +
+  stat_smooth(method = lm, color = "dimgrey") +
+  annotate("text", x = 0.2, y = 0.3, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_as_test$estimate), ", p = ", formatC(cor_as_test$p.value, format = "e", digits = 2))) +
+  labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response") +
+  theme(legend.position = "none")
+
+# === Combine Panels into Figure ===
+figure2_sub <- cowplot::plot_grid(panel_wgd, panel_leuk,
+                                  panel_prolif_base, panel_proteotox,
+                                  nrow = 2, ncol = 2, labels = c("D", "E", "F", "G"))
+
+figure2 <- cowplot::plot_grid(panel_celllines_agg, panel_types, figure2_sub,
+                              labels = c("", "C", ""),
+                              nrow = 3, ncol = 1,
+                              rel_heights = c(0.5, 0.2, 1))
+
+cairo_pdf(here(plots_dir, "figure02.pdf"), width = 15, height = 20)
+figure2
+dev.off()
