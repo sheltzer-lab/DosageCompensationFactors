@@ -31,6 +31,7 @@ shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL, color_
 
 shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                     labels = c("A", "B"),
                                      rel_widths = c(0.79, 1))
 
 # === SHAP Correlation Heatmap Panel (per Dataset) ===
@@ -41,3 +42,11 @@ shap_heatmap_datasets <- shap_results %>%
   distinct(DosageCompensation.Factor, Model.Dataset, Model.Condition, Model.Variant, SHAP.Factor.Corr, Label) %>%
   nested_shap_heatmap(as.formula(Model.Dataset + Model.Condition ~ .))
 
+# === Combine Panels into Figure ===
+figure4 <- cowplot::plot_grid(shap_raw_plots, shap_heatmap_datasets,
+                              labels = c("", "C"),
+                              nrow = 2, ncol = 1, rel_heights = c(1, 0.666))
+
+cairo_pdf(here(plots_dir, "figure04.pdf"), width = 11, height = 13)
+figure4
+dev.off()

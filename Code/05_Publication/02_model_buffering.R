@@ -151,7 +151,7 @@ df_cancer_heatmap <- bind_rows(df_depmap, df_procan, df_cptac) %>%
 
 cancer_heatmap_br <- df_cancer_heatmap %>%
   ggplot() +
-  aes(y = Dataset, x = OncotreeCode, fill = Mean.BR) +
+  aes(x = Dataset, y = OncotreeCode, fill = Mean.BR) +
   geom_tile(aes(color = Mean.AS), alpha = 0) +
   geom_tile() +
   scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore) +
@@ -164,14 +164,17 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0.5),
         axis.text.y = element_text(hjust = 1, vjust = 0.5),
         legend.key.size = unit(16, "points"),
-        legend.box = "horizontal")
+        legend.box = "vertical",
+        legend.position = "bottom",
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5, position = "top"))
 
 cancer_heatmap_as <- df_cancer_heatmap %>%
   group_by(OncotreeCode) %>%
   summarize(Mean.AS = mean(Mean.AS, na.rm = TRUE),
             Dataset = "Mean Aneuploidy") %>%
   ggplot() +
-  aes(y = Dataset, x = OncotreeCode, fill = Mean.AS) +
+  aes(x = Dataset, y = OncotreeCode, fill = Mean.AS) +
   geom_tile() +
   scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore) +
   theme_void() +
@@ -181,8 +184,8 @@ cancer_heatmap_as <- df_cancer_heatmap %>%
         legend.position = "none")
 
 panel_types <- cowplot::plot_grid(cancer_heatmap_br, cancer_heatmap_as,
-                                  nrow = 2, ncol = 1, align = "v", axis = "tb",
-                                  rel_heights = c(1, 0.2))
+                                  nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                  rel_widths = c(1, 0.2))
 
 # == Lymphoma Leukemia Panel ===
 leukemia_codes <- c("MNM", "LNM")
@@ -200,7 +203,7 @@ leuk_plot <- df_depmap %>%
   mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
-                       test = wilcox.test)
+                       test = wilcox.test, signif_label = \(p) paste0("p = ", formatC(p, format = "e", digits = 2)))
 
 leuk_plot_low <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
@@ -208,20 +211,26 @@ leuk_plot_low <- df_depmap %>%
   mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
-                       test = wilcox.test)
+                       test = wilcox.test, signif_label = \(p) paste0("p = ", formatC(p, format = "e", digits = 2)))
 
 leuk_poster <- leuk_plot +
   theme_light(base_size = 20) +
-  theme(legend.position = "top") +
-  labs(color = NULL, y = "Mean Buffering Ratio") +
+  theme(legend.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.title.position = "top") +
+  guides(color = guide_colourbar(ticks.linewidth = 1)) +
+  labs(color = "\nAneuploidy Score", y = "Mean Buffering Ratio") +
   scale_colour_viridis_c(option = "D", direction = 1,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy))
 
 leuk_poster_low <- leuk_plot_low +
   theme_light(base_size = 20) +
-  theme(legend.position = "top") +
-  labs(color = NULL, y = NULL) +
+  theme(legend.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.title.position = "top") +
+  guides(color = guide_colourbar(ticks.linewidth = 1)) +
+  labs(color = "Aneuploidy Score\n(Limited Range)", y = NULL) +
   scale_colour_viridis_c(option = "D", direction = 1,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),
@@ -363,14 +372,16 @@ panel_proteotox <- gsea_cptac %>%
   theme(legend.position = "none")
 
 # === Combine Panels into Figure ===
-figure2_sub <- cowplot::plot_grid(panel_wgd, panel_leuk,
-                                  panel_prolif_base, panel_proteotox,
-                                  nrow = 2, ncol = 2, labels = c("D", "E", "F", "G"))
+figure2_sub1 <- cowplot::plot_grid(panel_wgd, panel_leuk,
+                                   panel_prolif_base, panel_proteotox,
+                                   nrow = 2, ncol = 2, labels = c("D", "E", "F", "G"))
 
-figure2 <- cowplot::plot_grid(panel_celllines_agg, panel_types, figure2_sub,
-                              labels = c("", "C", ""),
-                              nrow = 3, ncol = 1,
-                              rel_heights = c(0.5, 0.2, 1))
+figure2_sub2 <- cowplot::plot_grid(panel_types, figure2_sub1,
+                                   nrow = 1, ncol = 2, rel_widths = c(0.2, 1),
+                                   labels = c("C", ""))
+
+figure2 <- cowplot::plot_grid(panel_celllines_agg, figure2_sub2,
+                              nrow = 2, ncol = 1, rel_heights = c(0.5, 1))
 
 cairo_pdf(here(plots_dir, "figure02.pdf"), width = 15, height = 20)
 figure2
