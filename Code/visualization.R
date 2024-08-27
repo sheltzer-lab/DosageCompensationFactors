@@ -119,9 +119,9 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
                          value_threshold = log2fc_threshold, signif_threshold = p_threshold,
                          title = NULL, subtitle = NULL) {
   df %>%
-    mutate(`-Log10(p)` = -log10({ { signif_col } })) %>%
+    mutate(`-log10(p)` = -log10({ { signif_col } })) %>%
     ggplot() +
-    aes(x = { { value_col } }, y = `-Log10(p)`,
+    aes(x = { { value_col } }, y = `-log10(p)`,
         label = { { label_col } }, color = { { color_col } }) +
     geom_point(alpha = 0.5, size = 1) +
     color_mapping +

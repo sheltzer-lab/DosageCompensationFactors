@@ -34,26 +34,33 @@ dir.create(temp_dir, recursive = TRUE)
 # === Load Datasets ===
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
-cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
 model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
 
 # === Identify proteins with significant expression differences between cell lines with high and low buffering ===
 
-diff_exp <- cellline_buf_procan %>%
-  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
-  filter(CellLine.Buffering.Group != "Center") %>%
-  inner_join(y = expr_buf_procan, by = "CellLine.Name", relationship = "one-to-many", na_matches = "never") %>%
-  select(CellLine.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
-  differential_expression(Gene.Symbol, CellLine.Buffering.Group, Protein.Expression.Normalized,
-                          groups = c("Low", "High"))
+diff_exp <- model_buf_procan %>%
+  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  filter(Model.Buffering.Group != "Center") %>%
+  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
 
 ## Volcano Plots
+color_mapping <- scale_color_manual(values = c(Down = bidirectional_color_pal[1],
+                                               Up = bidirectional_color_pal[5]),
+                                    na.value = color_palettes$Missing)
+
 volcano_plot <- diff_exp %>%
-  mutate(Label = if_else(abs(Log2FC) > log2fc_threshold & TTest.p.adj < p_threshold,
-                         Gene.Symbol, NA)) %>%
-  plot_volcano(Log2FC, TTest.p.adj, Label, NULL) %>%
+  mutate(Regulation = case_when(Log2FC > log2fc_threshold & TTest.p.adj < p_threshold ~ "Up",
+                                Log2FC < -log2fc_threshold & TTest.p.adj < p_threshold ~ "Down",
+                                TRUE ~ NA),
+         Label = if_else(!is.na(Regulation), Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, TTest.p.adj, Label, Regulation, color_mapping) %>%
   save_plot("volcano_plot.png")
 
 # === Enrichment Analysis ===
@@ -145,16 +152,16 @@ library(msigdbr)
 hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
   rename(Gene.Symbol = "gene_symbol")
 
-expr_buf_procan_hallmark <- cellline_buf_procan %>%
-  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "CellLine.Buffering.Group") %>%
-  filter(CellLine.Buffering.Group != "Center") %>%
+expr_buf_procan_hallmark <- model_buf_procan %>%
+  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  filter(Model.Buffering.Group != "Center") %>%
   inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
-  select(Gene.Symbol, Model.ID, CellLine.Buffering.Group, Protein.Expression.Normalized) %>%
+  select(Gene.Symbol, Model.ID, Model.Buffering.Group, Protein.Expression.Normalized) %>%
   right_join(y = hallmark_gene_set, by = "Gene.Symbol", relationship = "many-to-many")
 
 hallmark_tests <- expr_buf_procan_hallmark %>%
   group_by(gs_name) %>%
-  group_modify(~tidy(t.test(Protein.Expression.Normalized ~ CellLine.Buffering.Group, data = .x))) %>%
+  group_modify(~tidy(t.test(Protein.Expression.Normalized ~ Model.Buffering.Group, data = .x))) %>%
   ungroup() %>%
   mutate(p.value.adj = p.adjust(p.value, method = "bonferroni"))
 
@@ -182,7 +189,7 @@ gsea_procan %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
-  inner_join(y = cellline_buf_procan, by = "Model.ID") %>%
+  inner_join(y = model_buf_procan, by = "Model.ID") %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE)
 
 unfolded_gene_set <- hallmark_gene_set %>%
@@ -199,7 +206,7 @@ mean_unfolded_procan <- expr_buf_procan %>%
             Background.Protein.Mean = mean(Protein.Expression.Normalized[!Unfolded.Gene.Set], na.rm = TRUE),
             Unfolded.Protein.Response = Unfolded.Protein.Mean - Background.Protein.Mean) %>%
   ungroup() %>%
-  inner_join(y = cellline_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
+  inner_join(y = model_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
 
 mean_unfolded_procan %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%

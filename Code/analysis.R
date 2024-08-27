@@ -552,7 +552,7 @@ ssGSEA <- function(df, gene_sets, expr_col, sample_col,
   gsea_result <- gsva(gseaPar)
 }
 
-create_string_network <- function(df, gene_col, logfc_col, string_db) {
+create_string_network <- function(df, gene_col, logfc_col, string_db, min_score = 700) {
   require(STRINGdb)
   require(dplyr)
   require(magrittr)
@@ -575,11 +575,12 @@ create_string_network <- function(df, gene_col, logfc_col, string_db) {
     return(list(df_mapped = df_mapped,
                 payload = payload,
                 network = string_db$get_subnetwork(STRING_id),
-                link = string_db$get_link(STRING_id, payload_id = payload, required_score = 700)))
+                link = string_db$get_link(STRING_id, payload_id = payload, required_score = min_score)))
 }
 
 overrepresentation_analysis <- function(genes, ordered = TRUE, p_thresh = p_threshold, ref_background = NULL,
                                         databases = c("GO:BP", "GO:MF", "KEGG", "REAC", "WP", "CORUM")) {
+  require(gprofiler2)
   gost(query = genes,
        organism = "hsapiens", ordered_query = ordered,
        multi_query = FALSE, significant = TRUE, exclude_iea = FALSE,
@@ -592,6 +593,7 @@ overrepresentation_analysis <- function(genes, ordered = TRUE, p_thresh = p_thre
 ora_webgestalt <- function(genes, ref_background, p_thresh = p_threshold,
                            databases = c("pathway_KEGG", "pathway_Reactome", "pathway_Wikipathway_cancer",
                                          "geneontology_Biological_Process", "geneontology_Molecular_Function")) {
+  require(WebGestaltR)
   WebGestaltR(enrichMethod = "ORA", organism = "hsapiens", enrichDatabase = databases,
               interestGene = as.vector(genes), interestGeneType = "genesymbol",
               referenceGene = as.vector(ref_background), referenceGeneType = "genesymbol",
@@ -599,7 +601,7 @@ ora_webgestalt <- function(genes, ref_background, p_thresh = p_threshold,
 }
 
 plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", "GO:MF", "GO:BP"),
-                       terms_per_source = 5, p_thresh = p_threshold) {
+                       terms_per_source = 5, p_thresh = p_threshold, string_trunc = 50) {
   ora$result %>%
     filter(p_value < p_thresh) %>%
     filter(source %in% selected_sources) %>%
@@ -607,11 +609,11 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
     slice_min(p_value, n = terms_per_source) %>%
     ungroup() %>%
     mutate(`-log10(p)` = -log10(p_value),
-           term_name = fct_reorder(str_trunc(term_name, 50), p_value, .desc = TRUE)) %>%
+           term_name = fct_reorder(str_trunc(term_name, string_trunc), p_value, .desc = TRUE)) %>%
     vertical_bar_chart(term_name, `-log10(p)`, color_col = source, color_discrete = TRUE,
                        value_range = c(1, max(.$`-log10(p)`)),
                        line_intercept = 0, bar_label_shift = 0.18, break_steps = 2,
-                       category_lab = "Enriched Term", value_lab = "Significance (-log10(p))") +
+                       category_lab = "Enriched Term", value_lab = "-log10(p)") +
     facet_wrap(~source, scales = "free", ncol = 1) +
     theme(legend.position = "none")
 }

@@ -344,3 +344,15 @@ Data Source URL: ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/kno
 * DOI: 10.1016/j.crmeth.2022.100288
 * File: 1-s2.0-S2667237522001709-mmc3.xlsx 
   * Table S2. B.: Computed correlation between experimental proteomic replicates of ovarian and colon tumor samples and cancer cell lines using the standard pipeline and the aggregated normalized ranks, related to Figures 1 and S2 and STAR Methods. Computed protein-protein reproducibility ranks
+
+### Cancer Driver Genes
+
+* **Source:** OncoKB
+* **URL:** https://www.oncokb.org/cancer-genes
+* ***Location:*** `./Data/External/cancerGeneList.tsv`
+
+#### Citation
+
+* https://doi.org/10.1158/2159-8290.CD-23-0467
+* https://doi.org/10.1200/PO.17.00011
+
