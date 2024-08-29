@@ -21,7 +21,6 @@ plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
 
 dir.create(plots_dir, recursive = TRUE)
-dir.create(output_data_dir, recursive = TRUE)
 
 tumor_types <- get_tumor_types()
 

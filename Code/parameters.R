@@ -49,7 +49,13 @@ color_palettes <- list(
   AneuploidyScore = "rocket",
   Missing = default_color,
   WGD = c("WGD" = categorical_color_pal[4],
-          "Non-WGD" = categorical_color_pal[8])
+          "Non-WGD" = categorical_color_pal[8]),
+  CopyNumbers = c("1" = bidirectional_color_pal[1],
+                  "3" = bidirectional_color_pal[4],
+                  "4" = bidirectional_color_pal[5]),
+  Datasets = c("DepMap" = categorical_color_pal[8],
+               "ProCan" = categorical_color_pal[4],
+               "CPTAC" = categorical_color_pal[10])
 )
 
 # === Dosage Compensation Factors ===

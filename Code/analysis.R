@@ -259,6 +259,37 @@ differential_expression <- function(df, id_col, group_col, expr_col,
     mutate(TTest.p.adj = p.adjust(TTest.p, method = p.adj.method))
 }
 
+analyze_low_br_variance <- function (df_expr_buf) {
+  # Per gene summarize Mean, SD, and share of samples buffered across dataset
+  mean_var_buf <- df_expr_buf %>%
+    select(Dataset, Gene.Symbol, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.Class) %>%
+    drop_na(Buffering.GeneLevel.Ratio) %>%
+    group_by(Dataset, Gene.Symbol) %>%
+    summarize(Gene.BR.Mean = mean(Buffering.GeneLevel.Ratio),
+              Gene.BR.SD = sd(Buffering.GeneLevel.Ratio),
+              Gene.Buffered.Count = sum(Buffering.GeneLevel.Class == "Buffered"),
+              Samples = sum(!is.na(Buffering.GeneLevel.Class)),
+              Gene.Buffered.Share = Gene.Buffered.Count / Samples,
+              .groups = "drop")
+
+  # Filter genes by number of samples, share of buffered samples, and mean buffering ratio and rank by SD of BR
+  buf_rank <- mean_var_buf %>%
+    filter(Samples > 20) %>%
+    filter(Gene.Buffered.Share > 1 / 3 & Gene.BR.Mean > br_cutoffs$Buffered & Gene.BR.SD < 2) %>%
+    add_count(Gene.Symbol) %>%
+    filter(n >= length(unique(df_expr_buf$Dataset))) %>%
+    mean_norm_rank(Gene.BR.SD, Dataset, Gene.Symbol) %>%
+    rename(Gene.BR.SD.MeanNormRank = MeanNormRank)
+
+  # Rank genes by lowest BR variance
+  mean_var_buf %>%
+    left_join(y = buf_rank, by = "Gene.Symbol") %>%
+    mutate(Top50 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 50)$Gene.Symbol,
+           Top10 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 10)$Gene.Symbol) %>%
+    arrange(Gene.BR.SD.MeanNormRank) %>%
+    return()
+}
+
 # === (Parallelized) Bootstrapping Methods ===
 
 sample_func <- function(i, df, sample_prop, func, ...) {

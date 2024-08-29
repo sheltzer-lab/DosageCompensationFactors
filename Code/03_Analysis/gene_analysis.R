@@ -81,12 +81,29 @@ expr_buf_p0211 %>%
                         show_rownames = TRUE, show_colnames = TRUE) %>%
   save_plot("genes_chr13_log2fc_p0211.png", width = 500)
 
-## Buffering Ratio per cell line
+## Buffering Ratio Gain vs. Loss
+### P0211
 expr_buf_p0211 %>%
   filter(CellLine.Name != "RPE1") %>%
   filter(Gene.Chromosome == 13) %>%
   signif_violin_plot(CellLine.Name, Buffering.ChrArmLevel.Ratio) %>%
-  save_plot("p0211_buffering_cellline.png", width = 100, height = 150)
+  save_plot("buffering_cnv_p0211.png", width = 100, height = 150)
+
+### CPTAC
+expr_buf_cptac %>%
+  filter(Gene.CopyNumber.Baseline == 2) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  signif_violin_plot(CNV, Buffering.GeneLevel.Ratio) %>%
+  save_plot("buffering_cnv_cptac.png", width = 100, height = 150)
+
+### DepMap
+expr_buf_depmap %>%
+  filter(Gene.CopyNumber.Baseline == 2) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  signif_violin_plot(CNV, Buffering.GeneLevel.Ratio) %>%
+  save_plot("buffering_cnv_depmap.png", width = 100, height = 150)
 
 # === Export Tables ===
 
@@ -150,37 +167,6 @@ expr_buf_p0211 %>%
              colNames = TRUE)
 
 # === Low Variance Buffered Genes ===
-analyze_low_br_variance <- function (df_expr_buf) {
-  # Per gene summarize Mean, SD, and share of samples buffered across dataset
-  mean_var_buf <- df_expr_buf %>%
-    select(Dataset, Gene.Symbol, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.Class) %>%
-    drop_na(Buffering.GeneLevel.Ratio) %>%
-    group_by(Dataset, Gene.Symbol) %>%
-    summarize(Gene.BR.Mean = mean(Buffering.GeneLevel.Ratio),
-              Gene.BR.SD = sd(Buffering.GeneLevel.Ratio),
-              Gene.Buffered.Count = sum(Buffering.GeneLevel.Class == "Buffered"),
-              Samples = sum(!is.na(Buffering.GeneLevel.Class)),
-              Gene.Buffered.Share = Gene.Buffered.Count / Samples,
-              .groups = "drop")
-
-  # Filter genes by number of samples, share of buffered samples, and mean buffering ratio and rank by SD of BR
-  buf_rank <- mean_var_buf %>%
-    filter(Samples > 20) %>%
-    filter(Gene.Buffered.Share > 1 / 3 & Gene.BR.Mean > br_cutoffs$Buffered & Gene.BR.SD < 2) %>%
-    add_count(Gene.Symbol) %>%
-    filter(n >= length(unique(df_expr_buf$Dataset))) %>%
-    mean_norm_rank(Gene.BR.SD, Dataset, Gene.Symbol) %>%
-    rename(Gene.BR.SD.MeanNormRank = MeanNormRank)
-
-  # Rank genes by lowest BR variance
-  mean_var_buf %>%
-    left_join(y = buf_rank, by = "Gene.Symbol") %>%
-    mutate(Top50 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 50)$Gene.Symbol,
-           Top10 = Gene.Symbol %in% slice_min(buf_rank, Gene.BR.SD.MeanNormRank, n = 10)$Gene.Symbol) %>%
-    arrange(Gene.BR.SD.MeanNormRank) %>%
-    return()
-}
-
 low_var_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   analyze_low_br_variance()
 
@@ -245,7 +231,16 @@ low_var_buf_loss %>%
 ### Potential target for cancer therapy drugs (Eerl, CB-5083)
 ### VCP inhibitors synergize with proteasome inhibitors (Bortezomib)
 
-# Random Allelic Expression
+## Overrepresentation Analysis of Top50
+ora_buf <- low_var_buf %>%
+  filter(Top50) %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis()
+
+ora_buf %>%
+  plot_terms(databases)
+
+# === Random Allelic Expression ===
 rae_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   add_factors(df_factors = dc_factors) %>%
   select(Model.ID, Protein.Uniprot.Accession, Gene.Symbol, Dataset,

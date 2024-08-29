@@ -18,6 +18,7 @@ output_data_dir <- output_data_base_dir
 
 dir.create(plots_dir, recursive = TRUE)
 
+# TODO: Move to preprocessing
 cancer_genes <- vroom::vroom(here(external_data_dir, "cancerGeneList.tsv")) %>%
   rename(Occurrences = 9,
          Gene.Symbol = 1) %>%
