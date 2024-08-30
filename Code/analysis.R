@@ -7,6 +7,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 
+
 # Add dosage compensation factors to a dataframe
 add_factors <- function(df, df_factors, factor_cols = dc_factor_cols) {
   df %>%
@@ -260,6 +261,8 @@ differential_expression <- function(df, id_col, group_col, expr_col,
 }
 
 analyze_low_br_variance <- function (df_expr_buf) {
+  source(here("Code", "buffering_ratio.R"))
+
   # Per gene summarize Mean, SD, and share of samples buffered across dataset
   mean_var_buf <- df_expr_buf %>%
     select(Dataset, Gene.Symbol, Buffering.GeneLevel.Ratio, Buffering.GeneLevel.Class) %>%
@@ -633,6 +636,9 @@ ora_webgestalt <- function(genes, ref_background, p_thresh = p_threshold,
 
 plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", "GO:MF", "GO:BP"),
                        terms_per_source = 5, p_thresh = p_threshold, string_trunc = 50) {
+  require(forcats)
+  require(stringr)
+
   ora$result %>%
     filter(p_value < p_thresh) %>%
     filter(source %in% selected_sources) %>%

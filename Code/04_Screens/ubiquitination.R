@@ -70,9 +70,7 @@ ubi_class_plot <- ubi_buf_cptac %>%
               tip_length = 0, extend_line = -0.05, color = "black") +
   facet_wrap(~Gene.CopyNumber.Event) +
   theme(legend.position = "") +
-  scale_color_manual(values = c(Buffered = bidirectional_color_pal[1],
-                                Scaling = bidirectional_color_pal[5],
-                                `Anti-Scaling` = "black"))
+  scale_color_manual(values = color_palettes$BufferingClasses)
 
 save_plot(ubi_class_plot, "ubiquitination_buffering_class.png", width = 150, height = 120)
 

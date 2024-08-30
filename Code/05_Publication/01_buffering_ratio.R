@@ -8,6 +8,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
+source(here("Code", "analysis.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
@@ -21,7 +22,7 @@ expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac
 expr_buf_p0211 <- read_parquet(here(output_data_dir, "expression_buffering_p0211.parquet"))
 
 # === DC Class Illustration Panel ===
-dc_illustration <- expr_buf_depmap %>%
+dc_class_line <- expr_buf_depmap %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
   filter(Gene.CopyNumber.Baseline == 2) %>%
   filter(Gene.CopyNumber %in% c(1, 3, 4)) %>%
@@ -41,13 +42,14 @@ dc_illustration <- expr_buf_depmap %>%
                      breaks = seq(-0.5, 2.5, 0.5),
                      labels = paste0(seq(-0.5, 2.5, 0.5) * 100, "%")) +
   scale_color_manual(values = color_palettes$CopyNumbers) +
-  labs(x = "Buffering Class", y = "Mean Protein Expression", color = "Gene Copy Number")
+  labs(x = "Buffering Class", y = "Mean Protein Expression", color = "Gene Copy Number") +
+  theme(legend.position = "top", legend.direction = "horizontal")
 
 # === DC Class Protein Expression Panel ===
 prot_exp_dc_class <- expr_buf_depmap %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
   drop_na(Buffering.GeneLevel.Class, Protein.Expression.Normalized) %>%
-  mutate(Gene.CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss"),
+  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss"),
          Buffering.GeneLevel.Class = factor(Buffering.GeneLevel.Class,
                                             levels = c("Scaling", "Buffered", "Anti-Scaling"))) %>%
   ggplot() +
@@ -57,14 +59,17 @@ prot_exp_dc_class <- expr_buf_depmap %>%
                                  c("Buffered", "Scaling"),
                                  c("Anti-Scaling", "Scaling")),
               test = wilcox.test,
-              map_signif_level = print_signif, y_position = c(1.8, 1.8, 2.1),
+              map_signif_level = print_signif, y_position = c(1.5, 1.5, 1.8),
               size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
-  facet_grid(~Gene.CNV)
+  facet_grid(~Gene.CopyNumber.Event) +
+  labs(x = "Buffering Class", y = "Protein Expression") +
+  scale_color_manual(values = color_palettes$BufferingClasses) +
+  theme(legend.position = "none")
 
 # === Tumor vs Cell Lines Panel ===
-dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac_pure) %>%
+dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0.2) %>%
-  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss")) %>%
   select(Dataset, Buffering.GeneLevel.Ratio, Gene.CopyNumber.Event) %>%
   drop_na() %>%
   ggplot() +
@@ -78,29 +83,35 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac_pu
               size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
   theme(legend.position = "") +
   scale_color_manual(values = color_palettes$Datasets) +
-  facet_wrap(~Gene.CopyNumber.Event, ncol = 2)
+  facet_wrap(~Gene.CopyNumber.Event, ncol = 2) +
+  labs(x = "Dataset", y = "Buffering Ratio")
 
 # === Buffering Gain vs. Loss Panel ===
-expr_buf_p0211 %>%
+br_by_cnv_p0211 <- expr_buf_p0211 %>%
   filter(CellLine.Name != "RPE1") %>%
   filter(Gene.Chromosome == 13) %>%
+  mutate(CellLine.Name = factor(CellLine.Name, levels = c("Rtr13", "RM13"))) %>%
+  arrange(CellLine.Name) %>%
   ggplot() +
   aes(x = CellLine.Name, y = Buffering.ChrArmLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8) +
   geom_signif(comparisons = list(c("RM13", "Rtr13")),
-              map_signif_level = print_signif, y_position = 0.8, size = 1,
-              tip_length = 0, extend_line = -0.05, color = "black")
+              map_signif_level = print_signif, y_position = 1, size = 1,
+              tip_length = 0, extend_line = -0.05, color = "black") +
+  labs(x = "Cell Line", y = "Buffering Ratio")
 
-expr_buf_cptac %>%
+br_by_cnv <- bind_rows(expr_buf_cptac, expr_buf_depmap) %>%
   filter(Gene.CopyNumber.Baseline == 2) %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
-  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
   ggplot() +
-  aes(x = CNV, y = Buffering.GeneLevel.Ratio) +
+  aes(x = Gene.CopyNumber.Event, y = Buffering.GeneLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8) +
   geom_signif(comparisons = list(c("Gain", "Loss")),
-              map_signif_level = print_signif, y_position = 2, size = 1,
-              tip_length = 0, extend_line = -0.05, color = "black")
+              map_signif_level = print_signif, y_position = 1.9, size = 1,
+              tip_length = 0, extend_line = -0.05, color = "black") +
+  labs(x = "Gene Copy Number", y = "Buffering Ratio") +
+  facet_grid(~Dataset)
 
 # === Low Variance Buffering Panel ===
 low_var_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
@@ -117,12 +128,37 @@ scatter_signif_buffered <- low_var_buf %>%
   scale_color_manual(values = c(default_color, highlight_color)) +
   scale_alpha_manual(values = c(0.5, 1)) +
   labs(x = "Standard Deviation of Buffering Ratio", y = "Mean Buffering Ratio",
-       color = "Frequently Buffered", alpha = "Frequently Buffered")
+       color = "Frequently Buffered", alpha = "Frequently Buffered") +
+  theme(legend.position = "top", legend.direction = "horizontal")
 
 ora_buf <- low_var_buf %>%
   filter(Top50) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis()
 
-ora_buf %>%
-  plot_terms(selected_sources = c("CORUM", "GO:MF", "KEGG", "WP"))
+ora_buf_terms <- ora_buf %>%
+  plot_terms(selected_sources = c("GO:MF", "KEGG", "WP"))
+
+# === Combine Panels into Figure ===
+dc_illus <- cowplot::draw_image(here(illustrations_dir, "dc_illustration.svg"))
+buf_classes <- cowplot::draw_image(here(illustrations_dir, "buffering_classes.svg"))
+
+illustrations <- cowplot::plot_grid(cowplot::ggdraw() + dc_illus,
+                                    cowplot::ggdraw() + buf_classes,
+                                    labels = c("A", "B"))
+
+figure1_sub1 <- cowplot::plot_grid(dc_class_line, prot_exp_dc_class,
+                                   labels = c("C", "D"), rel_widths = c(1, 0.8))
+
+figure1_sub2 <- cowplot::plot_grid(dc_dataset_dist, br_by_cnv_p0211, br_by_cnv, ncol = 3,
+                                   rel_widths = c(1, 0.45, 0.75), labels = c("E", "F", "G"))
+
+figure1_sub3 <- cowplot::plot_grid(scatter_signif_buffered, ora_buf_terms,
+                                   labels = c("H", "I"))
+
+figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
+                               nrow = 3, ncol = 1)
+
+cairo_pdf(here(plots_dir, "figure01.pdf"), width = 12, height = 13)
+figure1
+dev.off()

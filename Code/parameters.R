@@ -31,6 +31,7 @@ tables_base_dir <- here("Output", "Tables")
 reports_base_dir <- here("Output", "Reports")
 temp_base_dir <- here("Output", "Temp")
 downloads_base_dir <- here("Downloads")
+illustrations_dir <- here("Illustrations")
 
 # === Theme Defaults ===
 base_size <- 14
@@ -55,7 +56,10 @@ color_palettes <- list(
                   "4" = bidirectional_color_pal[5]),
   Datasets = c("DepMap" = categorical_color_pal[8],
                "ProCan" = categorical_color_pal[4],
-               "CPTAC" = categorical_color_pal[10])
+               "CPTAC" = categorical_color_pal[10]),
+  BufferingClasses = c("Buffered" = bidirectional_color_pal[1],
+                       "Scaling" = bidirectional_color_pal[5],
+                       "Anti-Scaling" = "dimgrey")
 )
 
 # === Dosage Compensation Factors ===
