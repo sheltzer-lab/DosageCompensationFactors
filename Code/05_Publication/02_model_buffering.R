@@ -66,7 +66,8 @@ df_cptac <- model_buf_cptac %>%
   inner_join(y = df_model_cptac, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   rename(OncotreeCode = Model.CancerType) %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(Model.Ploidy = if_else(is.na(WGS_ploidy), WES_ploidy, WGS_ploidy))
 
 df_agg <- model_buf_agg %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
@@ -120,12 +121,13 @@ plot_agg_bot <- model_buf_agg %>%
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
 
 plot_bracket <- plot_corr_bracket(cellline_pearson_gene)
-plot_stack1 <- cowplot::plot_grid(waterfall_procan, waterfall_depmap + ylab(NULL),
-                                  nrow = 1, ncol = 2, align = "hv", axis = "tblr", labels = c("ProCan", "DepMap"),
+plot_stack1 <- cowplot::plot_grid(waterfall_depmap + ylim(-2, 6),
+                                  waterfall_procan + ylim(-2, 6) + ylab(NULL),
+                                  nrow = 1, ncol = 2, align = "v", axis = "tb", labels = c("DepMap", "ProCan"),
                                   label_y = 0.98, label_x = 0.1, rel_widths = c(1, 1))
 panel_celllines <- cowplot::plot_grid(plot_bracket, plot_stack1,
                                       nrow = 2, ncol = 1,
-                                      rel_heights = c(0.1, 1))
+                                      rel_heights = c(0.1, 1), align = "h", axis = "lr")
 
 panel_agg <- cowplot::plot_grid(plot_agg_top + ylab(NULL) + cowplot::theme_minimal_vgrid()
                                  + theme(axis.text.x = element_blank()),
@@ -166,7 +168,7 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
         legend.box = "vertical",
         legend.position = "bottom",
         legend.title.position = "top",
-        legend.title = element_text(hjust = 0.5, position = "top"))
+        legend.title = element_text(hjust = 0.5))
 
 cancer_heatmap_as <- df_cancer_heatmap %>%
   group_by(OncotreeCode) %>%
@@ -213,24 +215,22 @@ leuk_plot_low <- df_depmap %>%
                        test = wilcox.test, signif_label = \(p) paste0("p = ", formatC(p, format = "e", digits = 2)))
 
 leuk_poster <- leuk_plot +
-  theme_light(base_size = 20) +
   theme(legend.position = "top",
         legend.title = element_text(hjust = 0.5),
         legend.title.position = "top") +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
-  labs(color = "\nAneuploidy Score", y = "Mean Buffering Ratio") +
-  scale_colour_viridis_c(option = "D", direction = 1,
+  labs(color = "\nAneuploidy Score", y = "Model Buffering Ratio") +
+  scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy))
 
 leuk_poster_low <- leuk_plot_low +
-  theme_light(base_size = 20) +
   theme(legend.position = "top",
         legend.title = element_text(hjust = 0.5),
         legend.title.position = "top") +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
   labs(color = "Aneuploidy Score\n(Limited Range)", y = NULL) +
-  scale_colour_viridis_c(option = "D", direction = 1,
+  scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),
                          labels = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy))
@@ -328,7 +328,7 @@ panel_prolif_base <- df_prolif %>%
   aes(x = Model.Buffering.MeanNormRank, y = CellLine.GrowthRatio, color = WGD) +
   geom_point(size = 2) +
   stat_smooth(method = lm, color = "dimgrey") +
-  annotate("text", x = 0, y = 15, hjust = 0, size = 5,
+  annotate("text", x = 0, y = 14, hjust = 0, size = 5,
            label = paste0(print_corr(cor_prolif$estimate), ", ", print_signif(cor_prolif$p.value))) +
   # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
   scale_color_manual(values = color_palettes$WGD) +
@@ -353,22 +353,34 @@ gene_sets <- hallmark_gene_set %>%
   purrr::list_flatten()
 names(gene_sets) <- unique(hallmark_gene_set$gs_name)
 
-gsea_cptac <- expr_buf_cptac %>%
+gsea_cptac_all <- expr_buf_cptac %>%
   ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
-  inner_join(y = model_buf_cptac, by = "Model.ID")
+  inner_join(y = df_cptac %>% select(everything() & !starts_with("HALLMARK")), by = "Model.ID")
+
+quantile(gsea_cptac_all$Observations, probs = seq(0,1,0.1))
+
+gsea_cptac <- gsea_cptac_all %>%
+  filter(Observations > 500)
+
+cor_proteotox_test <- cor.test(gsea_cptac$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
+                               gsea_cptac$Model.Buffering.Ratio, method = "spearman")
 
 panel_proteotox <- gsea_cptac %>%
   ggplot() +
-  aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE) +
+  aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE, color = Observations) +
   geom_point(size = 2) +
   stat_smooth(method = lm, color = "dimgrey") +
-  annotate("text", x = 0.2, y = 0.3, hjust = 0, size = 5,
-           label = paste0(print_corr(cor_as_test$estimate), ", p = ", formatC(cor_as_test$p.value, format = "e", digits = 2))) +
-  labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response") +
-  theme(legend.position = "none")
+  annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_proteotox_test$estimate), ", p = ", formatC(cor_proteotox_test$p.value, format = "e", digits = 2))) +
+  labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "#Genes") +
+  scale_color_viridis_c() +
+  theme(legend.position = c("left", "top"),
+        legend.position.inside = c(0.01, 0.01),
+        legend.justification = c("left", "bottom"),
+        legend.text = element_text(size = base_size))
 
 # === Combine Panels into Figure ===
 figure2_sub1 <- cowplot::plot_grid(panel_wgd, panel_leuk,
@@ -382,6 +394,6 @@ figure2_sub2 <- cowplot::plot_grid(panel_types, figure2_sub1,
 figure2 <- cowplot::plot_grid(panel_celllines_agg, figure2_sub2,
                               nrow = 2, ncol = 1, rel_heights = c(0.5, 1))
 
-cairo_pdf(here(plots_dir, "figure02.pdf"), width = 15, height = 20)
+cairo_pdf(here(plots_dir, "figure02.pdf"), width = 13, height = 17)
 figure2
 dev.off()
