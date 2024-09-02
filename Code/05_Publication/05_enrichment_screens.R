@@ -19,42 +19,28 @@ output_data_dir <- output_data_base_dir
 dir.create(plots_dir, recursive = TRUE)
 
 # TODO: Move to preprocessing
-cancer_genes <- vroom::vroom(here(external_data_dir, "cancerGeneList.tsv")) %>%
-  rename(Occurrences = 9,
-         Gene.Symbol = 1) %>%
-  filter(Occurrences >= 2) %>%
-  mutate(CancerDriverMode = case_when(`Is Oncogene` == "Yes" & `Is Tumor Suppressor Gene` == "Yes" ~ "OG/TSG",
-                                      `Is Oncogene` == "Yes" & `Is Tumor Suppressor Gene` == "No" ~ "OG",
-                                      `Is Oncogene` == "No" & `Is Tumor Suppressor Gene` == "Yes" ~ "TSG",
-                                      TRUE ~ "Unknown")) %>%
-  select(Gene.Symbol, CancerDriverMode) %>%
-  updateGeneSymbols()
+cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
 diff_exp <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet")) %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%
-  mutate(Regulation = case_when(Log2FC > log2fc_threshold & TTest.p.adj < p_threshold ~ "Up",
-                                Log2FC < -log2fc_threshold & TTest.p.adj < p_threshold ~ "Down",
-                                TRUE ~ NA),
-         Label = if_else(!is.na(Regulation) & !is.na(CancerDriverMode), Gene.Symbol, NA))
-
+  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA))
 
 # === Volcano Plot Panel ===
-color_mapping <- scale_color_manual(values = c(Down = bidirectional_color_pal[1],
-                                               Up = bidirectional_color_pal[5]),
+color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
                                     na.value = color_palettes$Missing)
 
 panel_volcano <- diff_exp %>%
-  plot_volcano(Log2FC, TTest.p.adj, Label, Regulation, color_mapping) +
+  plot_volcano(Log2FC, TTest.p.adj, Label, Significant, color_mapping) +
   theme(legend.position = "none")
 
 # === ORA Panel ===
 genes_up <- diff_exp %>%
-  filter(Regulation == "Up") %>%
+  filter(Significant == "Up") %>%
   mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = TRUE)) %>%
   arrange(Gene.Symbol)
 
 genes_down <- diff_exp %>%
-  filter(Regulation == "Down") %>%
+  filter(Significant == "Down") %>%
   mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = FALSE)) %>%
   arrange(Gene.Symbol)
 

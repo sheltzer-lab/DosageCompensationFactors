@@ -115,7 +115,8 @@ plot_volcano_buffered <- function(df, ratio_col, signif_col, label_col, class_co
 }
 
 plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
-                         color_mapping = NULL,
+                         color_mapping = scale_color_manual(values = color_palettes$DiffExp,
+                                                            na.value = color_palettes$Missing),
                          value_threshold = log2fc_threshold, signif_threshold = p_threshold,
                          title = NULL, subtitle = NULL) {
   df %>%
@@ -600,6 +601,44 @@ prep_signif <- function(df, x, facet_col = NULL) {
   return(list(df = df_prep, labels = labels))
 }
 
+signif_boxplot <- function(df, x, y, facet_col = NULL,
+                           test = wilcox.test, test.args = NULL,
+                           signif_label = print_signif, title = NULL) {
+  prep <- df %>%
+    prep_signif({ { x } }, { { facet_col } })
+
+  df_n <- prep$df %>%
+    group_by({ { x } }, { { facet_col } }) %>%
+    summarize(n = first(n),
+              Q1 = quantile({ { y } }, probs = 0.25)[[1]],
+              Q3 = quantile({ { y } }, probs = 0.75)[[1]],
+              IQR = IQR({ { y } }),
+              y_min = Q1 - IQR * 1.7,
+              y_max = Q3 + IQR * 1.7,
+              .groups = "drop") %>%
+    mutate(y_min = min(y_min),
+           y_max = max(y_max))
+
+  plot <- prep$df %>%
+    ggplot() +
+    aes(x = { { x } }, y = { { y } }) +
+    geom_boxplot(outliers = FALSE) +
+    geom_signif(
+      comparisons = list(levels(prep$df$x)),
+      map_signif_level = signif_label,
+      tip_length = 0, extend_line = -0.05, y_position = max(df_n$y_max),
+      test = test, test.args = test.args
+    ) +
+    geom_text(data = df_n, aes(y = y_min, label = paste0("n = ", n))) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  { if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket) } +
+    xlab(as_name(enquo(x))) +
+    # ToDo: Use name of test as subtitle
+    ggtitle(title, subtitle = NULL)
+
+  return(plot)
+}
+
 signif_violin_plot <- function(df, x, y, facet_col = NULL,
                                test = wilcox.test, test.args = NULL,
                                signif_label = print_signif, title = NULL) {
@@ -665,7 +704,7 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
 }
 
 inverse_distance_weighting <- function(distances, values, p = 1) {
-  if (any(distances == 0)) {
+  if (any(distances == 0, na.rm = TRUE)) {
     return(values[distances == 0][1])
   }
   else {

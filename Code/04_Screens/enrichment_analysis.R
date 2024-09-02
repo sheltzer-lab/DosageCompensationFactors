@@ -36,12 +36,16 @@ dir.create(temp_dir, recursive = TRUE)
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 
+expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
 model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
 
-# === Identify proteins with significant expression differences between cell lines with high and low buffering ===
+cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
-diff_exp <- model_buf_procan %>%
+# === Identify proteins with significant expression differences between cell lines with high and low buffering ===
+diff_exp_procan <- model_buf_procan %>%
   split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
   filter(Model.Buffering.Group != "Center") %>%
   inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
@@ -50,50 +54,49 @@ diff_exp <- model_buf_procan %>%
                           groups = c("Low", "High")) %>%
   write_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
 
+diff_exp_depmap <- model_buf_depmap %>%
+  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  filter(Model.Buffering.Group != "Center") %>%
+  inner_join(y = expr_buf_depmap, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
+
 ## Volcano Plots
-color_mapping <- scale_color_manual(values = c(Down = bidirectional_color_pal[1],
-                                               Up = bidirectional_color_pal[5]),
+color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
                                     na.value = color_palettes$Missing)
 
-volcano_plot <- diff_exp %>%
-  mutate(Regulation = case_when(Log2FC > log2fc_threshold & TTest.p.adj < p_threshold ~ "Up",
-                                Log2FC < -log2fc_threshold & TTest.p.adj < p_threshold ~ "Down",
-                                TRUE ~ NA),
-         Label = if_else(!is.na(Regulation), Gene.Symbol, NA)) %>%
-  plot_volcano(Log2FC, TTest.p.adj, Label, Regulation, color_mapping) %>%
-  save_plot("volcano_plot.png")
+volcano_plot_procan <- diff_exp_procan %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, TTest.p.adj, Label, Significant, color_mapping) %>%
+  save_plot("volcano_plot_procan.png")
+
+volcano_plot_depmap <- diff_exp_depmap %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, TTest.p.adj, Label, Significant, color_mapping) %>%
+  save_plot("volcano_plot_depmap.png")
 
 # === Enrichment Analysis ===
-ref_gene <- unique(diff_exp$Gene.Symbol)
-
-genes_up <- diff_exp %>%
-  filter(Log2FC > log2fc_threshold & TTest.p.adj < p_threshold) %>%
+genes_up_procan <- diff_exp_procan %>%
+  filter(Significant == "Up") %>%
   mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = TRUE)) %>%
   arrange(Gene.Symbol)
 
-ora_up <- genes_up %>%
-  pull(Gene.Symbol) %>%
-  overrepresentation_analysis()
-
-ora_up_wg <- genes_up %>%
-  pull(Gene.Symbol) %>%
-  ora_webgestalt(ref_background = ref_gene)
-
-genes_down <- diff_exp %>%
-  filter(Log2FC < -log2fc_threshold & TTest.p.adj < p_threshold) %>%
+genes_down_procan <- diff_exp_procan %>%
+  filter(Significant == "Down") %>%
   mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = FALSE)) %>%
   arrange(Gene.Symbol)
 
-ora_down <- genes_down %>%
+ora_up <- genes_up_procan %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis()
 
-ora_down_wg <- genes_down %>%
+ora_down <- genes_down_procan %>%
   pull(Gene.Symbol) %>%
-  ora_webgestalt(ref_background = ref_gene)
-
-#gostplot(ora_up, capped = TRUE, interactive = TRUE)
-#gostplot(ora_down, capped = TRUE, interactive = TRUE)
+  overrepresentation_analysis()
 
 # TODO: Use WebGestaltR::affinityPropagation() for reducing redundant terms
 # ora_down_reduced <- WebGestaltR::affinityPropagation(ora_down$result$term_name, -log10(ora_down$result$p_value))
@@ -106,21 +109,55 @@ ora_down_wg <- genes_down %>%
    plot_terms() %>%
    save_plot("overrepresentation_terms_down.png", height = 300)
 
+# === Common Enriched Genes ===
+genes_up_common <- diff_exp_depmap %>%
+  filter(Significant == "Up") %>%
+  pull(Gene.Symbol) %>%
+  intersect(genes_up_procan$Gene.Symbol)
+
+genes_down_common <- diff_exp_depmap %>%
+  filter(Significant == "Down") %>%
+  pull(Gene.Symbol) %>%
+  intersect(genes_down_procan$Gene.Symbol)
+
+ora_up_common <- genes_up_common %>%
+  overrepresentation_analysis() %>%
+  plot_terms() %>%
+  save_plot("overrepresentation_terms_up_common.png", height = 300)
+
+ora_down_common <- genes_down_common %>%
+  overrepresentation_analysis() %>%
+  plot_terms() %>%
+  save_plot("overrepresentation_terms_down_common.png", height = 300)
+
 # === Network Analysis ===
 string_db <- STRINGdb$new(version = "12.0", species = 9606, score_threshold = 700,
                           network_type = "full", input_directory = temp_dir)
 
-string_up <- genes_up %>%
+string_up <- genes_up_procan %>%
   create_string_network(Gene.Symbol, Log2FC, string_db)
 
 string_up_png <- string_db$get_png(string_up$df_mapped$STRING_id, payload_id = string_up$payload,
                                    required_score = 700, file = here(plots_dir, "string_up.png"))
 
-string_down <- genes_down %>%
+string_down <- genes_down_procan %>%
   create_string_network(Gene.Symbol, Log2FC, string_db)
 
 string_down_png <- string_db$get_png(string_down$df_mapped$STRING_id, payload_id = string_down$payload,
                                      required_score = 700, file = here(plots_dir, "string_down.png"))
+
+## Common genes
+string_up_common <- data.frame(Gene.Symbol = genes_up_common, Log2FC = 0) %>%
+  create_string_network(Gene.Symbol, Log2FC, string_db)
+
+string_up_common_png <- string_db$get_png(string_up_common$df_mapped$STRING_id, payload_id = string_up_common$payload,
+                                   required_score = 700, file = here(plots_dir, "string_up_common.png"))
+
+string_down_common <- data.frame(Gene.Symbol = genes_down_common, Log2FC = 0) %>%
+  create_string_network(Gene.Symbol, Log2FC, string_db)
+
+string_down_common_png <- string_db$get_png(string_down_common$df_mapped$STRING_id, payload_id = string_down_common$payload,
+                                   required_score = 700, file = here(plots_dir, "string_down_common.png"))
 
 # ===  Karyotype & Expression by ChrArm ===
 # TODO: Compare Karyotype & Expression per Chromosome between buffered and scaling cell lines
@@ -129,24 +166,61 @@ gene_metadata <- expr_buf_procan %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome))
 
 # TODO: Nested facet with chromosome arm
-diff_exp %>%
+diff_exp_procan %>%
   inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
   bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
-                        x_lab = "Chromosome & Gene Position")
+                        x_lab = "Chromosome & Gene Position") %>%
+  save_plot("DiffExp_by_chromosome.png", height = 150, width = 200)
 
 # TODO: Check copy number / chromosome CNA between two cohorts
 
-egfr_dc <- expr_buf_procan %>%
-  filter(Gene.Symbol == "EGFR") %>%
-  mutate(CNDiff = ChromosomeArm.CopyNumber - ChromosomeArm.CopyNumber.Baseline) %>%
-  filter(abs(CNDiff) > 0.5) %>%
-  mutate(CNV = if_else(CNDiff > 0, "Gain", "Loss")) %>%
+# === Cancer Driver Genes Buffering ===
+og_dc <- expr_buf_procan %>%
+  inner_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  filter(CancerDriverMode == "OG") %>%
+  filter(Gene.Symbol %in% genes_up_procan$Gene.Symbol) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  drop_na(Buffering.GeneLevel.Ratio) %>%
+  signif_boxplot(CNV, Buffering.GeneLevel.Ratio) %>%
+  save_plot("oncogene_upregulated_buffering.png")
+
+tsg_dc <- expr_buf_procan %>%
+  inner_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  filter(CancerDriverMode == "TSG") %>%
+  filter(Gene.Symbol %in% genes_down_procan$Gene.Symbol) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  drop_na(Buffering.GeneLevel.Ratio) %>%
+  signif_boxplot(CNV, Buffering.GeneLevel.Ratio) %>%
+  save_plot("tumorsupressor_downregulated_buffering.png")
+
+## Common upregulated genes
+og_common_dc <- expr_buf_procan %>%
+  inner_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  filter(CancerDriverMode == "OG") %>%
+  filter(Gene.Symbol %in% genes_up_common) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  drop_na(Buffering.GeneLevel.Ratio) %>%
+  signif_boxplot(CNV, Buffering.GeneLevel.Ratio, facet_col = Gene.Symbol) %>%
+  save_plot("oncogene_common_upregulated_buffering.png", width = 400)
+
+og_common_dc <- expr_buf_procan %>%
+  inner_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  filter(CancerDriverMode == "OG") %>%
+  filter(Gene.Symbol %in% genes_up_common) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  drop_na(Buffering.GeneLevel.Ratio) %>%
+  signif_beeswarm_plot(CNV, Buffering.GeneLevel.Ratio, facet_col = Gene.Symbol, color_col = CellLine.AneuploidyScore) %>%
+  save_plot("oncogene_common_upregulated_buffering.png", width = 400)
+
+## EGFR & RRAS (chr arm)
+og_common_dc_chr <- expr_buf_procan %>%
+  filter(Gene.Symbol %in% c("EGFR", "RRAS")) %>%
+  mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss")) %>%
   drop_na(Buffering.ChrArmLevel.Ratio) %>%
-  signif_beeswarm_plot(CNV, Buffering.ChrArmLevel.Ratio, color_col = CellLine.AneuploidyScore) %>%
-  save_plot("EGFR_DC_ChrArm.png", height = 150, width = 150)
+  signif_beeswarm_plot(CNV, Buffering.ChrArmLevel.Ratio, facet_col = Gene.Symbol, color_col = CellLine.AneuploidyScore) %>%
+  save_plot("oncogene_buffering_selected_chr.png", width = 200)
 
-
-# Gene Sets
+# === Gene Sets ===
 ## Proteotoxic Stress / Unfolded Proteins / Autophagosome
 library(msigdbr)
 hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%

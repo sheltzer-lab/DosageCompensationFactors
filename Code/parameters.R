@@ -59,7 +59,9 @@ color_palettes <- list(
                "CPTAC" = categorical_color_pal[10]),
   BufferingClasses = c("Buffered" = bidirectional_color_pal[1],
                        "Scaling" = bidirectional_color_pal[5],
-                       "Anti-Scaling" = "dimgrey")
+                       "Anti-Scaling" = "dimgrey"),
+  DiffExp = c("Up" = bidirectional_color_pal[5],
+              "Down" = bidirectional_color_pal[1])
 )
 
 # === Dosage Compensation Factors ===

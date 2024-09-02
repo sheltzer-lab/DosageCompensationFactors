@@ -233,7 +233,8 @@ z_score <- function(values) {
 }
 
 differential_expression <- function(df, id_col, group_col, expr_col,
-                                    paired = FALSE, p.adj.method = "BH", groups = NULL) {
+                                    paired = FALSE, p.adj.method = "BH", groups = NULL,
+                                    log2fc_thresh = log2fc_threshold, p_thresh = p_threshold) {
 
   if (length(groups) != 2) {
     warning("'groups' parameter does not contain exactly two values.
@@ -257,7 +258,10 @@ differential_expression <- function(df, id_col, group_col, expr_col,
                        paired = paired)$p.value,
       .groups = 'drop'
     ) %>%
-    mutate(TTest.p.adj = p.adjust(TTest.p, method = p.adj.method))
+    mutate(TTest.p.adj = p.adjust(TTest.p, method = p.adj.method),
+           Significant = case_when(Log2FC > log2fc_thresh & TTest.p.adj < p_thresh ~ "Up",
+                                 Log2FC < -log2fc_thresh & TTest.p.adj < p_thresh ~ "Down",
+                                 TRUE ~ NA))
 }
 
 analyze_low_br_variance <- function (df_expr_buf) {
@@ -638,6 +642,8 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
                        terms_per_source = 5, p_thresh = p_threshold, string_trunc = 50) {
   require(forcats)
   require(stringr)
+
+  if (is.null(ora)) return(NULL)
 
   ora$result %>%
     filter(p_value < p_thresh) %>%
