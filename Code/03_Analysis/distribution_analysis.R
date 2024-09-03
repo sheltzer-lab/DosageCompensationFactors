@@ -29,6 +29,9 @@ dir.create(plots_dir, recursive = TRUE)
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac.parquet"))
+expr_buf_p0211 <- read_parquet(here(output_data_dir, "expression_buffering_p0211.parquet")) %>%
+  mutate(Gene.Chromosome = as.character(Gene.Chromosome))
 
 # === Summarize Distribution of Obersavtions ===
 
@@ -86,71 +89,90 @@ cn_dist <- expr_buf_procan %>%
 save_plot(cn_dist, "copy_number_distribution_procan.png", height = 100)
 
 # === Plot categorical distribution of buffering classes by analysis type ===
-# ToDo: Requires separate filtering for chromosome and gene cn gain/loss and then summarizing results
-stacked_buf_class <- expr_buf_procan %>%
-  filter_arm_gain() %>%
-  filter_cn_gain() %>%
-  select(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
-         Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
-  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
-                 Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
-               names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
+## Gene CN only (across datasets)
+df_share_gene <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss")) %>%
+  select(Buffering.GeneLevel.Class, Dataset, CNV) %>%
   drop_na() %>%
-  count(AnalysisVariant, BufferingClass) %>%
+  count(Buffering.GeneLevel.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_cn <- df_share_gene %>%
   ggplot() +
-  aes(fill = BufferingClass, y = n, x = AnalysisVariant) +
-  geom_bar(position = "fill", stat = "identity") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-stacked_buf_class %>%
-  save_plot("buffering_class_distribution_procan.png")
-
-stacked_buf_class <- expr_buf_depmap %>%
-  select(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
-         Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
-  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
-                 Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
-               names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
-  drop_na() %>%
-  count(AnalysisVariant, BufferingClass) %>%
-  ggplot() +
-  aes(fill = BufferingClass, y = n, x = AnalysisVariant) +
-  geom_bar(position = "fill", stat = "identity") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-stacked_buf_class %>%
-  save_plot("buffering_class_distribution_depmap.png")
-
-## Chromosome Arm only
-df_chr_gain <- expr_buf_depmap %>%
-  filter_arm_gain() %>%
-  select(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
-  pivot_longer(c(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
-               names_to = "Analysis Variant", values_to = "Buffering Class") %>%
-  drop_na() %>%
-  count(`Analysis Variant`, `Buffering Class`) %>%
-  mutate(`Chr Arm` = "Chr Arm Gain",
-         `Analysis Variant` = if_else(`Analysis Variant` == "Buffering.ChrArmLevel.Average.Class",
-                                   "Averaged", "Unaveraged"))
-
-df_chr_loss <- expr_buf_depmap %>%
-  filter_arm_loss() %>%
-  select(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class) %>%
-  pivot_longer(c(Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
-               names_to = "Analysis Variant", values_to = "Buffering Class") %>%
-  drop_na() %>%
-  count(`Analysis Variant`, `Buffering Class`) %>%
-  mutate(`Chr Arm` = "Chr Arm Loss",
-         `Analysis Variant` = if_else(`Analysis Variant` == "Buffering.ChrArmLevel.Average.Class",
-                                   "Averaged", "Unaveraged"))
-
-stacked_buf_chr <- bind_rows(df_chr_gain, df_chr_loss) %>%
-  group_by(`Analysis Variant`, `Chr Arm`) %>%
-  mutate(`Percentage of Genes` = (n / sum(n)) * 100) %>%
-  ggplot() +
-  aes(fill = `Buffering Class`, y = `Percentage of Genes`, x = `Analysis Variant`) +
+  aes(fill = Buffering.GeneLevel.Class, y = Share, x = Dataset) +
   geom_bar(stat = "identity") +
-  facet_wrap(~`Chr Arm`)
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
+
+stacked_buf_cn %>%
+  save_plot("buffering_class_gene.png", width = 200)
+
+## Chr Arm only (across datasets)
+df_share_chr <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Chr Arm Gain", "Chr Arm Loss")) %>%
+  select(Buffering.ChrArmLevel.Class, Dataset, CNV) %>%
+  drop_na() %>%
+  count(Buffering.ChrArmLevel.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_chr <- df_share_chr %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
 
 stacked_buf_chr %>%
-  save_plot("buffering_class_chromosome_depmap.png")
+  save_plot("buffering_class_chromosome.png", width = 200)
+
+## Chr Arm Average only (across datasets)
+df_share_chr_avg <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211) %>%
+  distinct(Gene.Symbol, Dataset, Buffering.ChrArmLevel.Average.Class, ChromosomeArm.CNA) %>%
+  filter(ChromosomeArm.CNA != 0) %>%
+  mutate(CNV = if_else(ChromosomeArm.CNA > 0, "Chr Arm Gain", "Chr Arm Loss")) %>%
+  select(Buffering.ChrArmLevel.Average.Class, Dataset, CNV) %>%
+  drop_na() %>%
+  count(Buffering.ChrArmLevel.Average.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_chr_avg <- df_share_chr_avg %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Average.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
+
+stacked_buf_chr_avg %>%
+  save_plot("buffering_class_chromosome_average.png", width = 200)
+
+## Compare all methods
+df_share_all <- bind_rows(df_share_gene, df_share_chr, df_share_chr_avg) %>%
+  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class, Buffering.ChrArmLevel.Average.Class),
+               names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
+  drop_na()
+
+dataset_order <- c("DepMap", "ProCan", "CPTAC", "P0211")
+
+stacked_buf_class <- df_share_all %>%
+  mutate(CNV = if_else(grepl("Gain", CNV), "Gain", "Loss"),
+         Dataset = factor(Dataset, levels = dataset_order),
+         AnalysisVariant = case_when(AnalysisVariant == "Buffering.GeneLevel.Class" ~ "Gene CN",
+                                     AnalysisVariant == "Buffering.ChrArmLevel.Class" ~ "ChrArm",
+                                     AnalysisVariant == "Buffering.ChrArmLevel.Average.Class" ~ "ChrArm (avg.)")) %>%
+  ggplot() +
+  aes(fill = BufferingClass, y = Share, x = AnalysisVariant) +
+  geom_bar(position = "fill", stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = color_palettes$BufferingClasses) +
+  ggh4x::facet_nested(~Dataset + CNV)
+
+stacked_buf_class %>%
+  save_plot("buffering_class_all.png", width = 400)
