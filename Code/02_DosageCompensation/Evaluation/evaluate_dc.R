@@ -310,7 +310,7 @@ buffered_expression_chr_gain <- expr_buf_depmap %>%
 
 signif_buffered_chr_gain <- buffered_expression_chr_gain %>%
   filter(Log2FC < 0) %>%
-  filter(TTest.p.adj < p_threshold) %>%
+  filter(Test.p.adj < p_threshold) %>%
   nrow() %>%
   (\(x) x/nrow(buffered_expression_chr_gain))
 
@@ -323,7 +323,7 @@ buffered_expression_chr_loss <- expr_buf_depmap %>%
 
 signif_buffered_chr_loss <- buffered_expression_chr_loss %>%
   filter(Log2FC > 0) %>%
-  filter(TTest.p.adj < p_threshold) %>%
+  filter(Test.p.adj < p_threshold) %>%
   nrow() %>%
   (\(x) x/nrow(buffered_expression_chr_loss))
 

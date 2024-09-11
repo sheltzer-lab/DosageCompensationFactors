@@ -9,6 +9,7 @@ library(forcats)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
 
@@ -23,17 +24,17 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
+cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 crispr_screens <- read_parquet(here(output_data_dir, "crispr_screens.parquet"))
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
-
+model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 
 # === Combine Datasets ===
-
 df_crispr_buf <- crispr_screens %>%
   inner_join(y = expr_buf_procan %>% select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name),
              by = c("Model.ID", "Protein.Uniprot.Accession", "Gene.Symbol")) %>%
-  select(Model.ID, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol,
-         Gene.ChromosomeArm, ChromosomeArm.CNA, Buffering.GeneLevel.Ratio, CRISPR.EffectScore, CRISPR.DependencyScore)
+  select(Model.ID, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol, Gene.CopyNumber, Gene.CopyNumber.Baseline,
+         Buffering.GeneLevel.Ratio, CRISPR.EffectScore, CRISPR.DependencyScore)
 
 ## Check distributions
 df_crispr_buf %>%
@@ -52,23 +53,23 @@ df_crispr_buf %>%
   geom_density(na.rm = TRUE)
 
 # === Analyze Gene-wise Essentiality-Buffering-Correlation ===
-
 df_gene_corr <- df_crispr_buf %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
   group_by(Gene.Symbol) %>%
   mutate(
-    # ToDo: Replace with rstatix cor_test
     CRISPR.EffectScore.Average = mean(CRISPR.EffectScore, na.rm = TRUE),
     CRISPR.EffectScore.Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$estimate[["rho"]],
     CRISPR.EffectScore.Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.EffectScore, method = "spearman")$p.value,
     CRISPR.DependencyScore.Average = mean(CRISPR.DependencyScore, na.rm = TRUE),
     CRISPR.DependencyScore.Corr = cor.test(Buffering.GeneLevel.Ratio, CRISPR.DependencyScore, method = "spearman")$estimate[["rho"]],
     CRISPR.DependencyScore.Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.DependencyScore, method = "spearman")$p.value,
-    ChromosomeArm.GainLossRatio = mean(ChromosomeArm.CNA, na.rm = TRUE)
+    Gene.CopyNumber.GainLossRatio = mean(Gene.CopyNumber - Gene.CopyNumber.Baseline, na.rm = TRUE)
   ) %>%
   ungroup()
 
 color_mapping_effect <- scale_color_viridis_c(option = "F", direction = 1, begin = 0.1, end = 0.8)
 color_mapping_dep <- scale_color_viridis_c(option = "G", direction = -1, begin = 0.1, end = 0.8)
+color_mapping_driver <- scale_color_viridis_d(option = "plasma", na.value = color_palettes$Missing, end = 0.9)
 
 df_gene_corr %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
@@ -91,6 +92,18 @@ df_gene_corr %>%
   plot_volcano(CRISPR.DependencyScore.Corr, CRISPR.DependencyScore.Corr.p, Label, CRISPR.DependencyScore.Average,
                color_mapping = color_mapping_dep, value_threshold = 0.2) %>%
   save_plot("dependency_buffering_correlation_volcano.png", width = 300, height = 250)
+
+df_gene_corr %>%
+  distinct(Gene.Symbol, .keep_all = TRUE) %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(abs(CRISPR.DependencyScore.Corr) > 0.2 &
+                           CRISPR.DependencyScore.Corr.p < p_threshold &
+                           !is.na(CancerDriverMode),
+                         Gene.Symbol, NA)) %>%
+  arrange(!is.na(CancerDriverMode)) %>%
+  plot_volcano(CRISPR.DependencyScore.Corr, CRISPR.DependencyScore.Corr.p, Label, CancerDriverMode,
+               color_mapping = color_mapping_driver, value_threshold = 0.2) %>%
+  save_plot("dependency_buffering_correlation_volcano_cancer-genes.png", width = 300, height = 250)
 
 bot_corr <- df_gene_corr %>%
   filter(CRISPR.DependencyScore.Corr.p < p_threshold) %>%
@@ -125,7 +138,7 @@ df_gene_corr %>%
   save_plot("dependency_buffering_top-correlation.png", height = 220, width = 180)
 
 ## Look at selected genes in more detail
-selected_genes <- c("KRAS", "EGFR")
+selected_genes <- c("KRAS", "EGFR", "TP53")
 
 for (gene in selected_genes) {
   df_gene_corr %>%
@@ -136,5 +149,55 @@ for (gene in selected_genes) {
 }
 
 # === Analyze Cell Line Sensitivity to Buffering ===
+## High Buffering vs. Low Buffering
+df_crispr_model_buf <- model_buf_agg %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = crispr_screens, by = "Model.ID") %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10)
+
+df_crispr_model_buf %>%
+  mutate(Label = if_else(!is.na(Significant), Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  save_plot("model_buffering_dependency_volcano.png", width = 300, height = 250)
+
+df_crispr_model_buf %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
+  arrange(!is.na(CancerDriverMode)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, CancerDriverMode,
+               value_threshold = 0.1, color_mapping = color_mapping_driver) %>%
+  save_plot("model_buffering_dependency_volcano_cancer-genes.png", width = 300, height = 250)
+
+### Apply over representation analysis
+ora_up <- df_crispr_model_buf %>%
+  filter(Significant == "Up") %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis()
+
+ora_up %>%
+  plot_terms() %>%
+  save_plot("ora_terms_up.png", height = 300)
+
+ora_down <- df_crispr_model_buf %>%
+  filter(Significant == "Down") %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis()
+
+ora_down %>%
+  plot_terms() %>%
+  save_plot("ora_terms_down.png", height = 300)
+
+### Check if model-wise and gene-wise results match
+df_crispr_model_buf %>%
+  filter(Significant == "Up") %>%
+  pull(Gene.Symbol) %>%
+  intersect(top_corr$Gene.Symbol)
+
+df_crispr_model_buf %>%
+  filter(Significant == "Down") %>%
+  pull(Gene.Symbol) %>%
+  intersect(bot_corr$Gene.Symbol)
+
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)
-# ToDo: Discretize Cell Lines into Low-/Mid-/High-Buffering groups and check gene essentiality difference between groups
+

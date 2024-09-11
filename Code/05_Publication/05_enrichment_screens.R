@@ -30,7 +30,7 @@ color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
                                     na.value = color_palettes$Missing)
 
 panel_volcano <- diff_exp %>%
-  plot_volcano(Log2FC, TTest.p.adj, Label, Significant, color_mapping) +
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
   theme(legend.position = "none")
 
 # === ORA Panel ===

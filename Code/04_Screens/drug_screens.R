@@ -383,7 +383,7 @@ moa_diff <- cellline_buf_agg %>%
                           groups = c("Low", "High"))
 
 moa_diff_signif <- moa_diff %>%
-  filter(TTest.p.adj < p_threshold)
+  filter(Test.p.adj < p_threshold)
 
 ## Drug Target
 target_diff <- cellline_buf_agg %>%
@@ -398,7 +398,7 @@ target_diff <- cellline_buf_agg %>%
                           groups = c("Low", "High"))
 
 target_diff_signif <- target_diff %>%
-  filter(TTest.p.adj < p_threshold)
+  filter(Test.p.adj < p_threshold)
 
 # ToDo: Create visualizations (Diff, MOA, Target)
 # ToDo: Cleanup Code

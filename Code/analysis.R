@@ -233,7 +233,7 @@ z_score <- function(values) {
 }
 
 differential_expression <- function(df, id_col, group_col, expr_col,
-                                    paired = FALSE, p.adj.method = "BH", groups = NULL,
+                                    test = t.test, paired = FALSE, centr = mean, p.adj.method = "BH", groups = NULL,
                                     log2fc_thresh = log2fc_threshold, p_thresh = p_threshold) {
 
   if (length(groups) != 2) {
@@ -251,17 +251,17 @@ differential_expression <- function(df, id_col, group_col, expr_col,
     summarise(
       GroupA = groups[1],
       GroupB = groups[2],
-      Mean_GroupA = mean({ { expr_col } }[{ { group_col } } == groups[1]]),
-      Mean_GroupB = mean({ { expr_col } }[{ { group_col } } == groups[2]]),
+      Mean_GroupA = centr({ { expr_col } }[{ { group_col } } == groups[1]]),
+      Mean_GroupB = centr({ { expr_col } }[{ { group_col } } == groups[2]]),
       Log2FC = Mean_GroupB - Mean_GroupA,
-      TTest.p = t.test(as.formula(paste(quo_name(enquo(expr_col)), "~", quo_name(enquo(group_col)))),
-                       paired = paired)$p.value,
+      Test.p = test(as.formula(paste(quo_name(enquo(expr_col)), "~", quo_name(enquo(group_col)))),
+                    paired = paired)$p.value,
       .groups = 'drop'
     ) %>%
-    mutate(TTest.p.adj = p.adjust(TTest.p, method = p.adj.method),
-           Significant = case_when(Log2FC > log2fc_thresh & TTest.p.adj < p_thresh ~ "Up",
-                                 Log2FC < -log2fc_thresh & TTest.p.adj < p_thresh ~ "Down",
-                                 TRUE ~ NA))
+    mutate(Test.p.adj = p.adjust(Test.p, method = p.adj.method),
+           Significant = case_when(Log2FC > log2fc_thresh & Test.p.adj < p_thresh ~ "Up",
+                                   Log2FC < -log2fc_thresh & Test.p.adj < p_thresh ~ "Down",
+                                   TRUE ~ NA))
 }
 
 analyze_low_br_variance <- function (df_expr_buf) {
@@ -649,7 +649,7 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
     filter(p_value < p_thresh) %>%
     filter(source %in% selected_sources) %>%
     group_by(source) %>%
-    slice_min(p_value, n = terms_per_source) %>%
+    slice_min(p_value, n = terms_per_source, with_ties = FALSE) %>%
     ungroup() %>%
     mutate(`-log10(p)` = -log10(p_value),
            term_name = fct_reorder(str_trunc(term_name, string_trunc), p_value, .desc = TRUE)) %>%

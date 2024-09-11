@@ -70,13 +70,13 @@ color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
 volcano_plot_procan <- diff_exp_procan %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%
   mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
-  plot_volcano(Log2FC, TTest.p.adj, Label, Significant, color_mapping) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) %>%
   save_plot("volcano_plot_procan.png")
 
 volcano_plot_depmap <- diff_exp_depmap %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%
   mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
-  plot_volcano(Log2FC, TTest.p.adj, Label, Significant, color_mapping) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) %>%
   save_plot("volcano_plot_depmap.png")
 
 # === Enrichment Analysis ===
