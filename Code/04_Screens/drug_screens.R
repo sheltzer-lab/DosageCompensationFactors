@@ -30,7 +30,7 @@ model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_
 model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
-  distinct(Model.ID, CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
+  distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
 # Calculate Correlation between Drug Sensitivity and Cell Line Buffering
 analyze_sensitivity <- function(df_model_buf, df_drug_screens, buffering_col, drug_effect_col) {
@@ -174,7 +174,7 @@ selected_meta <- drug_meta %>%
 
 # Plot correlation by mechanism of action
 moa_corr <- model_buf_agg %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
@@ -203,7 +203,7 @@ moa_corr %>%
 
 # Plot correlation by drug target
 target_corr <- model_buf_agg %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
@@ -297,9 +297,9 @@ drug_confounder_heatmap <- function(df, desc = FALSE) {
 }
 
 model_buf_agg %>%
-  inner_join(y = copy_number, by = "CellLine.Name",
+  inner_join(y = copy_number, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   inner_join(y = drug_dc_corr_agg_rank, by = c("Drug.ID", "Drug.Name")) %>%
   filter(Drug.Name %in% selected_drugs) %>%
@@ -307,18 +307,18 @@ model_buf_agg %>%
   save_plot("drug_confounder_heatmap_selected.png")
 
 model_buf_agg %>%
-  inner_join(y = copy_number, by = "CellLine.Name",
+  inner_join(y = copy_number, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   inner_join(y = top_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
   drug_confounder_heatmap(desc = TRUE) %>%
   save_plot("drug_confounder_heatmap_top.png")
 
 model_buf_agg %>%
-  inner_join(y = copy_number, by = "CellLine.Name",
+  inner_join(y = copy_number, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   inner_join(y = bot_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
   drug_confounder_heatmap() %>%
@@ -368,10 +368,23 @@ higher_diff_target <- higher_diff %>%
   summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
             Target.Count = first(n))
 
-# Difference between groups
+# === Difference in Sensitivity between High and Low Buffering Groups ===
+model_buf_sensitivity <- model_buf_agg %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group",
+                     quantile_low = "20%", quantile_high = "80%") %>%
+  inner_join(y = drug_screens, by = "Model.ID") %>%
+  differential_expression(Drug.ID, Model.Buffering.Group, Drug.MFI.Log2FC,
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.1) %>%
+  inner_join(y = drug_meta, by = "Drug.ID")
+
+model_buf_sensitivity %>%
+  mutate(Label = if_else(!is.na(Significant), Drug.Name, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  save_plot("buffering_drug_sensitivity_volcano.png", width = 300, height = 250)
+
 ## Mechanism of Action
 moa_diff <- model_buf_agg %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
@@ -379,27 +392,32 @@ moa_diff <- model_buf_agg %>%
   mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
   differential_expression(Drug.MOA, CellLine.Buffering.Group, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"))
+                          groups = c("Low", "High"), log2fc_thresh = 0.1)
 
-moa_diff_signif <- moa_diff %>%
-  filter(Test.p.adj < p_threshold)
+moa_diff %>%
+  mutate(Label = if_else(!is.na(Significant), str_trunc(Drug.MOA, 20), NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  save_plot("buffering_drug_mechanism_volcano.png", width = 300, height = 250)
+
 
 ## Drug Target
 target_diff <- model_buf_agg %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.Target, delim = ", ") %>%
-  mutate(Drug.MOA = str_squish(Drug.Target)) %>%
+  mutate(Drug.Target = str_squish(Drug.Target)) %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
   differential_expression(Drug.Target, CellLine.Buffering.Group, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"))
+                          groups = c("Low", "High"), log2fc_thresh = 0.1)
 
-target_diff_signif <- target_diff %>%
-  filter(Test.p.adj < p_threshold)
+target_diff %>%
+  mutate(Label = if_else(!is.na(Significant), str_trunc(Drug.Target, 20), NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  save_plot("buffering_drug_target_volcano.png", width = 300, height = 250)
 
-# ToDo: Create visualizations (Diff, MOA, Target)
+
 # ToDo: Cleanup Code
 # ToDo: Rename MOA to Mechanism
 
@@ -415,20 +433,3 @@ target_diff_signif <- target_diff %>%
 # dimnames(mechanism_dist) <- list(mechanisms$Drug.MOA, mechanisms$Drug.MOA)
 # mechanism_clust <- hclust(as.dist(mechanism_dist))
 # pheatmap::pheatmap(mechanism_dist)
-
-
-# === High vs Low Buffering Sensitivity ===
-model_buf_sensitivity <- model_buf_agg %>%
-  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group",
-                     quantile_low = "20%", quantile_high = "80%") %>%
-  inner_join(y = drug_screens, by = "Model.ID") %>%
-  differential_expression(Drug.ID, Model.Buffering.Group, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.2) %>%
-  inner_join(y = drug_meta, by = "Drug.ID")
-
-model_buf_sensitivity %>%
-  mutate(Label = if_else(!is.na(Significant), Drug.Name, NA)) %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
-  save_plot("buffering_drug_sensitivity_volcano.png", width = 300, height = 250)
-
-
