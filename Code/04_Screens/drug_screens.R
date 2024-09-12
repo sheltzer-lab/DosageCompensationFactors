@@ -24,36 +24,35 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
 
 # === Load Datasets ===
-drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet"))
+drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet")) %>% select(-CellLine.Name)
 drug_meta <- read_parquet(here(output_data_dir, "drug_metadata.parquet"))
-cellline_buf_filtered_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
-cellline_buf_filtered_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
-cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
+model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
-  distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
+  distinct(Model.ID, CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
 # Calculate Correlation between Drug Sensitivity and Cell Line Buffering
-analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_col, drug_value_col) {
-  test <- df_celllines %>%
-    inner_join(y = df_drug_screens, by = "CellLine.Name",
+analyze_sensitivity <- function(df_model_buf, df_drug_screens, buffering_col, drug_effect_col) {
+  df_model_buf %>%
+    inner_join(y = df_drug_screens, by = "Model.ID",
                relationship = "one-to-many", na_matches = "never") %>%
-    mutate(CellLine.Value.Median = median({ { cellline_value_col } }, na.rm = TRUE),
-           CellLine.Group = if_else({ { cellline_value_col } } > CellLine.Value.Median, "High", "Low")) %>%
-    group_by(Drug.ID, CellLine.Group) %>%
-    mutate(Group.Median = median({{drug_value_col}}, na.rm = TRUE)) %>%
+    mutate(Buffering.Median = median({ { buffering_col } }, na.rm = TRUE),
+           Buffering.Group = if_else({ { buffering_col } } > Buffering.Median, "High", "Low")) %>%
+    group_by(Drug.ID, Buffering.Group) %>%
+    mutate(Group.Median = median({{drug_effect_col}}, na.rm = TRUE)) %>%
     group_by(Drug.ID, Drug.Name) %>%
     # https://stackoverflow.com/questions/48041504/calculate-pairwise-correlation-in-r-using-dplyrmutate
     summarize(
       # Correlation analysis Buffering vs Sensitivity
-      # ToDo: Avoid calculating correlation twice
-      Corr.Sensitivity_Buffering = cor.test({ { cellline_value_col } }, { { drug_value_col } },
+      Corr.Sensitivity_Buffering = cor.test({ { buffering_col } }, { { drug_effect_col } },
                                             method = "spearman")$estimate[["rho"]],
-      Corr.p = cor.test({ { cellline_value_col } }, { { drug_value_col } },
+      Corr.p = cor.test({ { buffering_col } }, { { drug_effect_col } },
                         method = "spearman")$p.value,
       # Statistical test sensitivity low vs. high buffering
-      BufferingGroup.Sensitivity.Diff = Group.Median[CellLine.Group == "High"][1] - Group.Median[CellLine.Group == "Low"][1],
-      BufferingGroup.Diff.Test.p = wilcox.test({{drug_value_col}}[CellLine.Group == "High"],
-                                               {{drug_value_col}}[CellLine.Group == "Low"])$p.value,
+      BufferingGroup.Sensitivity.Diff = Group.Median[Buffering.Group == "High"][1] - Group.Median[Buffering.Group == "Low"][1],
+      BufferingGroup.Diff.Test.p = wilcox.test({{drug_effect_col}}[Buffering.Group == "High"],
+                                               {{drug_effect_col}}[Buffering.Group == "Low"])$p.value,
     ) %>%
     ungroup() %>%
     mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"),
@@ -61,13 +60,13 @@ analyze_sensitivity <- function(df_celllines, df_drug_screens, cellline_value_co
     arrange(Drug.Name)
 }
 
-drug_dc_corr_procan <- cellline_buf_filtered_procan %>%
+drug_dc_corr_procan <- model_buf_procan %>%
   analyze_sensitivity(drug_screens, Model.Buffering.Ratio.ZScore, Drug.MFI.Log2FC)
-drug_dc_corr_depmap <- cellline_buf_filtered_depmap %>%
+drug_dc_corr_depmap <- model_buf_depmap %>%
   analyze_sensitivity(drug_screens, Model.Buffering.Ratio.ZScore, Drug.MFI.Log2FC)
-drug_dc_corr_agg_rank <- cellline_buf_agg %>%
+drug_dc_corr_agg_rank <- model_buf_agg %>%
   analyze_sensitivity(drug_screens, Model.Buffering.MeanNormRank, Drug.MFI.Log2FC)
-drug_dc_corr_agg_mean <- cellline_buf_agg %>%
+drug_dc_corr_agg_mean <- model_buf_agg %>%
   analyze_sensitivity(drug_screens, Model.Buffering.StandardizedMean, Drug.MFI.Log2FC)
 
 
@@ -111,8 +110,8 @@ bot_sensitivity <- drug_dc_corr_agg_rank %>%
   filter(BufferingGroup.Sensitivity.Diff >= 0) %>%
   slice_max(Corr.Sensitivity_Buffering, n = 12)
 
-df_sensitivity_agg <- cellline_buf_agg %>%
-  inner_join(y = drug_screens, by = "CellLine.Name",
+df_sensitivity_agg <- model_buf_agg %>%
+  inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   mutate(Model.Buffering = if_else(Model.Buffering.MeanNormRank > 0.5, "High", "Low"))
 
@@ -174,7 +173,7 @@ selected_meta <- drug_meta %>%
   filter(Drug.Name %in% selected_drugs)
 
 # Plot correlation by mechanism of action
-moa_corr <- cellline_buf_agg %>%
+moa_corr <- model_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
@@ -203,7 +202,7 @@ moa_corr %>%
   save_plot("mechanism_buffering_sensitivity_top.png")
 
 # Plot correlation by drug target
-target_corr <- cellline_buf_agg %>%
+target_corr <- model_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
@@ -297,7 +296,7 @@ drug_confounder_heatmap <- function(df, desc = FALSE) {
   )
 }
 
-cellline_buf_agg %>%
+model_buf_agg %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
@@ -307,7 +306,7 @@ cellline_buf_agg %>%
   drug_confounder_heatmap(desc = TRUE) %>%
   save_plot("drug_confounder_heatmap_selected.png")
 
-cellline_buf_agg %>%
+model_buf_agg %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
@@ -316,7 +315,7 @@ cellline_buf_agg %>%
   drug_confounder_heatmap(desc = TRUE) %>%
   save_plot("drug_confounder_heatmap_top.png")
 
-cellline_buf_agg %>%
+model_buf_agg %>%
   inner_join(y = copy_number, by = "CellLine.Name",
              relationship = "one-to-one", na_matches = "never") %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
@@ -371,7 +370,7 @@ higher_diff_target <- higher_diff %>%
 
 # Difference between groups
 ## Mechanism of Action
-moa_diff <- cellline_buf_agg %>%
+moa_diff <- model_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
@@ -386,7 +385,7 @@ moa_diff_signif <- moa_diff %>%
   filter(Test.p.adj < p_threshold)
 
 ## Drug Target
-target_diff <- cellline_buf_agg %>%
+target_diff <- model_buf_agg %>%
   inner_join(y = drug_screens, by = "CellLine.Name",
              relationship = "one-to-many", na_matches = "never") %>%
   select(-"Drug.Name") %>%
@@ -416,3 +415,20 @@ target_diff_signif <- target_diff %>%
 # dimnames(mechanism_dist) <- list(mechanisms$Drug.MOA, mechanisms$Drug.MOA)
 # mechanism_clust <- hclust(as.dist(mechanism_dist))
 # pheatmap::pheatmap(mechanism_dist)
+
+
+# === High vs Low Buffering Sensitivity ===
+model_buf_sensitivity <- model_buf_agg %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group",
+                     quantile_low = "20%", quantile_high = "80%") %>%
+  inner_join(y = drug_screens, by = "Model.ID") %>%
+  differential_expression(Drug.ID, Model.Buffering.Group, Drug.MFI.Log2FC,
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.2) %>%
+  inner_join(y = drug_meta, by = "Drug.ID")
+
+model_buf_sensitivity %>%
+  mutate(Label = if_else(!is.na(Significant), Drug.Name, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
+  save_plot("buffering_drug_sensitivity_volcano.png", width = 300, height = 250)
+
+
