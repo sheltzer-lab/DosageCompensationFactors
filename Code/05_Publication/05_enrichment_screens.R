@@ -47,12 +47,12 @@ genes_down <- diff_exp %>%
 ora_up <- genes_up %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
-  plot_terms(selected_sources = c("REAC", "GO:MF", "CORUM"), string_trunc = 25)
+  plot_terms_compact(selected_sources = c("REAC", "GO:MF", "CORUM"), custom_color = color_palettes$DiffExp["Up"])
 
 ora_down <- genes_down %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
-  plot_terms(selected_sources = c("KEGG", "GO:MF", "CORUM"), string_trunc = 25)
+  plot_terms_compact(selected_sources = c("KEGG", "GO:MF", "CORUM"), custom_color = color_palettes$DiffExp["Down"])
 
 # === STRING Panel ===
 string_db <- STRINGdb$new(version = "12.0", species = 9606, score_threshold = 700,
@@ -67,7 +67,7 @@ string_down <- genes_down %>%
 # Use link in string_up & string_down to create plot manually
 
 # === Combine Panels into Figure ===
-figure5 <- cowplot::plot_grid(panel_volcano, ora_up, ora_down,
+figure5 <- cowplot::plot_grid(panel_volcano, ora_down, ora_up,
                               labels = c("A", "B", "C"),
                               rel_widths = c(1.2, 1, 1),
                               nrow = 1, ncol = 3)
