@@ -513,7 +513,7 @@ roc_auc_heatmap <- function(df, rank_tests) {
 }
 
 bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
-                                  threshold_low = NULL, threshold_high = NULL,
+                                  threshold_low = NULL, threshold_high = NULL, value_range = c(-2, 2),
                                   highlight_buckets = NULL, x_lab = NULL, title = element_blank()) {
   df %>%
     group_by({ { bucket_col } }) %>%
@@ -534,7 +534,7 @@ bucketed_scatter_plot <- function(df, value_col, x_value_col, bucket_col,
     facet_grid(~Bucket) +
     scale_x_continuous(limits = c(0, 1), breaks = c(0, 1)) +
     scale_colour_identity() +
-    scale_y_continuous(limits = c(-2, 2), breaks = seq(-2, 2, 1)) +
+    scale_y_continuous(limits = value_range, breaks = seq(c(value_range, 1))) +
     theme(axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
           panel.spacing = unit(0.25, "mm")) +

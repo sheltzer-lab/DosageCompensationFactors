@@ -46,8 +46,7 @@ cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
 # === Identify proteins with significant expression differences between cell lines with high and low buffering ===
 diff_exp_procan <- model_buf_procan %>%
-  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
-  filter(Model.Buffering.Group != "Center") %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
   inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
   select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
@@ -55,13 +54,20 @@ diff_exp_procan <- model_buf_procan %>%
   write_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
 
 diff_exp_depmap <- model_buf_depmap %>%
-  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
-  filter(Model.Buffering.Group != "Center") %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
   inner_join(y = expr_buf_depmap, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
   select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
                           groups = c("Low", "High")) %>%
   write_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
+
+diff_exp_cptac <- model_buf_cptac %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = expr_buf_cptac, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
 
 ## Volcano Plots
 color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
@@ -78,6 +84,14 @@ volcano_plot_depmap <- diff_exp_depmap %>%
   mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
   plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) %>%
   save_plot("volcano_plot_depmap.png")
+
+volcano_plot_cptac <- diff_exp_cptac %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) %>%
+  save_plot("volcano_plot_cptac.png")
+
+## Skip analysis of CPTAC - no clear enrichment
 
 # === Enrichment Analysis ===
 genes_up_procan <- diff_exp_procan %>%
@@ -159,20 +173,70 @@ string_down_common <- data.frame(Gene.Symbol = genes_down_common, Log2FC = 0) %>
 string_down_common_png <- string_db$get_png(string_down_common$df_mapped$STRING_id, payload_id = string_down_common$payload,
                                    required_score = 700, file = here(plots_dir, "string_down_common.png"))
 
-# ===  Karyotype & Expression by ChrArm ===
-# TODO: Compare Karyotype & Expression per Chromosome between buffered and scaling cell lines
+# ===  Karyotype & Expression by ChrArm between High & Low buffering groups ===
 gene_metadata <- expr_buf_procan %>%
   distinct(Gene.Symbol, Gene.Chromosome, Gene.ChromosomeArm, Gene.StartPosition, Gene.EndPosition) %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome))
 
-# TODO: Nested facet with chromosome arm
 diff_exp_procan %>%
   inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
   bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
                         x_lab = "Chromosome & Gene Position") %>%
-  save_plot("DiffExp_by_chromosome.png", height = 150, width = 200)
+  save_plot("diffexp_by_chromosome_procan.png", height = 150, width = 200)
 
-# TODO: Check copy number / chromosome CNA between two cohorts
+diff_exp_depmap %>%
+  inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        x_lab = "Chromosome & Gene Position") %>%
+  save_plot("diffexp_by_chromosome_depmap.png", height = 150, width = 200)
+
+diff_exp_cptac %>%
+  inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        x_lab = "Chromosome & Gene Position") %>%
+  save_plot("diffexp_by_chromosome_cptac.png", height = 150, width = 200)
+
+# TODO: Nested facet with chromosome arm
+
+## Copy Number Differences
+diff_exp_cn_procan <- model_buf_procan %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Gene.CopyNumber) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Gene.CopyNumber,
+                          groups = c("Low", "High"))
+
+diff_exp_cn_depmap <- model_buf_depmap %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = expr_buf_depmap, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Gene.CopyNumber) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Gene.CopyNumber,
+                          groups = c("Low", "High"))
+
+diff_exp_cn_cptac <- model_buf_cptac %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = expr_buf_cptac, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Gene.CopyNumber) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Gene.CopyNumber,
+                          groups = c("Low", "High"))
+
+diff_exp_cn_procan %>%
+  inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        x_lab = "Chromosome & Gene Position", value_range = c(0, 3)) %>%
+  save_plot("diffexp_by_chromosome_procan_copy-number.png", height = 150, width = 200)
+
+diff_exp_cn_depmap %>%
+  inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        x_lab = "Chromosome & Gene Position", value_range = c(0, 3)) %>%
+  save_plot("diffexp_by_chromosome_depmap_copy-number.png", height = 150, width = 200)
+
+diff_exp_cn_cptac %>%
+  inner_join(y = gene_metadata, by = "Gene.Symbol", relationship = "one-to-one") %>%
+  bucketed_scatter_plot(Log2FC, Gene.StartPosition, Gene.Chromosome,
+                        x_lab = "Chromosome & Gene Position", value_range = c(0, 4)) %>%
+  save_plot("diffexp_by_chromosome_cptac_copy-number.png", height = 150, width = 200)
 
 # === Cancer Driver Genes Buffering ===
 og_dc <- expr_buf_procan %>%
@@ -220,26 +284,12 @@ og_common_dc_chr <- expr_buf_procan %>%
   signif_beeswarm_plot(CNV, Buffering.ChrArmLevel.Ratio, facet_col = Gene.Symbol, color_col = CellLine.AneuploidyScore) %>%
   save_plot("oncogene_buffering_selected_chr.png", width = 200)
 
-# === Gene Sets ===
-## Proteotoxic Stress / Unfolded Proteins / Autophagosome
+# === Gene Set Enrichment Analysis ===
+## All Hallmark Gene Sets (ssGSEA)
 library(msigdbr)
 hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
   rename(Gene.Symbol = "gene_symbol")
 
-expr_buf_procan_hallmark <- model_buf_procan %>%
-  split_by_3_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
-  filter(Model.Buffering.Group != "Center") %>%
-  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
-  select(Gene.Symbol, Model.ID, Model.Buffering.Group, Protein.Expression.Normalized) %>%
-  right_join(y = hallmark_gene_set, by = "Gene.Symbol", relationship = "many-to-many")
-
-hallmark_tests <- expr_buf_procan_hallmark %>%
-  group_by(gs_name) %>%
-  group_modify(~tidy(t.test(Protein.Expression.Normalized ~ Model.Buffering.Group, data = .x))) %>%
-  ungroup() %>%
-  mutate(p.value.adj = p.adjust(p.value, method = "bonferroni"))
-
-# === TEST AREA ===
 gene_sets <- hallmark_gene_set %>%
   group_by(gs_name) %>%
   group_map(~list(.x$Gene.Symbol)) %>%
@@ -249,60 +299,57 @@ names(gene_sets) <- unique(hallmark_gene_set$gs_name)
 gsea_cptac <- expr_buf_cptac %>%
   ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
 
+gsea_procan <- expr_buf_procan %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
+
+gsea_depmap <- expr_buf_depmap %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
+
+## Proteotoxic Stress / Unfolded Proteins / Autophagosome
 gsea_cptac %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
   inner_join(y = model_buf_cptac, by = "Model.ID") %>%
-  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE)
-
-gsea_procan <- expr_buf_procan %>%
-  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
+  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE) %>%
+  save_plot("gsea_unfolded_cptac.png")
 
 gsea_procan %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
   inner_join(y = model_buf_procan, by = "Model.ID") %>%
-  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE)
+  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE) %>%
+  save_plot("gsea_unfolded_procan.png")
 
+gsea_depmap %>%
+  t() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Model.ID") %>%
+  inner_join(y = model_buf_procan, by = "Model.ID") %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE) %>%
+  save_plot("gsea_unfolded_depmap.png")
+
+## Manual Analysis of Unfolded Protein Response
 unfolded_gene_set <- hallmark_gene_set %>%
   filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE") %>%
   pull(Gene.Symbol)
 
-### ProCan
-mean_unfolded_procan <- expr_buf_procan %>%
-  # filter_cn_gain_abs() %>%
-  drop_na(Protein.Expression.Normalized) %>%
-  mutate(Unfolded.Gene.Set = Gene.Symbol %in% unfolded_gene_set) %>%
-  group_by(Model.ID) %>%
-  summarize(Unfolded.Protein.Mean = mean(Protein.Expression.Normalized[Unfolded.Gene.Set], na.rm = TRUE),
-            Background.Protein.Mean = mean(Protein.Expression.Normalized[!Unfolded.Gene.Set], na.rm = TRUE),
-            Unfolded.Protein.Response = Unfolded.Protein.Mean - Background.Protein.Mean) %>%
-  ungroup() %>%
-  inner_join(y = model_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
-
-mean_unfolded_procan %>%
-  scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%
-  save_plot("unfolded_protein_response_scatter_procan.png", height = 150, width = 150)
-
-mean_unfolded_procan %>%
-  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
-                     quantile_low = "30%", quantile_high = "70%") %>%
-  signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
-  save_plot("unfolded_protein_response_split_procan.png", width = 100, height = 150)
+unfolded_protein_response <- function(df_expr_buf, df_model_buf, gene_set = unfolded_gene_set) {
+ df_expr_buf %>%
+   # filter_cn_gain_abs() %>%
+   drop_na(Protein.Expression.Normalized) %>%
+   mutate(Unfolded.Gene.Set = Gene.Symbol %in% gene_set) %>%
+   group_by(Model.ID) %>%
+   summarize(Unfolded.Protein.Mean = mean(Protein.Expression.Normalized[Unfolded.Gene.Set], na.rm = TRUE),
+             Background.Protein.Mean = mean(Protein.Expression.Normalized[!Unfolded.Gene.Set], na.rm = TRUE),
+             Unfolded.Protein.Response = Unfolded.Protein.Mean - Background.Protein.Mean) %>%
+   ungroup() %>%
+   inner_join(y = df_model_buf, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
+}
 
 ### CPTAC
-mean_unfolded_cptac <- expr_buf_cptac %>%
-  # filter_cn_gain_abs() %>%
-  drop_na(Protein.Expression.Normalized) %>%
-  mutate(Unfolded.Gene.Set = Gene.Symbol %in% unfolded_gene_set) %>%
-  group_by(Model.ID) %>%
-  summarize(Unfolded.Protein.Mean = mean(Protein.Expression.Normalized[Unfolded.Gene.Set], na.rm = TRUE),
-            Background.Protein.Mean = mean(Protein.Expression.Normalized[!Unfolded.Gene.Set], na.rm = TRUE),
-            Unfolded.Protein.Response = Unfolded.Protein.Mean - Background.Protein.Mean) %>%
-  ungroup() %>%
-  inner_join(y = model_buf_cptac, by = "Model.ID", relationship = "one-to-many", na_matches = "never")
+mean_unfolded_cptac <- unfolded_protein_response(expr_buf_cptac, model_buf_cptac)
 
 mean_unfolded_cptac %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%
@@ -314,3 +361,28 @@ mean_unfolded_cptac %>%
   signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
   save_plot("unfolded_protein_response_split_cptac.png", width = 100, height = 150)
 
+### ProCan
+mean_unfolded_procan <- unfolded_protein_response(expr_buf_procan, model_buf_procan)
+
+mean_unfolded_procan %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_scatter_procan.png", height = 150, width = 150)
+
+mean_unfolded_procan %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                     quantile_low = "30%", quantile_high = "70%") %>%
+  signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_split_procan.png", width = 100, height = 150)
+
+### DepMap
+mean_unfolded_depmap <- unfolded_protein_response(expr_buf_depmap, model_buf_depmap)
+
+mean_unfolded_depmap %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_scatter_depmap.png", height = 150, width = 150)
+
+mean_unfolded_depmap %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                     quantile_low = "30%", quantile_high = "70%") %>%
+  signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
+  save_plot("unfolded_protein_response_split_depmap.png", width = 100, height = 150)

@@ -663,3 +663,36 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
     theme(legend.position = "none")
 }
 
+plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", "GO:MF", "GO:BP"),
+                               terms_per_source = 5, p_thresh = p_threshold, string_trunc = 50, custom_color = NULL) {
+  require(forcats)
+  require(stringr)
+  require(ggplot2)
+  require(shadowtext)
+
+  if (is.null(ora)) return(NULL)
+
+  df <- ora$result %>%
+    filter(p_value < p_thresh) %>%
+    filter(source %in% selected_sources) %>%
+    group_by(source) %>%
+    slice_min(p_value, n = terms_per_source, with_ties = FALSE) %>%
+    ungroup() %>%
+    mutate(`-log10(p)` = -log10(p_value),
+           term_name = fct_reorder(str_trunc(term_name, string_trunc), p_value, .desc = TRUE))
+
+  df %>%
+    ggplot() +
+    aes(x = term_name, y = `-log10(p)`,
+        label = term_name) +
+    { if (!is.null(custom_color)) geom_bar(fill = custom_color, stat = "identity")
+      else geom_bar(aes(fill = source), stat = "identity") } +
+    geom_shadowtext(color = "white", y = 1 + 0.18, hjust = 0, bg.colour = "dimgrey") +
+    scale_y_continuous(breaks = seq(1, max(df$`-log10(p)`), 2)) +
+    scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = TRUE) +
+    labs(x = "Enriched Term", y = "-log10(p)") +
+    coord_flip(ylim = c(1, max(df$`-log10(p)`))) +
+    facet_wrap(~source, scales = "free", ncol = 1) +
+    theme(legend.position = "none",
+          axis.text.y = element_blank())
+}
