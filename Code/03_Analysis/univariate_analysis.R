@@ -247,6 +247,7 @@ for (dataset in datasets) {
 }
 
 ## Create aggregated ranking between methods
+### Gain
 rank_gain <- analysis_results %>%
   filter(grepl("Gain", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
@@ -257,6 +258,7 @@ rank_gain %>%
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_gain.png", height = 200, width = 180)
 
+### Loss
 rank_loss <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & !grepl("WGD", AnalysisID) & !grepl("P0211", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
@@ -267,6 +269,7 @@ rank_loss %>%
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss.png", height = 200, width = 180)
 
+### WGD, Loss
 rank_loss_wgd <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & grepl("DepMap-WGD", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
@@ -277,6 +280,7 @@ rank_loss_wgd %>%
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss_wgd.png", height = 200, width = 180)
 
+### No-WGD, Loss
 rank_loss_no_wgd <- analysis_results %>%
   filter(grepl("Loss", AnalysisID) & grepl("DepMap-NoWGD", AnalysisID)) %>%
   mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
@@ -286,6 +290,28 @@ rank_loss_no_wgd %>%
                      value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
                      bar_label_shift = 0.07, line_intercept = 0) %>%
   save_plot("buffering-factors_rank_loss_no-wgd.png", height = 200, width = 180)
+
+### WGD, Gain
+rank_gain_wgd <- analysis_results %>%
+  filter(grepl("Gain", AnalysisID) & grepl("DepMap-WGD", AnalysisID)) %>%
+  mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
+                 AnalysisID, DosageCompensation.Factor)
+rank_gain_wgd %>%
+  vertical_bar_chart(DosageCompensation.Factor, MeanNormRank,
+                     value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
+                     bar_label_shift = 0.07, line_intercept = 0) %>%
+  save_plot("buffering-factors_rank_gain_wgd.png", height = 200, width = 180)
+
+### No-WGD, Gain
+rank_gain_no_wgd <- analysis_results %>%
+  filter(grepl("Gain", AnalysisID) & grepl("DepMap-NoWGD", AnalysisID)) %>%
+  mean_norm_rank(DosageCompensation.Factor.ROC.AUC,
+                 AnalysisID, DosageCompensation.Factor)
+rank_gain_no_wgd %>%
+  vertical_bar_chart(DosageCompensation.Factor, MeanNormRank,
+                     value_range = c(0, 1), break_steps = 0.1, value_lab = "Aggregated Rank",
+                     bar_label_shift = 0.07, line_intercept = 0) %>%
+  save_plot("buffering-factors_rank_gain_no-wgd.png", height = 200, width = 180)
 
 ## Save results
 analysis_results %>%
@@ -307,6 +333,14 @@ rank_loss_wgd %>%
 rank_loss_no_wgd %>%
   write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.parquet")) %>%
   write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.xlsx"),
+             colNames = TRUE)
+rank_gain_wgd %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain_WGD.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_gain_WGD.xlsx"),
+             colNames = TRUE)
+rank_gain_no_wgd %>%
+  write_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain_NoWGD.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "dosage_compensation_factors_univariate_aggregated_gain_NoWGD.xlsx"),
              colNames = TRUE)
 
 # === Statistically compare results ===
