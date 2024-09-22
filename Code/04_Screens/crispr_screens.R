@@ -5,6 +5,7 @@ library(stringr)
 library(arrow)
 library(openxlsx)
 library(forcats)
+library(magrittr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -26,12 +27,12 @@ dir.create(reports_dir, recursive = TRUE)
 # === Load Datasets ===
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 crispr_screens <- read_parquet(here(output_data_dir, "crispr_screens.parquet"))
-expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
+expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 
 # === Combine Datasets ===
 df_crispr_buf <- crispr_screens %>%
-  inner_join(y = expr_buf_procan %>% select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name),
+  inner_join(y = expr_buf_depmap %>% select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name),
              by = c("Model.ID", "Protein.Uniprot.Accession", "Gene.Symbol")) %>%
   select(Model.ID, CellLine.Name, Protein.Uniprot.Accession, Gene.Symbol, Gene.CopyNumber, Gene.CopyNumber.Baseline,
          Buffering.GeneLevel.Ratio, CRISPR.EffectScore, CRISPR.DependencyScore)
@@ -65,7 +66,9 @@ df_gene_corr <- df_crispr_buf %>%
     CRISPR.DependencyScore.Corr.p = cor.test(Buffering.GeneLevel.Ratio, CRISPR.DependencyScore, method = "spearman")$p.value,
     Gene.CopyNumber.GainLossRatio = mean(Gene.CopyNumber - Gene.CopyNumber.Baseline, na.rm = TRUE)
   ) %>%
-  ungroup()
+  ungroup() %>%
+  write_parquet(here(output_data_dir, "buffering_gene_dependency_depmap.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "buffering_gene_dependency_depmap.xlsx"), colNames = TRUE)
 
 color_mapping_effect <- scale_color_viridis_c(option = "F", direction = 1, begin = 0.1, end = 0.8)
 color_mapping_dep <- scale_color_viridis_c(option = "G", direction = -1, begin = 0.1, end = 0.8)
@@ -138,7 +141,7 @@ df_gene_corr %>%
   save_plot("dependency_buffering_top-correlation.png", height = 220, width = 180)
 
 ## Look at selected genes in more detail
-selected_genes <- c("KRAS", "EGFR", "TP53")
+selected_genes <- c("KRAS", "EGFR", "TP53", "CDK6", "ELMO2", "CRKL")
 
 for (gene in selected_genes) {
   df_gene_corr %>%
@@ -154,7 +157,9 @@ df_crispr_model_buf <- model_buf_agg %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group") %>%
   inner_join(y = crispr_screens, by = "Model.ID") %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
-                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10)
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10) %>%
+  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap.xlsx"), colNames = TRUE)
 
 df_crispr_model_buf %>%
   mutate(Label = if_else(!is.na(Significant), Gene.Symbol, NA)) %>%

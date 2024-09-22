@@ -18,7 +18,6 @@ output_data_dir <- output_data_base_dir
 
 dir.create(plots_dir, recursive = TRUE)
 
-# TODO: Move to preprocessing
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
 diff_exp <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet")) %>%
