@@ -45,6 +45,27 @@ dc_class_line <- expr_buf_depmap %>%
   labs(x = "Buffering Class", y = "Mean Protein Expression", color = "Gene Copy Number") +
   theme(legend.position = "top", legend.direction = "horizontal")
 
+# === Categorical Distribution Panel ===
+df_share_gene <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss")) %>%
+  select(Buffering.GeneLevel.Class, Dataset, CNV) %>%
+  drop_na() %>%
+  count(Buffering.GeneLevel.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n))) %>%
+  ungroup()
+
+stacked_buf_cn <- df_share_gene %>%
+  ggplot() +
+  aes(fill = Buffering.GeneLevel.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(fill = "Buffering Class") +
+  theme(legend.position = "top", legend.direction = "horizontal")
+
 # === DC Class Protein Expression Panel ===
 prot_exp_dc_class <- expr_buf_depmap %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
@@ -137,28 +158,28 @@ ora_buf <- low_var_buf %>%
   overrepresentation_analysis()
 
 ora_buf_terms <- ora_buf %>%
-  plot_terms(selected_sources = c("GO:MF", "KEGG", "WP"))
+  plot_terms_compact(selected_sources = c("GO:MF", "KEGG", "WP"), custom_color = highlight_color)
 
 # === Combine Panels into Figure ===
-dc_illus <- cowplot::draw_image(here(illustrations_dir, "dc_illustration.svg"))
-buf_classes <- cowplot::draw_image(here(illustrations_dir, "buffering_classes.svg"))
+#dc_illus <- cowplot::draw_image(here(illustrations_dir, "dc_illustration.svg"))
+#buf_classes <- cowplot::draw_image(here(illustrations_dir, "buffering_classes.svg"))
 
-illustrations <- cowplot::plot_grid(cowplot::ggdraw() + dc_illus,
-                                    cowplot::ggdraw() + buf_classes,
-                                    labels = c("A", "B"))
+#illustrations <- cowplot::plot_grid(cowplot::ggdraw() + dc_illus,
+#                                    cowplot::ggdraw() + buf_classes,
+#                                    labels = c("A", "B"))
 
-figure1_sub1 <- cowplot::plot_grid(dc_class_line, prot_exp_dc_class,
-                                   labels = c("C", "D"), rel_widths = c(1, 0.8))
+figure1_sub1 <- cowplot::plot_grid(dc_class_line, stacked_buf_cn,
+                                   labels = c("C", "D"), rel_widths = c(1, 0.8), ncol = 2)
 
-figure1_sub2 <- cowplot::plot_grid(dc_dataset_dist, br_by_cnv_p0211, br_by_cnv, ncol = 3,
-                                   rel_widths = c(1, 0.45, 0.75), labels = c("E", "F", "G"))
+figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist, br_by_cnv_p0211,
+                                   rel_widths = c(1, 0.9, 0.4), labels = c("E", "F", "G"), ncol = 3)
 
-figure1_sub3 <- cowplot::plot_grid(scatter_signif_buffered, ora_buf_terms,
-                                   labels = c("H", "I"))
+figure1_sub3 <- cowplot::plot_grid(br_by_cnv, scatter_signif_buffered, ora_buf_terms,
+                                   rel_widths = c(0.8, 1, 1), labels = c("H", "I", "J"), ncol = 3)
 
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
-                               nrow = 3, ncol = 1)
+                              nrow = 3, rel_heights = c(0.8, 1, 1))
 
-cairo_pdf(here(plots_dir, "figure01.pdf"), width = 12, height = 13)
+cairo_pdf(here(plots_dir, "figure01.pdf"), width = 13, height = 13)
 figure1
 dev.off()

@@ -659,7 +659,7 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
                        value_range = c(1, max(.$`-log10(p)`)),
                        line_intercept = 0, bar_label_shift = 0.18, break_steps = 2,
                        category_lab = "Enriched Term", value_lab = "-log10(p)") +
-    facet_wrap(~source, scales = "free", ncol = 1) +
+    facet_wrap(~source, scales = "free_y", ncol = 1) +
     theme(legend.position = "none")
 }
 
@@ -692,7 +692,7 @@ plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC"
     scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = TRUE) +
     labs(x = "Enriched Term", y = "-log10(p)") +
     coord_flip(ylim = c(1, max(df$`-log10(p)`))) +
-    facet_wrap(~source, scales = "free", ncol = 1) +
+    facet_wrap(~source, scales = "free_y", ncol = 1) +
     theme(legend.position = "none",
           axis.text.y = element_blank())
 }

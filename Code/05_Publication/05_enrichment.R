@@ -68,9 +68,9 @@ string_down <- genes_down %>%
 # === Combine Panels into Figure ===
 figure5 <- cowplot::plot_grid(panel_volcano, ora_down, ora_up,
                               labels = c("A", "B", "C"),
-                              rel_widths = c(1.2, 1, 1),
+                              rel_widths = c(1, 1, 1),
                               nrow = 1, ncol = 3)
 
-cairo_pdf(here(plots_dir, "figure05_01.pdf"), width = 15, height = 5)
+cairo_pdf(here(plots_dir, "figure05_01.pdf"), width = 13, height = 5)
 figure5
 dev.off()

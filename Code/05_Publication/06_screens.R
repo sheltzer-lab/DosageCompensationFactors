@@ -104,6 +104,6 @@ figure6_sub2 <- cowplot::plot_grid(volcano_dep_diff, ora_down, ora_up,
 figure6 <- cowplot::plot_grid(figure6_sub1, figure6_sub2,
                               nrow = 2, ncol = 1, rel_heights = c(0.75, 1))
 
-cairo_pdf(here(plots_dir, "figure06.pdf"), width = 17, height = 8)
+cairo_pdf(here(plots_dir, "figure06.pdf"), width = 17, height = 9)
 figure6
 dev.off()

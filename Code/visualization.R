@@ -122,6 +122,8 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
                                                             na.value = color_palettes$Missing),
                          value_threshold = log2fc_threshold, signif_threshold = p_threshold,
                          title = NULL, subtitle = NULL) {
+  max_abs_value <- df %>% pull({ { value_col } }) %>% abs() %>% max(na.rm = TRUE)
+
   df %>%
     mutate(`-log10(p)` = -log10({ { signif_col } })) %>%
     ggplot() +
@@ -139,7 +141,8 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
                      seed = 42, max.iter = 30000, max.time = 1.5,
                      point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
                      force = 2, max.overlaps = 20) +
-    labs(title = title, subtitle = subtitle)
+    labs(title = title, subtitle = subtitle) +
+    xlim(c(-max_abs_value, max_abs_value))
 }
 
 # Get density of points in 2 dimensions.
