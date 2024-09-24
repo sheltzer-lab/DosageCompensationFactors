@@ -180,6 +180,6 @@ figure1_sub3 <- cowplot::plot_grid(br_by_cnv, scatter_signif_buffered, ora_buf_t
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
                               nrow = 3, rel_heights = c(0.8, 1, 1))
 
-cairo_pdf(here(plots_dir, "figure01.pdf"), width = 13, height = 13)
+cairo_pdf(here(plots_dir, "figure01_01.pdf"), width = 13, height = 13)
 figure1
 dev.off()

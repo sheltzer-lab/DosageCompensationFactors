@@ -179,6 +179,7 @@ moa_corr <- model_buf_agg %>%
   select(-"Drug.Name") %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.MOA, delim = ", ") %>%
+  drop_na(Drug.MOA) %>%
   mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
   group_by(Drug.MOA) %>%
   summarize(
@@ -187,19 +188,20 @@ moa_corr <- model_buf_agg %>%
                                           method = "spearman")$estimate[["rho"]],
     Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                       method = "pearson")$p.value
-  )
+  ) %>%
+  mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
 
 moa_corr %>%
-  filter(Corr.p < p_threshold) %>%
+  filter(Corr.p.adj < p_threshold) %>%
   #filter(Corr.Sensitivity_Buffering < -0.15) %>%
   slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
   mutate(Drug.MOA = fct_reorder(Drug.MOA, Corr.Sensitivity_Buffering, .desc = TRUE),
-         `-log10(p)` = -log10(Corr.p)) %>%
-  vertical_bar_chart(Drug.MOA, Corr.Sensitivity_Buffering, Corr.p,
-                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.18,
+         `-log10(p)` = -log10(Corr.p.adj)) %>%
+  vertical_bar_chart(Drug.MOA, Corr.Sensitivity_Buffering, `-log10(p)`,
+                     value_range = c(-0.1, 0.1), line_intercept = 0, bar_label_shift = 0.1,
                      category_lab = "Mechanism of Action", value_lab = "Correlation Buffering-Sensitivity",
-                     color_lab = "p-value") %>%
-  save_plot("mechanism_buffering_sensitivity_top.png")
+                     color_lab = "-log10(p)") %>%
+  save_plot("mechanism_buffering_sensitivity_top.png", width = 200)
 
 # Plot correlation by drug target
 target_corr <- model_buf_agg %>%
@@ -209,6 +211,7 @@ target_corr <- model_buf_agg %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.Target, delim = ", ") %>%
   mutate(Drug.Target = str_squish(Drug.Target)) %>%
+  drop_na(Drug.Target) %>%
   group_by(Drug.Target) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
@@ -216,18 +219,19 @@ target_corr <- model_buf_agg %>%
                                           method = "spearman")$estimate[["rho"]],
     Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
                       method = "pearson")$p.value
-  )
+  ) %>%
+  mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
 
 target_corr %>%
-  filter(Corr.p < p_threshold) %>%
-  filter(Corr.Sensitivity_Buffering < -0.15) %>%
+  filter(Corr.p.adj < p_threshold) %>%
+  #filter(Corr.Sensitivity_Buffering < -0.15) %>%
   slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
   mutate(Drug.Target = fct_reorder(Drug.Target, Corr.Sensitivity_Buffering, .desc = TRUE),
-         `-log10(p)` = -log10(Corr.p)) %>%
-  vertical_bar_chart(Drug.Target, Corr.Sensitivity_Buffering, Corr.p,
-                     value_range = c(-0.25, 0), line_intercept = 0, bar_label_shift = 0.225,
+         `-log10(p)` = -log10(Corr.p.adj)) %>%
+  vertical_bar_chart(Drug.Target, Corr.Sensitivity_Buffering, `-log10(p)`,
+                     value_range = c(0, 0.1), line_intercept = 0, bar_label_shift = 0.005,
                      category_lab = "Drug Target", value_lab = "Correlation Buffering-Sensitivity",
-                     color_lab = "p-value") %>%
+                     color_lab = "-log10(p)") %>%
   save_plot("target_buffering_sensitivity_top.png")
 
 # Heatmap plotting Drug Sensitivity, Cell Line Buffering and potential confounders
@@ -374,12 +378,12 @@ model_buf_sensitivity <- model_buf_agg %>%
                      quantile_low = "20%", quantile_high = "80%") %>%
   inner_join(y = drug_screens, by = "Model.ID") %>%
   differential_expression(Drug.ID, Model.Buffering.Group, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.1) %>%
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.2) %>%
   inner_join(y = drug_meta, by = "Drug.ID")
 
 model_buf_sensitivity %>%
   mutate(Label = if_else(!is.na(Significant), Drug.Name, NA)) %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
   save_plot("buffering_drug_sensitivity_volcano.png", width = 300, height = 250)
 
 ## Mechanism of Action
@@ -392,11 +396,11 @@ moa_diff <- model_buf_agg %>%
   mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
   differential_expression(Drug.MOA, CellLine.Buffering.Group, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"), log2fc_thresh = 0.1)
+                          groups = c("Low", "High"), log2fc_thresh = 0.2)
 
 moa_diff %>%
   mutate(Label = if_else(!is.na(Significant), str_trunc(Drug.MOA, 20), NA)) %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
   save_plot("buffering_drug_mechanism_volcano.png", width = 300, height = 250)
 
 
@@ -410,11 +414,11 @@ target_diff <- model_buf_agg %>%
   mutate(Drug.Target = str_squish(Drug.Target)) %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
   differential_expression(Drug.Target, CellLine.Buffering.Group, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"), log2fc_thresh = 0.1)
+                          groups = c("Low", "High"), log2fc_thresh = 0.2)
 
 target_diff %>%
   mutate(Label = if_else(!is.na(Significant), str_trunc(Drug.Target, 20), NA)) %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.1) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
   save_plot("buffering_drug_target_volcano.png", width = 300, height = 250)
 
 
