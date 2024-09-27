@@ -8,13 +8,15 @@ library(ggpubr)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
+source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
+models_base_dir <- here("Output", "Models")
+
 
 dir.create(plots_dir, recursive = TRUE)
-dir.create(output_data_dir, recursive = TRUE)
 
 # Load SHAP Results
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
@@ -35,7 +37,7 @@ get_rocs <- function(df_models) {
               unmatched = "error", relationship = "many-to-one")
 }
 
-plot_rocs_publish <- function(df_rocs, auc_prefix = "AUC = ") {
+plot_rocs_publish <- function(df_rocs, auc_prefix = "AUC = ", title = "") {
   df_label <- df_rocs %>%
     distinct(Model.Variant, Model.Condition, AUC) %>%
     arrange(desc(Model.Variant)) %>%
@@ -51,7 +53,7 @@ plot_rocs_publish <- function(df_rocs, auc_prefix = "AUC = ") {
   df_legend <- data.frame(
     Label = c("ChrArm", "ChrArm (avg.)", "Gene CN", "Gain", "Loss"),
     x = c(0.5, 0.5, 0.5, 0.25, 0),
-    y = c(0.01, 0.11, 0.21, 0.28, 0.28)
+    y = c(0.01, 0.11, 0.21, 0.31, 0.31)
   )
 
   df_rocs %>%
@@ -65,7 +67,8 @@ plot_rocs_publish <- function(df_rocs, auc_prefix = "AUC = ") {
                hjust = 1, vjust = 0) +
     geom_text(data = df_legend,
               mapping = aes(label = Label, x = x, y = y, color = NULL),
-              hjust = 1, vjust = 0, fontface = "bold") +
+              hjust = 1, vjust = 0) +
+    annotate("text", x = 1, y = 1, hjust = 0, size = 5, label = title) +
     scale_x_reverse(limits = c(1, 0)) +
     labs(x = "Specificity", y = "Sensitivity", color = "Model") +
     theme(legend.position = "none")
@@ -76,21 +79,21 @@ models_depmap <- shap_results %>%
   distinct() %>%
   filter(Model.Dataset == "DepMap" & Model.Subset == "All" & !grepl("Log2FC", Model.Variant)) %>%
   get_rocs() %>%
-  plot_rocs_publish(auc_prefix = "")
+  plot_rocs_publish(auc_prefix = "", title = "DepMap")
 
 models_procan <- shap_results %>%
   select(starts_with("Model")) %>%
   distinct() %>%
   filter(Model.Dataset == "ProCan" & Model.Subset == "All" & !grepl("Log2FC", Model.Variant)) %>%
   get_rocs() %>%
-  plot_rocs_publish(auc_prefix = "")
+  plot_rocs_publish(auc_prefix = "", title = "ProCan")
 
 models_cptac <- shap_results %>%
   select(starts_with("Model")) %>%
   distinct() %>%
   filter(Model.Dataset == "CPTAC") %>%
   get_rocs() %>%
-  plot_rocs_publish(auc_prefix = "")
+  plot_rocs_publish(auc_prefix = "", title = "CPTAC")
 
 panel_roc <- cowplot::plot_grid(models_depmap, models_procan, models_cptac,
                                 labels = c("A", "B", "C"),
