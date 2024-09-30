@@ -386,3 +386,103 @@ mean_unfolded_depmap %>%
                      quantile_low = "30%", quantile_high = "70%") %>%
   signif_violin_plot(Model.Buffering.Group, Unfolded.Protein.Response) %>%
   save_plot("unfolded_protein_response_split_depmap.png", width = 100, height = 150)
+
+
+## 2D-GSEA
+ranks_depmap <- diff_exp_depmap %>%
+  arrange(Log2FC) %>%
+  pull(Log2FC, name = Gene.Symbol)
+
+ranks_procan <- diff_exp_procan %>%
+  arrange(Log2FC) %>%
+  pull(Log2FC, name = Gene.Symbol)
+
+ranks_cptac <- diff_exp_cptac %>%
+  arrange(Log2FC) %>%
+  pull(Log2FC, name = Gene.Symbol)
+
+fgsea_depmap <- fgsea::fgsea(pathways = gene_sets, stats = ranks_depmap)
+fgsea_procan <- fgsea::fgsea(pathways = gene_sets, stats = ranks_procan)
+fgsea_cptac <- fgsea::fgsea(pathways = gene_sets, stats = ranks_cptac)
+
+fgsea_results <- bind_rows(fgsea_depmap %>% mutate(Dataset = "DepMap"),
+                           fgsea_procan %>% mutate(Dataset = "ProCan"),
+                           fgsea_cptac %>% mutate(Dataset = "CPTAC"))
+
+### CPTAC vs ProCan
+enrichment_2d_procan <- fgsea_results %>%
+  filter(Dataset %in% c("CPTAC", "ProCan")) %>%
+  select(pathway, Dataset, NES, padj) %>%
+  pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+    padj_ProCan < p_threshold & padj_CPTAC < p_threshold ~ "Both",
+    padj_ProCan >= p_threshold & padj_CPTAC < p_threshold ~ "CPTAC",
+    padj_ProCan < p_threshold & padj_CPTAC >= p_threshold ~ "ProCan",
+    TRUE ~ "None"),
+         Label = if_else(Significant != "None", pathway, NA),
+         Label = str_replace(Label, "HALLMARK_", "")) %>%
+  ggplot() +
+  aes(x = NES_ProCan, y = NES_CPTAC, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(slope = 1, color = default_color) +
+  geom_point() +
+  geom_label_repel() +
+  scale_color_manual(values = c(Both = "purple", CPTAC = "blue", ProCan = "red", None = default_color)) +
+  labs(x = "Normalized Enrichment Score (ProCan, High vs. Low Model Buffering)",
+       y = "Normalized Enrichment Score (CPTAC, High vs. Low Model Buffering)")
+
+enrichment_2d_procan %>%
+  save_plot("gsea_2d_hallmark_procan_cptac.png", height = 250, width = 250)
+
+### CPTAC vs DepMap
+enrichment_2d_depmap <- fgsea_results %>%
+  filter(Dataset %in% c("CPTAC", "DepMap")) %>%
+  select(pathway, Dataset, NES, padj) %>%
+  pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+    padj_DepMap < p_threshold & padj_CPTAC < p_threshold ~ "Both",
+    padj_DepMap >= p_threshold & padj_CPTAC < p_threshold ~ "CPTAC",
+    padj_DepMap < p_threshold & padj_CPTAC >= p_threshold ~ "DepMap",
+    TRUE ~ "None"),
+         Label = if_else(Significant != "None", pathway, NA),
+         Label = str_replace(Label, "HALLMARK_", "")) %>%
+  ggplot() +
+  aes(x = NES_DepMap, y = NES_CPTAC, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(slope = 1, color = default_color) +
+  geom_point() +
+  geom_label_repel() +
+  scale_color_manual(values = c(Both = "purple", CPTAC = "blue", DepMap = "red", None = default_color)) +
+  labs(x = "Normalized Enrichment Score (DepMap, High vs. Low Model Buffering)",
+       y = "Normalized Enrichment Score (CPTAC, High vs. Low Model Buffering)")
+
+enrichment_2d_depmap %>%
+  save_plot("gsea_2d_hallmark_depmap_cptac.png", height = 250, width = 250)
+
+### DepMap vs ProCan
+enrichment_2d_procan_depmap <- fgsea_results %>%
+  filter(Dataset %in% c("DepMap", "ProCan")) %>%
+  select(pathway, Dataset, NES, padj) %>%
+  pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+    padj_ProCan < p_threshold & padj_DepMap < p_threshold ~ "Both",
+    padj_ProCan >= p_threshold & padj_DepMap < p_threshold ~ "DepMap",
+    padj_ProCan < p_threshold & padj_DepMap >= p_threshold ~ "ProCan",
+    TRUE ~ "None"),
+         Label = if_else(Significant != "None", pathway, NA),
+         Label = str_replace(Label, "HALLMARK_", "")) %>%
+  ggplot() +
+  aes(x = NES_ProCan, y = NES_DepMap, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(slope = 1, color = default_color) +
+  geom_point() +
+  geom_label_repel() +
+  scale_color_manual(values = c(Both = "purple", DepMap = "blue", ProCan = "red", None = default_color)) +
+  labs(x = "Normalized Enrichment Score (ProCan, High vs. Low Model Buffering)",
+       y = "Normalized Enrichment Score (DepMap, High vs. Low Model Buffering)")
+
+enrichment_2d_procan_depmap %>%
+  save_plot("gsea_2d_hallmark_procan_depmap.png", height = 250, width = 250)
