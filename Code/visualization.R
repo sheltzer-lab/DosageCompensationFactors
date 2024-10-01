@@ -311,7 +311,7 @@ plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10, labe
 }
 
 print_signif <- function(p, digits = 3, scientific = TRUE, digits_scientific = 1) {
-  if (p == 0) return("p = 0")
+  if (!is.na(p) & p == 0) return("p = 0")
 
   if (scientific) {
     return(paste0("p = ", formatC(p, format = "e", digits = digits_scientific)))

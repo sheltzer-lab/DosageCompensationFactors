@@ -118,7 +118,7 @@ plot_continuous_properties <- function (df, cols_continuous) {
   return(list(plots = plots, df_corr = df_corr))
 }
 
-save_signif_continuous_plots <- function (plots, dir = plots_dir, p_thresh = 0.01) {
+save_signif_continuous_plots <- function (plots, dir = plots_dir, p_thresh = p_threshold) {
   signif_plots <- plots$df_corr %>%
     filter(p.adj < p_thresh) %>%
     pull(var1)
@@ -149,6 +149,13 @@ cols_procan <- c("tissue_status", "cancer_type", "msi_status",
 cols_depmap <- c("PrimaryOrMetastasis", "OncotreeSubtype", "Sex",
                  "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
 
+violin_plots_procan <- df_procan %>%
+  plot_categorical_properties(cols_procan)
+
+violin_plots_depmap <- df_depmap %>%
+  plot_categorical_properties(cols_depmap)
+
+# Plot continuous properties
 cols_cptac_hallmark <- df_cptac %>% select(starts_with("HALLMARK")) %>% colnames()
 
 cols_cptac_immune <- df_cptac %>%
@@ -159,12 +166,6 @@ cols_cptac_signatures <- data_density_cptac %>%
   filter(grepl("PROGENy", Column) | grepl("Mutation_signature", Column)) %>%
   filter(Density > 0.1) %>%
   pull(Column)
-
-violin_plots_procan <- df_procan %>%
-  plot_categorical_properties(cols_procan)
-
-violin_plots_depmap <- df_depmap %>%
-  plot_categorical_properties(cols_depmap)
 
 hallmark_plots_cptac <- df_cptac %>%
   plot_continuous_properties(cols_cptac_hallmark) %T>%
@@ -178,7 +179,18 @@ signature_plots_cptac <- df_cptac %>%
   plot_continuous_properties(cols_cptac_signatures) %T>%
   save_signif_continuous_plots(dir = signature_dir)
 
-## Plot cell line buffering per cancer type
+## Summarize significant correlations
+bind_rows(hallmark_plots_cptac$df_corr, immune_plots_cptac$df_corr, signature_plots_cptac$df_corr) %>%
+  filter(p.adj < p_threshold & abs(cor) > 0.2) %>%
+  mutate(Score = fct_reorder(var1, cor)) %>%
+  vertical_bar_chart(Score, cor, line_intercept = 0, value_range = c(-0.4, 0.4), break_steps = 0.1,
+                     value_lab = "Correlation (Model Buffering Ratio, Score)", category_lab = "Score") %>%
+  save_plot("significant_scores_cptac.png", width = 200)
+
+bind_rows(hallmark_plots_cptac$df_corr, immune_plots_cptac$df_corr, signature_plots_cptac$df_corr) %>%
+  write_parquet(here(output_data_dir, "score_model_buffering_corr_cptac.parquet"))
+
+# Plot cell line buffering per cancer type
 df_procan %>%
   sorted_beeswarm_plot("cancer_type", Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
@@ -203,7 +215,7 @@ df_depmap %>%
   sorted_beeswarm_plot("OncotreeSubtype", CellLine.AneuploidyScore, cex = 0.5) %>%
   save_plot("cellline_cancer-type_aneuploidy_depmap.png", width = 300)
 
-### Control for low aneuploidy score when plotting buffering per cancer type
+## Control for low aneuploidy score when plotting buffering per cancer type
 df_procan %>%
   filter(Aneuploidy == "Low") %>%
   sorted_beeswarm_plot("cancer_type", Model.Buffering.Ratio,
