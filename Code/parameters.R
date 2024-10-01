@@ -45,6 +45,7 @@ bidirectional_color_pal <- rev(brewer.pal(5, "RdBu"))
 bidirectional_color_pal2 <- brewer.pal(5, "PiYG")
 bidirectional_color_pal_viridis <- viridis(n = 5, option = "D", direction = 1)
 categorical_color_pal <- brewer.pal(12, "Paired")
+categorical_color_pal_dark <- brewer.pal(8, "Dark2")
 two_class_color_pal <- c(categorical_color_pal[4], categorical_color_pal[8])
 dicrete_color_pal1 <- c("#E6B000", "#E6882C", "#2C7FE6", "#465566", "#6B644B")
 dicrete_color_pal2 <- c("#33C653", "#C6A433", "#3349C6", "#C63345")
@@ -60,9 +61,9 @@ color_palettes <- list(
   CopyNumbers = c("1" = bidirectional_color_pal[1],
                   "3" = bidirectional_color_pal[4],
                   "4" = bidirectional_color_pal[5]),
-  Datasets = c("DepMap" = brewer.pal(8, "Dark2")[1],
-               "ProCan" = brewer.pal(8, "Dark2")[2],
-               "CPTAC" = brewer.pal(8, "Dark2")[3]),
+  Datasets = c("DepMap" = categorical_color_pal_dark[1],
+               "ProCan" = categorical_color_pal_dark[2],
+               "CPTAC" = categorical_color_pal_dark[3]),
   BufferingClasses = c("Buffered" = bidirectional_color_pal[1],
                        "Scaling" = bidirectional_color_pal[5],
                        "Anti-Scaling" = "dimgrey"),
@@ -88,3 +89,6 @@ dc_factor_cols <- c(
 
 ## Dataset-Specific Dosage Compensation Factors
 dc_factor_cols_specific <- c("Protein Neutral CV")
+
+# === Misc ===
+dataset_order <- c("DepMap", "ProCan", "CPTAC")

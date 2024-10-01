@@ -90,15 +90,16 @@ prot_exp_dc_class <- expr_buf_depmap %>%
 # === Tumor vs Cell Lines Panel ===
 dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0.2) %>%
-  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss")) %>%
+  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss"),
+         Dataset = factor(Dataset, levels = dataset_order)) %>%
   select(Dataset, Buffering.GeneLevel.Ratio, Gene.CopyNumber.Event) %>%
   drop_na() %>%
   ggplot() +
   aes(x = Dataset, y = Buffering.GeneLevel.Ratio, color = Dataset) +
   geom_boxplot(outliers = FALSE, size = 0.8) +
-  geom_signif(comparisons = list(c("ProCan", "DepMap"),
-                                 c("CPTAC", "DepMap"),
-                                 c("CPTAC", "ProCan")),
+  geom_signif(comparisons = list(c("DepMap", "ProCan"),
+                                 c("CPTAC", "ProCan"),
+                                 c("CPTAC", "DepMap")),
               test = wilcox.test,
               map_signif_level = print_signif, y_position = c(1.8, 1.8, 2.1),
               size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
@@ -124,7 +125,8 @@ br_by_cnv_p0211 <- expr_buf_p0211 %>%
 br_by_cnv <- bind_rows(expr_buf_cptac, expr_buf_depmap) %>%
   filter(Gene.CopyNumber.Baseline == 2) %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
-  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss"),
+         Dataset = factor(Dataset, levels = dataset_order)) %>%
   ggplot() +
   aes(x = Gene.CopyNumber.Event, y = Buffering.GeneLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8) +

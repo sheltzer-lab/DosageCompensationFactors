@@ -102,12 +102,20 @@ panel_roc <- cowplot::plot_grid(models_depmap, models_procan, models_cptac,
 # === SHAP Value Panel ===
 ### Select models for visualization
 shap_gain <- shap_results %>%
-  filter(Model.Variant == "CPTAC_Gene-Level_Filtered_Gain")
+  filter(Model.Variant == "CPTAC_Gene-Level_Filtered_Gain") %>%
+  group_by(DosageCompensation.Factor) %>%
+  slice_sample(n = 200) %>%     # Simplify visualization
+  ungroup()
 shap_loss <- shap_results %>%
-  filter(Model.Variant == "CPTAC_Gene-Level_Filtered_Loss")
+  filter(Model.Variant == "CPTAC_Gene-Level_Filtered_Loss") %>%
+  group_by(DosageCompensation.Factor) %>%
+  slice_sample(n = 200) %>%     # Simplify visualization
+  ungroup()
 
-shap_arrows_plot_gain <- shap_plot_arrows(shap_gain, category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
-shap_arrows_plot_loss <- shap_plot_arrows(shap_loss, category_lab = NULL, color_lab = "Factor Value", title = "Gene CN Loss")
+shap_arrows_plot_gain <- shap_gain %>%
+  shap_plot_arrows(category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
+shap_arrows_plot_loss <- shap_loss %>%
+  shap_plot_arrows(category_lab = NULL, color_lab = "Factor Value", title = "Gene CN Loss")
 
 shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
