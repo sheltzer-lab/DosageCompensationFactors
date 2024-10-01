@@ -95,7 +95,8 @@ get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target
 waterfall_procan <- model_buf_procan %>%
   waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name)
 waterfall_depmap <- model_buf_depmap %>%
-  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name)
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) +
+  labs(y = "Model Buffering Ratio (z-score)")
 
 model_buf_celllines <- model_buf_procan %>%
   bind_rows(model_buf_depmap) %>%
@@ -110,14 +111,14 @@ plot_agg_top <- model_buf_agg %>%
   slice_max(Model.Buffering.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
                      default_fill_color = head(bidirectional_color_pal, n = 1),
-                     text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
 
 plot_agg_bot <- model_buf_agg %>%
   slice_min(Model.Buffering.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
                      default_fill_color = tail(bidirectional_color_pal, n = 1),
-                     text_color = "black", bar_label_shift = 0.1, break_steps = 0.25,
+                     bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
 
 plot_bracket <- plot_corr_bracket(cellline_pearson_gene)
@@ -204,7 +205,7 @@ leuk_plot <- df_depmap %>%
   mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
-                       test = wilcox.test, signif_label = \(p) paste0("p = ", formatC(p, format = "e", digits = 2)))
+                       test = wilcox.test)
 
 leuk_plot_low <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
@@ -212,7 +213,7 @@ leuk_plot_low <- df_depmap %>%
   mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
-                       test = wilcox.test, signif_label = \(p) paste0("p = ", formatC(p, format = "e", digits = 2)))
+                       test = wilcox.test)
 
 leuk_poster <- leuk_plot +
   theme(legend.position = "top",
@@ -253,7 +254,7 @@ wgd_base_panel <- df_procan_wgd %>%
   geom_point(size = 2) +
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0, y = 1.8, hjust = 0, size = 5,
-           label = paste0(print_corr(cor_as_test$estimate), ", p = ", formatC(cor_as_test$p.value, format = "e", digits = 2))) +
+           label = paste0(print_corr(cor_as_test$estimate), ", ", print_signif(cor_as_test$p.value))) +
   # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
   scale_color_manual(values = color_palettes$WGD) +
   labs(x = "Aneuploidy Score", y = "Model Buffering Ratio") +
@@ -279,7 +280,7 @@ as_density_panel <- df_procan_wgd %>%
   geom_density(alpha = 1 / 4) +
   geom_vline(data = wgd_median, aes(xintercept = CellLine.AneuploidyScore, color = WGD), linetype = "dashed") +
   geom_label(data = data.frame(x = mean(wgd_median$CellLine.AneuploidyScore), y = 0.08), aes(x = x, y = y),
-             label = paste0("p = ", formatC(wgd_as_test$p.value, format = "e", digits = 2)),
+             label = print_signif(wgd_as_test$p.value),
              label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, vjust = 0) +
   geom_segment(aes(x = wgd_median$CellLine.AneuploidyScore[1] + as_median_range * 0.1,
                    xend = wgd_median$CellLine.AneuploidyScore[2] - as_median_range * 0.1,
@@ -295,7 +296,7 @@ br_density_panel <- df_procan_wgd %>%
   geom_density(alpha = 1 / 4) +
   geom_vline(data = wgd_median, aes(xintercept = Model.Buffering.Ratio, color = WGD), linetype = "dashed") +
   geom_label(data = data.frame(x = mean(wgd_median$Model.Buffering.Ratio), y = 3), aes(x = x, y = y),
-             label = paste0("p = ", formatC(wgd_br_test$p.value, format = "e", digits = 2)),
+             label = print_signif(wgd_br_test$p.value),
              label.size = NA, fill = "white", color = "black", size = 4, alpha = 0.5, angle = -90, vjust = 0) +
   geom_segment(aes(x = wgd_median$Model.Buffering.Ratio[1] + br_median_range * 0.1,
                    xend = wgd_median$Model.Buffering.Ratio[2] - br_median_range * 0.1,
@@ -374,7 +375,7 @@ panel_proteotox <- gsea_cptac %>%
   geom_point(size = 2) +
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
-           label = paste0(print_corr(cor_proteotox_test$estimate), ", p = ", formatC(cor_proteotox_test$p.value, format = "e", digits = 2))) +
+           label = paste0(print_corr(cor_proteotox_test$estimate), ", ", print_signif(cor_proteotox_test$p.value))) +
   labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "#Genes") +
   scale_color_viridis_c() +
   theme(legend.position = c("left", "top"),

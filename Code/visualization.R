@@ -310,10 +310,16 @@ plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10, labe
   return(plot)
 }
 
-print_signif <- function(p, digits = 3) {
-  paste0("p ", if_else(p < 10^(-digits),
-                      paste0("< ", format(10^(-digits), nsmall = digits, scientific = FALSE)),
-                      paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE))))
+print_signif <- function(p, digits = 3, scientific = TRUE, digits_scientific = 1) {
+  if (p == 0) return("p = 0")
+
+  if (scientific) {
+    return(paste0("p = ", formatC(p, format = "e", digits = digits_scientific)))
+  }
+
+  return(paste0("p ", if_else(p < 10^(-digits),
+                              paste0("< ", format(10^(-digits), nsmall = digits, scientific = FALSE)),
+                              paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE)))))
 }
 
 print_corr <- function(corr, p.value = NULL, estimate_symbol = utf8_rho, signif = FALSE, digits = 3, map_p = FALSE) {

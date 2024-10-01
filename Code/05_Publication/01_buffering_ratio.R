@@ -171,11 +171,11 @@ ora_buf_terms <- ora_buf %>%
 figure1_sub1 <- cowplot::plot_grid(dc_class_line, stacked_buf_cn,
                                    labels = c("C", "D"), rel_widths = c(1, 0.8), ncol = 2)
 
-figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist, br_by_cnv_p0211,
-                                   rel_widths = c(1, 0.9, 0.4), labels = c("E", "F", "G"), ncol = 3)
+figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist,
+                                   rel_widths = c(1, 1), labels = c("E", "F"), ncol = 2)
 
-figure1_sub3 <- cowplot::plot_grid(br_by_cnv, scatter_signif_buffered, ora_buf_terms,
-                                   rel_widths = c(0.8, 1, 1), labels = c("H", "I", "J"), ncol = 3)
+figure1_sub3 <- cowplot::plot_grid(br_by_cnv_p0211, br_by_cnv, scatter_signif_buffered, ora_buf_terms,
+                                   rel_widths = c(0.5, 0.8, 1, 1), labels = c("G", "H", "I", "J"), ncol = 4)
 
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
                               nrow = 3, rel_heights = c(0.8, 1, 1))

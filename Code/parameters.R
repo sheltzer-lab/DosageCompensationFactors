@@ -37,26 +37,32 @@ illustrations_dir <- here("Illustrations")
 base_size <- 14
 default_theme <- theme_light(base_size = base_size)
 theme_set(default_theme)
-default_color <- "darkgrey"
-highlight_color <- "#66CCB4"
+default_color <- "#2B2B2B"
+highlight_colors <- c("#03A678", "#F27405")
+highlight_color <- highlight_colors[1]
 unidirectional_color_pal <- brewer.pal(5, "Greens")
 bidirectional_color_pal <- rev(brewer.pal(5, "RdBu"))
+bidirectional_color_pal2 <- brewer.pal(5, "PiYG")
 bidirectional_color_pal_viridis <- viridis(n = 5, option = "D", direction = 1)
 categorical_color_pal <- brewer.pal(12, "Paired")
 two_class_color_pal <- c(categorical_color_pal[4], categorical_color_pal[8])
+dicrete_color_pal1 <- c("#E6B000", "#E6882C", "#2C7FE6", "#465566", "#6B644B")
+dicrete_color_pal2 <- c("#33C653", "#C6A433", "#3349C6", "#C63345")
+dicrete_color_pal2_bright <- c("#47E669", "#E6C047", "#475EE6", "#E6475A")
+dicrete_color_pal2_dark <- c("#C8A51A", "#8F3635", "#2E3390", "#39724B")
 
 color_palettes <- list(
   BufferingRatio = "viridis",
   AneuploidyScore = "rocket",
-  Missing = default_color,
+  Missing = "darkgrey",
   WGD = c("WGD" = categorical_color_pal[4],
           "Non-WGD" = categorical_color_pal[8]),
   CopyNumbers = c("1" = bidirectional_color_pal[1],
                   "3" = bidirectional_color_pal[4],
                   "4" = bidirectional_color_pal[5]),
-  Datasets = c("DepMap" = categorical_color_pal[8],
-               "ProCan" = categorical_color_pal[4],
-               "CPTAC" = categorical_color_pal[10]),
+  Datasets = c("DepMap" = brewer.pal(8, "Dark2")[1],
+               "ProCan" = brewer.pal(8, "Dark2")[2],
+               "CPTAC" = brewer.pal(8, "Dark2")[3]),
   BufferingClasses = c("Buffered" = bidirectional_color_pal[1],
                        "Scaling" = bidirectional_color_pal[5],
                        "Anti-Scaling" = "dimgrey"),

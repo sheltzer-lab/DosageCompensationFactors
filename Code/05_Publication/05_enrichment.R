@@ -30,7 +30,8 @@ color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
 
 panel_volcano <- diff_exp %>%
   plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  labs(y = "-log10(p.adj)")
 
 # === ORA Panel ===
 genes_up <- diff_exp %>%
