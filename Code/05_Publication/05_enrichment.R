@@ -92,6 +92,15 @@ string_down <- genes_down %>%
 # TODO: Why are more samples in df_agg than in df_procan and df_depmap?
 
 # === 2D Enrichment Panel ===
+hallmark_gene_set <- msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
+  rename(Gene.Symbol = "gene_symbol")
+
+gene_sets <- hallmark_gene_set %>%
+  group_by(gs_name) %>%
+  group_map(~list(.x$Gene.Symbol)) %>%
+  purrr::list_flatten()
+names(gene_sets) <- unique(hallmark_gene_set$gs_name)
+
 fgsea_procan <- diff_exp_procan %>%
   arrange(Log2FC) %>%
   pull(Log2FC, name = Gene.Symbol) %>%
@@ -137,16 +146,6 @@ panel_2d_enrichment <- bind_rows(fgsea_procan %>% mutate(Dataset = "ProCan"),
   theme(legend.position = "top", legend.direction = "horizontal")
 
 # === Proteotoxic Stress Panel ===
-library(msigdbr)
-hallmark_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
-  rename(Gene.Symbol = "gene_symbol")
-
-gene_sets <- hallmark_gene_set %>%
-  group_by(gs_name) %>%
-  group_map(~list(.x$Gene.Symbol)) %>%
-  purrr::list_flatten()
-names(gene_sets) <- unique(hallmark_gene_set$gs_name)
-
 gsea_cptac_all <- expr_buf_cptac %>%
   ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
   t() %>%
@@ -172,9 +171,10 @@ panel_proteotox <- gsea_cptac %>%
   labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "#Genes") +
   scale_color_viridis_c() +
   theme(legend.position = c("left", "top"),
-        legend.position.inside = c(0.01, 0.01),
+        legend.position.inside = c(0, 0),
         legend.justification = c("left", "bottom"),
-        legend.text = element_text(size = base_size))
+        legend.text = element_text(size = base_size),
+        legend.background = element_rect(fill = alpha('white', 2/3)))
 
 # === Proliferation ===
 df_prolif <- df_agg %>%
@@ -221,6 +221,6 @@ figure5_02 <- cowplot::plot_grid(panel_2d_enrichment, fig5_02_sub1,
                               rel_widths = c(1, 0.7),
                               nrow = 1, ncol = 2)
 
-cairo_pdf(here(plots_dir, "figure05_02.pdf"), width = 10, height = 7)
+cairo_pdf(here(plots_dir, "figure05_02.pdf"), width = 12, height = 7)
 figure5_02
 dev.off()
