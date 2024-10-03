@@ -78,15 +78,19 @@ volcano_dep_diff <- df_crispr_model_buf %>%
 # === Model Buffering Enrichment Panel
 ora_up <- df_crispr_model_buf %>%
   filter(Significant == "Up") %>%
+  arrange(desc(Log2FC)) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
-  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "CORUM"), custom_color = color_palettes$DiffExp["Up"])
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "CORUM"),
+                     custom_color = color_palettes$DiffExp["Up"], string_trunc = 60)
 
 ora_down <- df_crispr_model_buf %>%
   filter(Significant == "Down") %>%
+  arrange(Log2FC) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
-  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), custom_color = color_palettes$DiffExp["Down"])
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "WP"),
+                     custom_color = color_palettes$DiffExp["Down"], string_trunc = 60)
 
 # === Combine Panels into Figure ===
 figure6_sub1 <- cowplot::plot_grid(volcano_dep_corr, gene_corr_plots$EGFR, gene_corr_plots$CDK6 + ylab(NULL),

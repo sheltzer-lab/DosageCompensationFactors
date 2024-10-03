@@ -234,11 +234,14 @@ low_var_buf_loss %>%
 ## Overrepresentation Analysis of Top50
 ora_buf <- low_var_buf %>%
   filter(Top50) %>%
+  filter(Dataset == "CPTAC") %>%
+  arrange(Gene.BR.SD.MeanNormRank) %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis()
+  overrepresentation_analysis(ordered = TRUE)
 
 ora_buf %>%
-  plot_terms(databases)
+  plot_terms() %>%
+  save_plot("frequently_buffered_genes_ora-terms.png", height = 200)
 
 # === Random Allelic Expression ===
 rae_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%

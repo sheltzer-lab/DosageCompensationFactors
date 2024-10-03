@@ -156,8 +156,10 @@ scatter_signif_buffered <- low_var_buf %>%
 
 ora_buf <- low_var_buf %>%
   filter(Top50) %>%
+  filter(Dataset == "CPTAC") %>%
+  arrange(Gene.BR.SD.MeanNormRank) %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis()
+  overrepresentation_analysis(ordered = TRUE)
 
 ora_buf_terms <- ora_buf %>%
   plot_terms_compact(selected_sources = c("GO:MF", "KEGG", "WP"), custom_color = highlight_color)

@@ -177,6 +177,7 @@ df_crispr_model_buf %>%
 ### Apply over representation analysis
 ora_up <- df_crispr_model_buf %>%
   filter(Significant == "Up") %>%
+  arrange(desc(Log2FC)) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis()
 
@@ -186,6 +187,7 @@ ora_up %>%
 
 ora_down <- df_crispr_model_buf %>%
   filter(Significant == "Down") %>%
+  arrange(Log2FC) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis()
 
@@ -203,6 +205,29 @@ df_crispr_model_buf %>%
   filter(Significant == "Down") %>%
   pull(Gene.Symbol) %>%
   intersect(bot_corr$Gene.Symbol)
+
+### Get Genes that are essential in Buffering cells only
+essential_buf_only <- df_crispr_model_buf %>%
+  filter(Significant == "Up") %>%
+  filter(Mean_GroupA < 0.5 & Mean_GroupB > 0.5)
+
+essential_buf_only %>%
+  arrange(desc(Log2FC)) %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = TRUE) %>%
+  plot_terms()
+
+### Genes that are essential in Scaling cells only
+essential_scaling_only <- df_crispr_model_buf %>%
+  filter(Significant == "Down") %>%
+  filter(Mean_GroupA > 0.5 & Mean_GroupB < 0.5)
+
+essential_scaling_only %>%
+  arrange(Log2FC) %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = FALSE) %>%
+  plot_terms()
+
 
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)
 
