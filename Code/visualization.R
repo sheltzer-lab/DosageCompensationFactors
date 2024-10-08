@@ -15,7 +15,7 @@ library(ggrepel)
 here::i_am("DosageCompensationFactors.Rproj")
 
 vertical_bar_chart <- function(df, category_col, value_col,
-                               color_col = NULL, default_fill_color = "dimgrey",
+                               color_col = NULL, default_fill_color = default_color,
                                error_low_col = NULL, error_high_col = NULL,
                                value_range = c(0.45, 0.65), break_steps = 0.05,
                                line_intercept = 0.5, bar_label_shift = 0.002, color_discrete = FALSE,
@@ -34,7 +34,7 @@ vertical_bar_chart <- function(df, category_col, value_col,
       geom_pointrange(aes(x = { { category_col } }, y = { { value_col } },
                           ymin = { { error_low_col } }, ymax = { { error_high_col } }),
                       colour = "orange", fatten = 1) } +
-    geom_shadowtext(color = "white", y = value_range[1] + bar_label_shift, hjust = 0, bg.colour = "dimgrey") +
+    geom_shadowtext(color = "white", y = value_range[1] + bar_label_shift, hjust = 0, bg.colour = default_color) +
     scale_y_continuous(breaks = seq(value_range[1], value_range[2], break_steps)) +
     scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = color_discrete) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
@@ -311,7 +311,7 @@ plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10, labe
 }
 
 print_signif <- function(p, digits = 3, scientific = TRUE, digits_scientific = 1) {
-  if (!is.na(p) & p == 0) return("p = 0")
+  if (!is.na(p) & p == 0) return("p < 1.0e-99")
 
   if (scientific) {
     return(paste0("p = ", formatC(p, format = "e", digits = digits_scientific)))

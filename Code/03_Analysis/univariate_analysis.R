@@ -29,21 +29,17 @@ comparison_plots_dir <- here(plots_dir, "Comparison")
 procan_plots_dir <- here(plots_dir, "ProCan")
 procan_chr_plots_dir <- here(procan_plots_dir, "ChromosomeArm-Level")
 procan_gene_plots_dir <- here(procan_plots_dir, "Gene-Level")
-procan_comparison_plots_dir <- here(comparison_plots_dir, "ProCan")
 depmap_plots_dir <- here(plots_dir, "DepMap")
 depmap_chr_plots_dir <- here(depmap_plots_dir, "ChromosomeArm-Level")
 depmap_gene_plots_dir <- here(depmap_plots_dir, "Gene-Level")
-depmap_comparison_plots_dir <- here(comparison_plots_dir, "DepMap")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(procan_plots_dir, recursive = TRUE)
 dir.create(procan_chr_plots_dir, recursive = TRUE)
 dir.create(procan_gene_plots_dir, recursive = TRUE)
-dir.create(procan_comparison_plots_dir, recursive = TRUE)
 dir.create(depmap_plots_dir, recursive = TRUE)
 dir.create(depmap_chr_plots_dir, recursive = TRUE)
 dir.create(depmap_gene_plots_dir, recursive = TRUE)
-dir.create(depmap_comparison_plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
 dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors.parquet"))
@@ -407,15 +403,10 @@ plot_comparison <- function(comparison_results) {
   return(plot_stack2)
 }
 
-## Create cluster & run bootstrap analysis
-cl <- makeCluster(getOption("cl.cores", max(1, detectCores() - 2)))
-clusterExport(cl = cl, c("reshape_factors", "determine_rocs", "summarize_roc_auc", "dc_factor_cols",
-                         "roc_silent", "auc_na", "factor_roc_auc_base_pipeline", "sample_func"),
-              envir = environment())
-
 datasets_bootstrap <- list(
   list(dataset = expr_buf_procan, name = "ProCan"),
-  list(dataset = expr_buf_depmap, name = "DepMap")
+  list(dataset = expr_buf_depmap, name = "DepMap"),
+  list(dataset = expr_buf_cptac, name = "CPTAC")
 )
 
 conditions_bootstrap <- list(
@@ -424,6 +415,12 @@ conditions_bootstrap <- list(
   list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_gain, level = "Chromosome Arm", event = "Gain"),
   list(buffering = "Buffering.ChrArmLevel.Class", filter = filter_arm_loss, level = "Chromosome Arm", event = "Loss")
 )
+
+## Create cluster & run bootstrap analysis
+cl <- makeCluster(getOption("cl.cores", max(1, detectCores() - 2)))
+clusterExport(cl = cl, c("reshape_factors", "determine_rocs", "summarize_roc_auc", "dc_factor_cols",
+                         "roc_silent", "auc_na", "factor_roc_auc_base_pipeline", "sample_func"),
+              envir = environment())
 
 bootstrap_results <- NULL
 pb <- txtProgressBar(min = 0, max = length(datasets_bootstrap) * length(conditions_bootstrap), style = 3)
@@ -452,107 +449,112 @@ bootstrap_results %>%
   write.xlsx(here(tables_base_dir, "dosage_compensation_univariate_bootstrap.xlsx"),
              colNames = TRUE)
 
+## Compare statistical results between conditions
 bootstrap_results <- read_parquet(here(output_data_dir, 'bootstrap_univariate.parquet'))
 
-bootstrap_chr_gain <- filter(bootstrap_results, Dataset == "DepMap" & Level == "Chromosome Arm" & Event == "Gain")
-bootstrap_chr_loss <- filter(bootstrap_results, Dataset == "DepMap" & Level == "Chromosome Arm" & Event == "Loss")
-bootstrap_cn_gain <- filter(bootstrap_results, Dataset == "DepMap" & Level == "Gene Copy Number" & Event == "Gain")
-bootstrap_cn_loss <- filter(bootstrap_results, Dataset == "DepMap" & Level == "Gene Copy Number" & Event == "Loss")
+for (dataset in datasets_bootstrap) {
+  current_plots_dir <- here(comparison_plots_dir, dataset$name)
+  dir.create(current_plots_dir, recursive = TRUE)
 
-## Compare statistical results between conditions
-### Chr Gain vs. Chr Loss
-results_chrgain_chrloss <- compare_conditions(bootstrap_chr_gain, bootstrap_chr_loss)
-plot_chrgain_chrloss <- plot_comparison(results_chrgain_chrloss)
-ggsave(here(depmap_comparison_plots_dir, "roc-auc_comparison_chrgain_chrloss.png"),
-       plot = plot_chrgain_chrloss,
-       height = 200, width = 320, units = "mm", dpi = 300)
+  bootstrap_chr_gain <- filter(bootstrap_results, Dataset == dataset$name & Level == "Chromosome Arm" & Event == "Gain")
+  bootstrap_chr_loss <- filter(bootstrap_results, Dataset == dataset$name & Level == "Chromosome Arm" & Event == "Loss")
+  bootstrap_cn_gain <- filter(bootstrap_results, Dataset == dataset$name & Level == "Gene Copy Number" & Event == "Gain")
+  bootstrap_cn_loss <- filter(bootstrap_results, Dataset == dataset$name & Level == "Gene Copy Number" & Event == "Loss")
 
-### CN gain vs. CN loss
-results_cngain_cnloss <- compare_conditions(bootstrap_cn_gain, bootstrap_cn_loss)
-plot_cngain_cnloss <- plot_comparison(results_cngain_cnloss)
-ggsave(here(depmap_comparison_plots_dir, "roc-auc_comparison_cngain_cnloss.png"),
-       plot = plot_cngain_cnloss,
-       height = 200, width = 320, units = "mm", dpi = 300)
+  ### Chr Gain vs. Chr Loss
+  results_chrgain_chrloss <- compare_conditions(bootstrap_chr_gain, bootstrap_chr_loss)
+  plot_chrgain_chrloss <- plot_comparison(results_chrgain_chrloss)
+  ggsave(here(current_plots_dir, "roc-auc_comparison_chrgain_chrloss.png"),
+         plot = plot_chrgain_chrloss,
+         height = 200, width = 320, units = "mm", dpi = 300)
 
-### Chr gain vs. CN gain
-results_chrgain_cngain <- compare_conditions(bootstrap_chr_gain, bootstrap_cn_gain)
-plot_chrgain_cngain <- plot_comparison(results_chrgain_cngain)
-ggsave(here(depmap_comparison_plots_dir, "roc-auc_comparison_chrgain_cngain.png"),
-       plot = plot_chrgain_cngain,
-       height = 200, width = 320, units = "mm", dpi = 300)
+  ### CN gain vs. CN loss
+  results_cngain_cnloss <- compare_conditions(bootstrap_cn_gain, bootstrap_cn_loss)
+  plot_cngain_cnloss <- plot_comparison(results_cngain_cnloss)
+  ggsave(here(current_plots_dir, "roc-auc_comparison_cngain_cnloss.png"),
+         plot = plot_cngain_cnloss,
+         height = 200, width = 320, units = "mm", dpi = 300)
 
-### Chr loss vs. CN loss
-results_chrloss_cnloss <- compare_conditions(bootstrap_chr_loss, bootstrap_cn_loss)
-plot_chrloss_cnloss <- plot_comparison(results_chrloss_cnloss)
-ggsave(here(depmap_comparison_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"),
-       plot = plot_chrloss_cnloss,
-       height = 200, width = 320, units = "mm", dpi = 300)
+  ### Chr gain vs. CN gain
+  results_chrgain_cngain <- compare_conditions(bootstrap_chr_gain, bootstrap_cn_gain)
+  plot_chrgain_cngain <- plot_comparison(results_chrgain_cngain)
+  ggsave(here(current_plots_dir, "roc-auc_comparison_chrgain_cngain.png"),
+         plot = plot_chrgain_cngain,
+         height = 200, width = 320, units = "mm", dpi = 300)
 
-## Investigate correlation of ROC AUC of factors
-png(here(depmap_comparison_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
-corrplot_chr_gain <- bootstrap_chr_gain %>%
-  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
-  pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
-  select(-Condition, -Bootstrap.Sample) %>%
-  plot_correlation()
-dev.off()
+  ### Chr loss vs. CN loss
+  results_chrloss_cnloss <- compare_conditions(bootstrap_chr_loss, bootstrap_cn_loss)
+  plot_chrloss_cnloss <- plot_comparison(results_chrloss_cnloss)
+  ggsave(here(current_plots_dir, "roc-auc_comparison_chrloss_cnloss.png"),
+         plot = plot_chrloss_cnloss,
+         height = 200, width = 320, units = "mm", dpi = 300)
 
-png(here(depmap_comparison_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
-corrplot_chr_loss <- bootstrap_chr_loss %>%
-  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
-  pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
-  select(-Condition, -Bootstrap.Sample) %>%
-  plot_correlation()
-dev.off()
+  ## Investigate correlation of ROC AUC of factors
+  png(here(current_plots_dir, "corrplot_chrgain.png"), width = 300, height = 300, units = "mm", res = 200)
+  corrplot_chr_gain <- bootstrap_chr_gain %>%
+    select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
+    pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    select(-Condition, -Bootstrap.Sample) %>%
+    plot_correlation()
+  dev.off()
 
-png(here(depmap_comparison_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
-corrplot_cn_gain <- bootstrap_cn_gain %>%
-  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
-  pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
-  select(-Condition, -Bootstrap.Sample) %>%
-  plot_correlation()
-dev.off()
+  png(here(current_plots_dir, "corrplot_chrloss.png"), width = 300, height = 300, units = "mm", res = 200)
+  corrplot_chr_loss <- bootstrap_chr_loss %>%
+    select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
+    pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    select(-Condition, -Bootstrap.Sample) %>%
+    plot_correlation()
+  dev.off()
 
-png(here(depmap_comparison_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
-corrplot_cn_loss <- bootstrap_cn_loss %>%
-  select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
-  pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
-  select(-Condition, -Bootstrap.Sample) %>%
-  plot_correlation()
-dev.off()
+  png(here(current_plots_dir, "corrplot_cngain.png"), width = 300, height = 300, units = "mm", res = 200)
+  corrplot_cn_gain <- bootstrap_cn_gain %>%
+    select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
+    pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    select(-Condition, -Bootstrap.Sample) %>%
+    plot_correlation()
+  dev.off()
 
-## Plot distribution of ROC AUC of factors
-dist_chr_gain <- bootstrap_chr_gain %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_chrgain.png", depmap_comparison_plots_dir)
-dist_chr_loss <- bootstrap_chr_loss %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_chrloss.png", depmap_comparison_plots_dir)
-dist_cn_gain <- bootstrap_cn_gain %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_cngain.png", depmap_comparison_plots_dir)
-dist_cn_loss <- bootstrap_cn_loss %>%
-  violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
-  save_plot("roc-auc_distribution_cnloss.png", depmap_comparison_plots_dir)
+  png(here(current_plots_dir, "corrplot_cnloss.png"), width = 300, height = 300, units = "mm", res = 200)
+  corrplot_cn_loss <- bootstrap_cn_loss %>%
+    select(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC, Condition, Bootstrap.Sample) %>%
+    pivot_wider(names_from = DosageCompensation.Factor, values_from = DosageCompensation.Factor.ROC.AUC) %>%
+    select(-Condition, -Bootstrap.Sample) %>%
+    plot_correlation()
+  dev.off()
 
-## Plot Heatmap to compare conditions in a condensed way
-bootstrap_auc <- bind_rows(bootstrap_chr_gain, bootstrap_chr_loss, bootstrap_cn_gain, bootstrap_cn_loss)
+  ## Plot distribution of ROC AUC of factors
+  dist_chr_gain <- bootstrap_chr_gain %>%
+    violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+    save_plot("roc-auc_distribution_chrgain.png", current_plots_dir)
+  dist_chr_loss <- bootstrap_chr_loss %>%
+    violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+    save_plot("roc-auc_distribution_chrloss.png", current_plots_dir)
+  dist_cn_gain <- bootstrap_cn_gain %>%
+    violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+    save_plot("roc-auc_distribution_cngain.png", current_plots_dir)
+  dist_cn_loss <- bootstrap_cn_loss %>%
+    violin_plot(DosageCompensation.Factor, DosageCompensation.Factor.ROC.AUC) %>%
+    save_plot("roc-auc_distribution_cnloss.png", current_plots_dir)
 
-rank_tests <- list(
-  comparisons = list(c("Chromosome Arm Gain", "Chromosome Arm Loss"),
-                     c("Gene Copy Number Gain", "Gene Copy Number Loss"),
-                     c("Chromosome Arm Gain", "Gene Copy Number Gain"),
-                     c("Chromosome Arm Loss", "Gene Copy Number Loss")),
-  annotations = c(print_corr_obj(results_chrgain_chrloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
-                 print_corr_obj(results_cngain_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
-                 print_corr_obj(results_chrgain_cngain$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
-                 print_corr_obj(results_chrloss_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE)),
-  y_position = c(1, 1, 1.5, 2)
-)
+  ## Plot Heatmap to compare conditions in a condensed way
+  bootstrap_auc <- bind_rows(bootstrap_chr_gain, bootstrap_chr_loss, bootstrap_cn_gain, bootstrap_cn_loss)
 
-bootstrap_heatmap <- bootstrap_auc %>%
-  roc_auc_heatmap(rank_tests) %>%
-  save_plot("roc-auc_comparison_heatmap.png", dir = depmap_comparison_plots_dir, width = 400)
+  rank_tests <- list(
+    comparisons = list(c("Chromosome Arm Gain", "Chromosome Arm Loss"),
+                       c("Gene Copy Number Gain", "Gene Copy Number Loss"),
+                       c("Chromosome Arm Gain", "Gene Copy Number Gain"),
+                       c("Chromosome Arm Loss", "Gene Copy Number Loss")),
+    annotations = c(print_corr_obj(results_chrgain_chrloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                    print_corr_obj(results_cngain_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                    print_corr_obj(results_chrgain_cngain$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                    print_corr_obj(results_chrloss_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE)),
+    y_position = c(1, 1, 1.5, 2)
+  )
+
+  bootstrap_heatmap <- bootstrap_auc %>%
+    roc_auc_heatmap(rank_tests) %>%
+    save_plot("roc-auc_comparison_heatmap.png", dir = current_plots_dir, width = 400)
+}
 
 # === Correlation Analysis between Buffering Ratio and Factors ===
 br_factor_cor <- bind_rows(expr_buf_procan, expr_buf_depmap, expr_buf_cptac) %>%
