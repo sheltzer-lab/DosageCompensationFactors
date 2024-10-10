@@ -88,6 +88,8 @@ beeswarm_plot <- function(df, x, y, color_col = NULL, cex = 2) {
 }
 
 plot_correlation <- function(df, method = "spearman", adjust = "none") {
+  if(nrow(df) == 0) return(NULL)
+
   cor_matrix <- psych::corr.test(df, method = method, adjust = adjust)
 
   corrplot(cor_matrix$r, p.mat = cor_matrix$p,

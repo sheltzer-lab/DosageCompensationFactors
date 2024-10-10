@@ -363,6 +363,8 @@ plot_comparison <- function(comparison_results) {
   require(ggplot2)
   require(cowplot)
 
+  if(is.null(comparison_results)) return(NULL)
+
   conditions <- unique(comparison_results$stat_summary$Condition)
 
   plot1 <- comparison_results$stat_summary %>%
@@ -537,6 +539,9 @@ for (dataset in datasets_bootstrap) {
     save_plot("roc-auc_distribution_cnloss.png", current_plots_dir)
 
   ## Plot Heatmap to compare conditions in a condensed way
+  results <- list(results_chrgain_chrloss, results_cngain_cnloss, results_chrgain_cngain, results_chrloss_cnloss)
+  if (any(sapply(results, is.null))) next
+
   bootstrap_auc <- bind_rows(bootstrap_chr_gain, bootstrap_chr_loss, bootstrap_cn_gain, bootstrap_cn_loss)
 
   rank_tests <- list(
@@ -599,3 +604,5 @@ br_factor_cor_heatmap <- br_factor_cor %>%
         plot.margin = unit(c(5, 15, 5, 15), "mm"))
 
 save_plot(br_factor_cor_heatmap, "buffering_ratio_factor_correlation.png", width = 280, height = 150)
+
+max_abs_cor <- max(abs(br_factor_cor$cor))

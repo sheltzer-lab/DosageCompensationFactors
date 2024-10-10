@@ -215,7 +215,8 @@ essential_buf_only %>%
   arrange(desc(Log2FC)) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis(ordered = TRUE) %>%
-  plot_terms()
+  plot_terms() %>%
+  save_plot("ora_terms_essential_buffering_only.png", height = 300)
 
 ### Genes that are essential in Scaling cells only
 essential_scaling_only <- df_crispr_model_buf %>%
@@ -225,8 +226,9 @@ essential_scaling_only <- df_crispr_model_buf %>%
 essential_scaling_only %>%
   arrange(Log2FC) %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis(ordered = FALSE) %>%
-  plot_terms()
+  overrepresentation_analysis(ordered = TRUE) %>%
+  plot_terms() %>%
+  save_plot("ora_terms_essential_scaling_only.png", height = 300)
 
 
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)

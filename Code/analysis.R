@@ -344,6 +344,8 @@ compare_conditions <- function(df_condition1, df_condition2) {
   require(skimr)
   require(assertr)
 
+  if (nrow(df_condition1) == 0 || nrow(df_condition2) == 0) return(NULL)
+
   # Merge dataframes for unified handling
   df_merged <- df_condition1 %>%
     bind_rows(df_condition2) %>%
