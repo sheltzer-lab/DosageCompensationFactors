@@ -41,6 +41,7 @@ model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_
 
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
 model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+metadata_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
@@ -311,7 +312,9 @@ gsea_cptac %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
   inner_join(y = model_buf_cptac, by = "Model.ID") %>%
-  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE) %>%
+  left_join(y = metadata_cptac %>% select(-HALLMARK_UNFOLDED_PROTEIN_RESPONSE), by = "Model.ID") %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
+                        color_col = Model.AneuploidyScore.Estimate) %>%
   save_plot("gsea_unfolded_cptac.png")
 
 gsea_procan %>%

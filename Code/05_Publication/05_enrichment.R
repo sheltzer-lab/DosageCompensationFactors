@@ -24,6 +24,8 @@ model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregat
 df_celllines <- read_parquet(here(output_data_dir, 'celllines.parquet'))
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
 model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+metadata_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
+
 
 diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
 diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet")) %>%
@@ -130,8 +132,7 @@ panel_2d_enrichment <- bind_rows(fgsea_procan %>% mutate(Dataset = "ProCan"),
          Significant = factor(Significant, levels = c("ProCan", "CPTAC", "Both", "None")),
          Label = str_replace(pathway, "HALLMARK_", ""),
          Label = if_else(Significant == "Both" | Label %in% selected_pathways,
-                         Label, NA),
-         Label = str_to_lower(str_replace_all(Label, "_", " "))) %>%
+                         Label, NA)) %>%
   ggplot() +
   aes(x = NES_ProCan, y = NES_CPTAC, label = Label, color = Significant) +
   geom_hline(yintercept = 0, color = default_color) +
@@ -151,7 +152,9 @@ gsea_cptac_all <- expr_buf_cptac %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
-  inner_join(y = model_buf_cptac, by = "Model.ID")
+  inner_join(y = model_buf_cptac, by = "Model.ID") %>%
+  left_join(y = metadata_cptac %>% select(-HALLMARK_UNFOLDED_PROTEIN_RESPONSE), by = "Model.ID")
+
 
 quantile(gsea_cptac_all$Observations, probs = seq(0,1,0.1))
 
@@ -163,12 +166,12 @@ cor_proteotox_test <- cor.test(gsea_cptac$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
 
 panel_proteotox <- gsea_cptac %>%
   ggplot() +
-  aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE, color = Observations) +
+  aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE, color = Model.AneuploidyScore.Estimate) +
   geom_point(size = 2) +
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
            label = paste0(print_corr(cor_proteotox_test$estimate), ", ", print_signif(cor_proteotox_test$p.value))) +
-  labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "#Genes") +
+  labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "eAS") +
   scale_color_viridis_c() +
   theme(legend.position = c("left", "top"),
         legend.position.inside = c(0, 0),

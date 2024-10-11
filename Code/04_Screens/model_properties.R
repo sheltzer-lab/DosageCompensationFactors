@@ -488,6 +488,10 @@ aneuploidy_reg_plot <- df_procan %>%
 df_depmap %>%
   scatter_plot_reg_corr(CellLine.AneuploidyScore, Model.Buffering.Ratio, color_col = WGD, point_size = 2) %>%
   save_plot("cellline_aneuploidy_depmap.png")
+df_cptac %>%
+  scatter_plot_reg_corr(Model.AneuploidyScore.Estimate, Model.Buffering.Ratio, color_col = Model.WGD.Estimate,
+                        point_size = 2) %>%
+  save_plot("cellline_aneuploidy_cptac.png")
 
 ## Tumor Purity
 df_cptac %>%
