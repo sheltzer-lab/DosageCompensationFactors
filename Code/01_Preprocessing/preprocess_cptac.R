@@ -93,18 +93,13 @@ copy_number_cptac <- gdc_cptac_cnv %>%
   mutate(Gene.CopyNumber = if_else(as.numeric(copy_number) < 10, as.numeric(copy_number), NA), # TODO: Temporary fix
          ## Remove ENSEMBL version
          Gene.ENSEMBL.Id = sub("\\.\\d+$", "", Gene.ENSEMBL.Id)) %>%
-  ## ID Mapping
   select(Model.ID, Gene.ENSEMBL.Id, Gene.CopyNumber) %>%
-  left_join(y = uniprot_mapping %>% select("Gene.ENSEMBL.Id", "Protein.Uniprot.Accession", "Gene.Symbol"),
-            by = "Gene.ENSEMBL.Id",
-            na_matches = "never", relationship = "many-to-one", multiple = "last") %>% # TODO: Check which UniProt ID is obsolete
-  updateGeneSymbols() %>%
-  get_chromosome_arms() %>%
-  filter(Gene.Chromosome %in% (1:22)) %>% # Only use autosomal genes
   # TODO: Determine source of quality issues (multiple values per gene and sample)
   drop_na(Gene.CopyNumber) %>%
   group_by(Model.ID, Gene.ENSEMBL.Id) %>%
-  summarize(Gene.CopyNumber = max(Gene.CopyNumber, na.rm = TRUE), .groups = "drop")
+  summarize(Gene.CopyNumber = max(Gene.CopyNumber, na.rm = TRUE), .groups = "drop") %>%
+  get_chromosome_arms(id_col = "Gene.ENSEMBL.Id", id_type = "ensembl_gene_id") %>%
+  filter(Gene.Chromosome %in% (1:22)) # Only use autosomal genes
 
 # === Preprocess Datasets ===
 ## Expression
@@ -115,11 +110,37 @@ expr_cptac_processed <- expr_cptac %>%
                     normalized_colname = "Protein.Expression.Normalized")
 
 ## Metadata
+### Estimate Aneuploidy Score & WGD
+df_as <- copy_number_cptac %>%
+  left_join(y = metadata_cptac_processed %>% select(Model.ID, ends_with("ploidy")), by = "Model.ID") %>%
+  mutate(Model.Ploidy = if_else(is.na(WGS_ploidy), WES_ploidy, WGS_ploidy),
+         Model.WGD.Estimate = Model.Ploidy > 3,
+         Model.Ploidy.Rounded = round(Model.Ploidy),
+         CopyNumber.Gain = Gene.CopyNumber > Model.Ploidy.Rounded,
+         CopyNumber.Loss = Gene.CopyNumber < Model.Ploidy.Rounded,
+         CopyNumber.Neutral = Gene.CopyNumber == Model.Ploidy.Rounded) %>%
+  group_by(Model.ID, Gene.ChromosomeArm, Model.Ploidy, Model.Ploidy.Rounded, Model.WGD.Estimate) %>%
+  summarize(Genes = n(),
+            CopyNumber.Median = median(Gene.CopyNumber, na.rm = TRUE),
+            CopyNumber.Gain.Freq = sum(CopyNumber.Gain, na.rm = TRUE) / Genes,
+            CopyNumber.Loss.Freq = sum(CopyNumber.Loss, na.rm = TRUE) / Genes,
+            CopyNumber.Neutral.Freq = sum(CopyNumber.Neutral, na.rm = TRUE) / Genes,
+            .groups = "drop") %>%
+  mutate(ChromosomeArm.CNA = case_when(CopyNumber.Gain.Freq > CopyNumber.Neutral.Freq & CopyNumber.Gain.Freq > CopyNumber.Loss.Freq ~ 1L,
+                                       CopyNumber.Loss.Freq > CopyNumber.Neutral.Freq & CopyNumber.Loss.Freq > CopyNumber.Gain.Freq ~ -1L,
+                                       TRUE ~ 0L),
+         ChromosomeArm.CNA.Alternative = as.integer(CopyNumber.Median - Model.Ploidy.Rounded)) %>%
+  group_by(Model.ID) %>%
+  mutate(Model.AneuploidyScore.Estimate = if_else(is.na(Model.Ploidy.Rounded), NA, sum(abs(ChromosomeArm.CNA)))) %>%
+  ungroup() %>%
+  distinct(Model.ID, Model.Ploidy, Model.WGD.Estimate, Model.AneuploidyScore.Estimate) %>%
+  drop_na()
+
 metadata_cptac_processed <- bind_rows(df_list_meta) %>%
   rename(Model.ID = idx) %>%
   mutate_all(~type.convert(., as.is = TRUE)) %>%
-  mutate(Model.TumorPurity = pmin(WES_purity, WGS_purity, na.rm = TRUE))
-
+  mutate(Model.TumorPurity = pmin(WES_purity, WGS_purity, na.rm = TRUE)) %>%
+  left_join(df_as, by = "Model.ID")
 
 # === Save Datasets ===
 expr_cptac_processed %>%
@@ -207,6 +228,16 @@ purity_dist <- metadata_cptac_processed %>%
   scale_x_continuous(breaks = seq(0, 1, 0.1))
 
 fivenum(metadata_cptac_processed$Model.TumorPurity, na.rm = TRUE)
+
+# Aneuploidy Score
+df_as %>%
+  ggplot() +
+  aes(x = Model.AneuploidyScore.Estimate, fill = Model.WGD.Estimate) +
+  geom_histogram(position = "stack")
+
+df_as %>%
+  pull(Model.AneuploidyScore.Estimate) %>%
+  fivenum()
 
 # WGS and WES ploidy inconsistent
 ploidy_cptac <- metadata_cptac_processed %>%
