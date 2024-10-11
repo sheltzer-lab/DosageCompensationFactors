@@ -344,7 +344,7 @@ map_signif <- function (p, thresholds = c(0.01, 0.001, 0.0001)) {
       p < thresholds[3] ~ "***",
       p < thresholds[2] ~ "**",
       p < thresholds[1] ~ "*",
-      TRUE ~ "N.S."
+      TRUE ~ "n.s."
     )
 }
 
@@ -519,7 +519,7 @@ roc_auc_heatmap <- function(df, rank_tests) {
   cowplot::plot_grid(
     heatmap_boot_auc, signif_bars,
     labels = NULL, nrow = 1, align = "h", axis = "tb",
-    rel_widths = c(15, 1)
+    rel_widths = c(12, 1)
   )
 }
 

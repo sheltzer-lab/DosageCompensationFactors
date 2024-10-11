@@ -32,29 +32,53 @@ rank_loss <- bind_rows(rank_loss_wgd %>% mutate(Condition = "Loss, WGD"),
 rank_gain <- bind_rows(rank_gain_wgd %>% mutate(Condition = "Gain, WGD"),
                        rank_gain_no_wgd %>% mutate(Condition = "Gain, Non-WGD"))
 
+# To supplement
 rank_heatmap <- rank_univariate %>%
   unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
   theme(legend.position = "right", legend.direction = "vertical")
+# To main figure
 rank_loss_heatmap <- rank_loss %>%
+  # Shorten list of factors
+  group_by(DosageCompensation.Factor) %>%
+  mutate(MaxMNR = max(MeanNormRank)) %>%
+  ungroup() %>%
+  filter(MaxMNR > 0.5) %>%
   unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
   theme(legend.position = "right", legend.direction = "vertical")
 rank_gain_heatmap <- rank_gain %>%
+  # Shorten list of factors
+  group_by(DosageCompensation.Factor) %>%
+  mutate(MaxMNR = max(MeanNormRank)) %>%
+  ungroup() %>%
+  filter(MaxMNR > 0.5) %>%
   unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
   theme(legend.position = "right", legend.direction = "vertical")
 
-panel_rank <- cowplot::plot_grid(rank_heatmap + coord_flip() + theme(legend.position = "none"),
-                                 rank_gain_heatmap + coord_flip() + theme(legend.position = "none"),
+panel_rank <- cowplot::plot_grid(rank_gain_heatmap + coord_flip() + theme(legend.position = "none"),
                                  rank_loss_heatmap + coord_flip(),
-                                 labels = c("A", "B", "C"),
-                                 nrow = 1, ncol = 3, rel_widths = c(0.8, 0.8, 1))
+                                 labels = c("A", "B"),
+                                 nrow = 1, ncol = 2, rel_widths = c(0.8, 1))
 
 # === Univariate Bootstrap Panel ===
-bootstrap_results <- read_parquet(here(output_data_dir, 'bootstrap_univariate.parquet'))
+bootstrap_results <- read_parquet(here(output_data_dir, 'bootstrap_univariate.parquet')) %>%
+  filter(Dataset == "ProCan") %>%
+  group_by(DosageCompensation.Factor) %>%
+  mutate(MedianAUC = median(DosageCompensation.Factor.ROC.AUC)) %>%
+  ungroup() %>%
+  filter(MedianAUC > 0.51) %>%
+  select(-MedianAUC)
 
-bootstrap_chr_gain <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Chromosome Arm" & Event == "Gain")
-bootstrap_chr_loss <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Chromosome Arm" & Event == "Loss")
-bootstrap_cn_gain <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Gene Copy Number" & Event == "Gain")
-bootstrap_cn_loss <- filter(bootstrap_results, Dataset == "ProCan" & Level == "Gene Copy Number" & Event == "Loss")
+excluded_factors <- c("Protein Abundance", "mRNA Abundance",
+                      "Transcription Factors (Repressor)", "Transcription Factors (Activator)")
+
+bootstrap_chr_gain <- bootstrap_results %>%
+  filter(!(DosageCompensation.Factor %in% excluded_factors) & Level == "Chromosome Arm" & Event == "Gain")
+bootstrap_chr_loss <- bootstrap_results %>%
+  filter(!(DosageCompensation.Factor %in% excluded_factors) & Level == "Chromosome Arm" & Event == "Loss")
+bootstrap_cn_gain <- bootstrap_results %>%
+  filter(!(DosageCompensation.Factor %in% excluded_factors) & Level == "Gene Copy Number" & Event == "Gain")
+bootstrap_cn_loss <- bootstrap_results %>%
+  filter(!(DosageCompensation.Factor %in% excluded_factors) & Level == "Gene Copy Number" & Event == "Loss")
 
 results_chrgain_chrloss <- compare_conditions(bootstrap_chr_gain, bootstrap_chr_loss)
 results_cngain_cnloss <- compare_conditions(bootstrap_cn_gain, bootstrap_cn_loss)
@@ -69,9 +93,9 @@ rank_tests <- list(
                      c("Chromosome Arm Gain", "Gene Copy Number Gain"),
                      c("Chromosome Arm Loss", "Gene Copy Number Loss")),
   annotations = c(print_corr_obj(results_chrgain_chrloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
-                 print_corr_obj(results_cngain_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
-                 print_corr_obj(results_chrgain_cngain$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
-                 print_corr_obj(results_chrloss_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE)),
+                  print_corr_obj(results_cngain_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                  print_corr_obj(results_chrgain_cngain$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
+                  print_corr_obj(results_chrloss_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE)),
   y_position = c(1, 1, 1.5, 2)
 )
 
@@ -80,9 +104,9 @@ panel_bootstrap <- bootstrap_auc %>%
 
 # === Combine Panels into Figure ===
 figure3 <- cowplot::plot_grid(panel_rank, panel_bootstrap,
-                              labels = c("", "D"),
-                              nrow = 2, ncol = 1, rel_heights = c(1, 0.5))
+                              labels = c("", "C"),
+                              nrow = 2, ncol = 1, rel_heights = c(1, 0.8))
 
-cairo_pdf(here(plots_dir, "figure03.pdf"), width = 16, height = 15)
+cairo_pdf(here(plots_dir, "figure03.pdf"), width = 11, height = 11)
 figure3
 dev.off()
