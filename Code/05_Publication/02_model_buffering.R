@@ -162,7 +162,7 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
   geom_tile(aes(color = Mean.AS), alpha = 0) +
   geom_tile() +
   scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
-  scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$BufferingRatio) +
+  scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$BufferingRatio, end = 0.8, begin = 0.1) +
   scale_x_discrete(position = "top") +
   theme_void() +
   labs(x = NULL, fill = "Mean\nBuffering Ratio", color = "Mean\nAneuploidy") +
