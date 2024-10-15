@@ -15,7 +15,7 @@ library(ggrepel)
 here::i_am("DosageCompensationFactors.Rproj")
 
 vertical_bar_chart <- function(df, category_col, value_col,
-                               color_col = NULL, default_fill_color = default_color,
+                               color_col = NULL, default_fill_color = default_color, text_color = NULL,
                                error_low_col = NULL, error_high_col = NULL,
                                value_range = c(0.45, 0.65), break_steps = 0.05,
                                line_intercept = 0.5, bar_label_shift = 0.002, color_discrete = FALSE,
@@ -34,7 +34,8 @@ vertical_bar_chart <- function(df, category_col, value_col,
       geom_pointrange(aes(x = { { category_col } }, y = { { value_col } },
                           ymin = { { error_low_col } }, ymax = { { error_high_col } }),
                       colour = "orange", fatten = 1) } +
-    geom_shadowtext(color = "white", y = value_range[1] + bar_label_shift, hjust = 0, bg.colour = default_color) +
+    { if (!is.null(text_color)) geom_text(color = text_color, y = value_range[1] + bar_label_shift, hjust = 0)
+      else geom_shadowtext(color = "white", y = value_range[1] + bar_label_shift, hjust = 0, bg.colour = default_color) } +
     scale_y_continuous(breaks = seq(value_range[1], value_range[2], break_steps)) +
     scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = color_discrete) +
     labs(title = title, x = category_lab, y = value_lab, fill = color_lab) +
@@ -142,7 +143,7 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
     geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
                      seed = 42, max.iter = 30000, max.time = 1.5,
                      point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
-                     force = 2, max.overlaps = 20) +
+                     force = 5, max.overlaps = 20) +
     labs(title = title, subtitle = subtitle) +
     xlim(c(-max_abs_value, max_abs_value))
 }
@@ -247,6 +248,9 @@ scatter_plot_reg_corr <- function(df, x_col, y_col, color_col = NULL, cor_method
 }
 
 waterfall_plot <- function(df, value_col, rank_col, label_col, n = 5,
+                           color_low = tail(bidirectional_color_pal, n = 1),
+                           color_high = head(bidirectional_color_pal, n = 1),
+                           centrality_measure = mean,
                            y_margin = 0.02, font_size = theme_get()$text$size / 4) {
   rank_col_name <- quo_name(enquo(rank_col))
   value_col_name <- quo_name(enquo(value_col))
@@ -260,24 +264,20 @@ waterfall_plot <- function(df, value_col, rank_col, label_col, n = 5,
   ylim2 <- c((df %>% filter({ { rank_col } } == xlim[2] - label_nudge_x))[[value_col_name]],
              max(df[[value_col_name]] + y_range * y_margin))
 
-  value_mean <- mean(df[[value_col_name]], na.rm = TRUE)
-
-  # TODO: parametrize
-  color_low <- tail(bidirectional_color_pal, n = 1)
-  color_high <- head(bidirectional_color_pal, n = 1)
+  central_value <- centrality_measure(df[[value_col_name]], na.rm = TRUE)
 
   df %>%
     ggplot() +
     aes(x = { { rank_col } }, y = { { value_col } }, label = { { label_col } }) +
-    geom_hline(yintercept = 0, color = "darkgrey") +
+    geom_hline(yintercept = 0, color = default_color) +
     geom_point(size = 0.3) +
-    geom_hline(yintercept = value_mean, color = "red") +
+    geom_hline(yintercept = central_value, color = "red") +
     geom_text_repel(data = df %>% slice_min({ { rank_col } }, n = n),
                     xlim = xlim, ylim = ylim1, direction = "y", nudge_x = label_nudge_x,
-                    seed = 42, force = 2.2, color = color_low, size = font_size) +
+                    seed = 42, force = 2.2, color = color_low, size = font_size, hjust = 0) +
     geom_text_repel(data = df %>% slice_max({ { rank_col } }, n = n),
                     xlim = xlim, ylim = ylim2, direction = "y", nudge_x = -label_nudge_x,
-                    seed = 42, force = 2.2, color = color_high, size = font_size) +
+                    seed = 42, force = 2.2, color = color_high, size = font_size, hjust = 1) +
     lims(y = c(ylim1[1], ylim2[2]))
 }
 

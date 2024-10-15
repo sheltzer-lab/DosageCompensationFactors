@@ -42,7 +42,7 @@ dc_class_line <- expr_buf_depmap %>%
                      breaks = seq(-0.5, 2.5, 0.5),
                      labels = paste0(seq(-0.5, 2.5, 0.5) * 100, "%")) +
   scale_color_manual(values = color_palettes$CopyNumbers) +
-  labs(x = "Buffering Class", y = "Mean Protein Expression", color = "Gene Copy Number") +
+  labs(x = "Buffering Class", y = "Mean Protein Abundance", color = "Gene Copy Number") +
   theme(legend.position = "top", legend.direction = "horizontal")
 
 # === Categorical Distribution Panel ===
@@ -75,7 +75,7 @@ prot_exp_dc_class <- expr_buf_depmap %>%
                                             levels = c("Scaling", "Buffered", "Anti-Scaling"))) %>%
   ggplot() +
   aes(x = Buffering.GeneLevel.Class, y = Protein.Expression.Normalized, color = Buffering.GeneLevel.Class) +
-  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
   geom_signif(comparisons = list(c("Anti-Scaling", "Buffered"),
                                  c("Buffered", "Scaling"),
                                  c("Anti-Scaling", "Scaling")),
@@ -83,7 +83,7 @@ prot_exp_dc_class <- expr_buf_depmap %>%
               map_signif_level = print_signif, y_position = c(1.5, 1.5, 1.8),
               size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
   facet_grid(~Gene.CopyNumber.Event) +
-  labs(x = "Buffering Class", y = "Protein Expression") +
+  labs(x = "Buffering Class", y = "Protein Abundance") +
   scale_color_manual(values = color_palettes$BufferingClasses) +
   theme(legend.position = "none")
 
@@ -92,11 +92,11 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %
   filter(abs(Gene.CopyNumber - Gene.CopyNumber.Baseline) > 0.2) %>%
   mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss"),
          Dataset = factor(Dataset, levels = dataset_order)) %>%
-  select(Dataset, Buffering.GeneLevel.Ratio, Gene.CopyNumber.Event) %>%
+  select(Dataset, Buffering.GeneLevel.Ratio, Gene.CopyNumber.Event, Gene.Symbol) %>%
   drop_na() %>%
   ggplot() +
   aes(x = Dataset, y = Buffering.GeneLevel.Ratio, color = Dataset) +
-  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
   geom_signif(comparisons = list(c("DepMap", "ProCan"),
                                  c("CPTAC", "ProCan"),
                                  c("CPTAC", "DepMap")),
@@ -114,26 +114,32 @@ br_by_cnv_p0211 <- expr_buf_p0211 %>%
   filter(Gene.Chromosome == 13) %>%
   mutate(CellLine.Name = factor(CellLine.Name, levels = c("Rtr13", "RM13"))) %>%
   arrange(CellLine.Name) %>%
+  group_by(Gene.Symbol, CellLine.Name) %>%
+  summarize(Buffering.ChrArmLevel.Ratio = mean(Buffering.ChrArmLevel.Ratio)) %>%
   ggplot() +
   aes(x = CellLine.Name, y = Buffering.ChrArmLevel.Ratio) +
-  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
   geom_signif(comparisons = list(c("RM13", "Rtr13")),
-              map_signif_level = print_signif, y_position = 1, size = 1,
+              map_signif_level = print_signif, y_position = 1.9, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
-  labs(x = "Cell Line", y = "Buffering Ratio")
+  ylim(c(-0.5, 2.5)) +
+  labs(x = "Cell Line", y = "Mean Buffering Ratio")
 
 br_by_cnv <- bind_rows(expr_buf_cptac, expr_buf_depmap) %>%
   filter(Gene.CopyNumber.Baseline == 2) %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
   mutate(Gene.CopyNumber.Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss"),
          Dataset = factor(Dataset, levels = dataset_order)) %>%
+  group_by(Gene.Symbol, Gene.CopyNumber.Event, Dataset) %>%
+  summarize(Buffering.GeneLevel.Ratio = mean(Buffering.GeneLevel.Ratio)) %>%
   ggplot() +
   aes(x = Gene.CopyNumber.Event, y = Buffering.GeneLevel.Ratio) +
-  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
   geom_signif(comparisons = list(c("Gain", "Loss")),
               map_signif_level = print_signif, y_position = 1.9, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
-  labs(x = "Gene Copy Number", y = "Buffering Ratio") +
+  labs(x = "Gene Copy Number", y = "Mean Buffering Ratio") +
+  ylim(c(-0.5, 2.5)) +
   facet_grid(~Dataset)
 
 # === Low Variance Buffering Panel ===
@@ -152,7 +158,8 @@ scatter_signif_buffered <- low_var_buf %>%
   scale_alpha_manual(values = c(0.5, 1)) +
   labs(x = "Standard Deviation of Buffering Ratio", y = "Mean Buffering Ratio",
        color = "Frequently Buffered", alpha = "Frequently Buffered") +
-  theme(legend.position = "top", legend.direction = "horizontal")
+  theme(legend.position = "top", legend.direction = "horizontal") +
+  guides(colour = guide_legend(title.position="top", title.hjust = 0))
 
 ora_buf <- low_var_buf %>%
   filter(Top50) %>%
@@ -178,8 +185,12 @@ figure1_sub1 <- cowplot::plot_grid(dc_class_line, stacked_buf_cn,
 figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist,
                                    rel_widths = c(1, 1), labels = c("E", "F"), ncol = 2)
 
-figure1_sub3 <- cowplot::plot_grid(br_by_cnv_p0211, br_by_cnv, scatter_signif_buffered, ora_buf_terms,
-                                   rel_widths = c(0.5, 0.8, 1, 1), labels = c("G", "H", "I", "J"), ncol = 4)
+br_by_cnv_all <- cowplot::plot_grid(br_by_cnv_p0211, br_by_cnv,
+                                    rel_widths = c(0.5, 0.8), labels = c("G", "H"),
+                                    ncol = 2, align = "h", axis = "tb")
+
+figure1_sub3 <- cowplot::plot_grid(br_by_cnv_all, scatter_signif_buffered, ora_buf_terms,
+                                   rel_widths = c(1, 1, 1), labels = c("", "I", "J"), ncol = 3)
 
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
                               nrow = 3, rel_heights = c(0.8, 1, 1))

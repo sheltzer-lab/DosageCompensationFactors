@@ -8,8 +8,8 @@ library(ggpubr)
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
-source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
+source(here("Code", "analysis.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir

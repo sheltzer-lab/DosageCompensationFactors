@@ -9,7 +9,6 @@ here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
-source(here("Code", "annotation.R"))
 source(here("Code", "analysis.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
@@ -28,9 +27,7 @@ metadata_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 
 
 diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
-diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet")) %>%
-  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
-  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA))
+diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
   select(Model.ID, CellLine.GrowthRatio)
@@ -52,10 +49,20 @@ df_agg <- model_buf_agg %>%
 color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
                                     na.value = color_palettes$Missing)
 
+top_diff <- diff_exp_procan %>%
+  distinct(Gene.Symbol, .keep_all = TRUE) %>%
+  filter(Test.p.adj < p_threshold) %>%
+  slice_max(abs(Log2FC), n = 10)
+
+diff_exp_procan <- diff_exp_procan  %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) & (!is.na(CancerDriverMode) | Gene.Symbol %in% top_diff$Gene.Symbol),
+                         Gene.Symbol, NA))
+
 panel_volcano <- diff_exp_procan %>%
   plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
   theme(legend.position = "none") +
-  labs(y = "-log10(p.adj)")
+  labs(y = "-log10(p.adj)", x = "Log2FC (High - Low Buffering)")
 
 # === ORA Panel ===
 genes_up <- diff_exp_procan %>%
@@ -140,7 +147,8 @@ panel_2d_enrichment <- bind_rows(fgsea_procan %>% mutate(Dataset = "ProCan"),
   geom_abline(xintercept = 0, yintercept = 0, slope = 1, color = default_color) +
   geom_point() +
   geom_label_repel(force = 30, min.segment.length = 0.01) +
-  scale_color_manual(values = c(Both = categorical_color_pal_dark[4], color_palettes$Datasets, None = default_color)) +
+  scale_color_manual(values = c(Both = highlight_colors[1], color_palettes$Datasets,
+                                None = default_color)) +
   lims(x = c(-max_abs_nes_procan, max_abs_nes_procan), y = c(-max_abs_nes_cptac, max_abs_nes_cptac)) +
   labs(x = "Normalized Enrichment Score (ProCan)",
        y = "Normalized Enrichment Score (CPTAC)") +
@@ -172,7 +180,7 @@ panel_proteotox <- gsea_cptac %>%
   annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
            label = paste0(print_corr(cor_proteotox_test$estimate), ", ", print_signif(cor_proteotox_test$p.value))) +
   labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "eAS") +
-  scale_color_viridis_c() +
+  scale_color_viridis_c(option = color_palettes$AneuploidyScore, end = 0.8) +
   theme(legend.position = c("left", "top"),
         legend.position.inside = c(0, 0),
         legend.justification = c("left", "bottom"),
@@ -202,7 +210,8 @@ panel_prolif_base <- df_prolif %>%
         legend.position.inside = c(0.01, 0.90),
         legend.justification = c("left", "top"),
         legend.title = element_blank(),
-        legend.text = element_text(size = base_size))
+        legend.text = element_text(size = base_size),
+        legend.background = element_rect(fill = alpha('white', 2/3)))
 
 # === Combine Panels into Figure ===
 figure5_01 <- cowplot::plot_grid(panel_volcano, ora_down, ora_up,
@@ -214,16 +223,16 @@ cairo_pdf(here(plots_dir, "figure05_01.pdf"), width = 13, height = 5)
 figure5_01
 dev.off()
 
-# D-K reserved for STRING clusters
+# D & E reserved for STRING clusters
 
 fig5_02_sub1 <- cowplot::plot_grid(panel_proteotox, panel_prolif_base,
-                                   nrow = 2, ncol = 1, labels = c("M", "N"))
+                                   nrow = 2, ncol = 1, labels = c("G", "H"))
 
 figure5_02 <- cowplot::plot_grid(panel_2d_enrichment, fig5_02_sub1,
-                              labels = c("L", ""),
+                              labels = c("F", ""),
                               rel_widths = c(1, 0.7),
                               nrow = 1, ncol = 2)
 
-cairo_pdf(here(plots_dir, "figure05_02.pdf"), width = 12, height = 7)
+cairo_pdf(here(plots_dir, "figure05_02.pdf"), width = 12, height = 8)
 figure5_02
 dev.off()

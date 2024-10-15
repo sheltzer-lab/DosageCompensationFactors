@@ -689,7 +689,8 @@ plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC"
         label = term_name) +
     { if (!is.null(custom_color)) geom_bar(fill = custom_color, stat = "identity")
       else geom_bar(aes(fill = source), stat = "identity") } +
-    geom_shadowtext(color = "white", y = 1 + 0.18, hjust = 0, bg.colour = "dimgrey") +
+    # geom_shadowtext(color = "white", y = 1 + 0.18, hjust = 0, bg.colour = "dimgrey") +
+    geom_text(color = default_color, y = 1, hjust = 0) +
     scale_y_continuous(breaks = seq(1, max(df$`-log10(p)`), 2)) +
     scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = TRUE) +
     labs(x = "Enriched Term", y = "-log10(p)") +

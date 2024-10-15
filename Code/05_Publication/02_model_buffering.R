@@ -93,9 +93,13 @@ get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target
 
 # === Cell Lines Panel ===
 waterfall_procan <- model_buf_procan %>%
-  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name)
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name, centrality_measure = median,
+                 color_low = color_palettes$BufferingClasses["Scaling"],
+                 color_high = color_palettes$BufferingClasses["Buffered"])
 waterfall_depmap <- model_buf_depmap %>%
-  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name) +
+  waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name, centrality_measure = median,
+                 color_low = color_palettes$BufferingClasses["Scaling"],
+                 color_high = color_palettes$BufferingClasses["Buffered"]) +
   labs(y = "Model Buffering Ratio (z-score)")
 
 model_buf_celllines <- model_buf_procan %>%
@@ -110,14 +114,14 @@ cellline_pearson_gene <- cor.test(x = model_buf_celllines$ProCan,
 plot_agg_top <- model_buf_agg %>%
   slice_max(Model.Buffering.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
-                     default_fill_color = head(bidirectional_color_pal, n = 1),
+                     default_fill_color = color_palettes$BufferingClasses["Buffered"], text_color = "black",
                      bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
 
 plot_agg_bot <- model_buf_agg %>%
   slice_min(Model.Buffering.MeanNormRank, n = 10) %>%
   vertical_bar_chart(CellLine.Name, Model.Buffering.MeanNormRank,
-                     default_fill_color = tail(bidirectional_color_pal, n = 1),
+                     default_fill_color = color_palettes$BufferingClasses["Scaling"], text_color = "black",
                      bar_label_shift = 0.1, break_steps = 0.25,
                      value_range = c(0,1), line_intercept = 0.5, value_lab = "Mean Normalized Rank")
 
@@ -157,7 +161,7 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
   aes(x = OncotreeCode, y = Dataset, fill = Mean.BR) +
   geom_tile(aes(color = Mean.AS), alpha = 0) +
   geom_tile() +
-  scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore) +
+  scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
   scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$BufferingRatio) +
   scale_x_discrete(position = "top") +
   theme_void() +
@@ -179,7 +183,7 @@ cancer_heatmap_as <- df_cancer_heatmap %>%
   ggplot() +
   aes(x = OncotreeCode, y = Dataset, fill = Mean.AS) +
   geom_tile() +
-  scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore) +
+  scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
   theme_void() +
   labs(x = NULL, y = NULL) +
   theme(axis.text.y = element_blank(),
@@ -222,7 +226,7 @@ leuk_poster <- leuk_plot +
         legend.title.position = "top") +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
   labs(color = "\nAneuploidy Score", y = "Model Buffering Ratio") +
-  scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1,
+  scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1, end = 0.8,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy))
 
@@ -232,7 +236,7 @@ leuk_poster_low <- leuk_plot_low +
         legend.title.position = "top") +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
   labs(color = "Aneuploidy Score\n(Limited Range)", y = NULL) +
-  scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1,
+  scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1, end = 0.8,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),
                          labels = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy))
