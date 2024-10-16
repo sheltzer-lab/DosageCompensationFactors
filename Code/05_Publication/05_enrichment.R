@@ -173,19 +173,24 @@ cor_proteotox_test <- cor.test(gsea_cptac$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
                                gsea_cptac$Model.Buffering.Ratio, method = "spearman")
 
 panel_proteotox <- gsea_cptac %>%
+  mutate(Ploidy = if_else(Model.Ploidy >= 3, "\u2265 3", "< 3")) %>%
   ggplot() +
   aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE, color = Model.AneuploidyScore.Estimate) +
-  geom_point(size = 2) +
+  geom_point(aes(shape = Ploidy), size = 3) +
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
            label = paste0(print_corr(cor_proteotox_test$estimate), ", ", print_signif(cor_proteotox_test$p.value))) +
   labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "eAS") +
+  ylim(c(0.085, 0.275)) +
   scale_color_viridis_c(option = color_palettes$AneuploidyScore, end = 0.8) +
-  theme(legend.position = c("left", "top"),
+  theme(legend.position = c("left", "bottom"),
         legend.position.inside = c(0, 0),
         legend.justification = c("left", "bottom"),
+        legend.box = "horizontal",
         legend.text = element_text(size = base_size),
-        legend.background = element_rect(fill = alpha('white', 2/3)))
+        legend.background = element_rect(fill = alpha('white', 2/3))) +
+  guides(colour = guide_colourbar(order = 1),
+         shape = guide_legend(order = 2))
 
 # === Proliferation ===
 df_prolif <- df_agg %>%
