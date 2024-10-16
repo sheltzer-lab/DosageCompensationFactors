@@ -20,6 +20,7 @@ source(here("Code", "analysis.R"))
 source(here("Code", "preprocessing.R"))
 
 expression_data_dir <- here(input_data_dir, "P0211")
+chunduri_data_dir <- here(external_data_dir, "Expression", "Chunduri")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Preprocessing", "P0211")
 
@@ -30,6 +31,9 @@ dir.create(plots_dir, recursive = TRUE)
 p0211_raw <- read.table(here(expression_data_dir, "proteinGroups.txt"), sep="\t", dec=".",
                         header=TRUE, stringsAsFactors=FALSE)
 p0211_meta <- read_excel(here(expression_data_dir, "metadata.xlsx"))
+# Chunduri et al. 2021, DOI: https://doi.org/10.1038/s41467-021-25288-x
+chunduri_raw <- read.table(here(chunduri_data_dir, "proteinGroups.txt"), sep="\t", dec=".",
+                           header=TRUE, stringsAsFactors=FALSE)
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
 df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
 
@@ -38,6 +42,7 @@ df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_fil
 state_cols <- c("Identified.In.All", "Identified.In.Some", "Potential.Contaminant", "Reverse",
                 "Only.Identified.By.Site", "Unidentified")
 
+## P0211
 p0211_expr_tidy <- p0211_raw %>%
   select(starts_with("Reporter.intensity.corrected"),
          Potential.contaminant, Only.identified.by.site, Reverse,
@@ -67,6 +72,46 @@ p0211_expr_tidy <- p0211_raw %>%
          ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols)) %>%
     mutate(Dataset = "P0211",
            Model.Type = "Cell Line")
+
+## Chunduri et al.
+chunduri_meta <- data.frame(
+  raw_name = paste(rep("Reporter.intensity.corrected", 6), 1:6, sep = "."),
+  Sample.Tag = c("TMT126", "TMT127", "TMT128", "TMT129", "TMT130", "TMT131"),
+  CellLine.Name = c("RPE1 p53 KO", "RM X", "RM 10;18", "RM 13", "RPE1 p53 KD", "RM 19p")
+)
+
+chunduri_tidy <- chunduri_raw %>%
+  select(starts_with("Reporter.intensity.corrected"),
+         Potential.contaminant, Only.identified.by.site, Reverse,
+         Majority.protein.IDs) %>%
+  select(contains(".REP_"),
+         Potential.contaminant, Only.identified.by.site, Reverse,
+         Majority.protein.IDs) %>%
+  pivot_longer(starts_with("Reporter.intensity.corrected"),
+               names_to = "raw_name", values_to = "Protein.Expression") %>%
+  separate_wider_delim(raw_name, ".REP_", names = c("raw_name", "CellLine.Replicate")) %>%
+  mutate(Dataset = "Chunduri",
+         Model.Type = "Cell Line",
+         CellLine.Replicate = as.integer(CellLine.Replicate)) %>%
+  inner_join(y = chunduri_meta, by = "raw_name",
+             unmatched = "error", relationship = "many-to-one") %>%
+  unite("Model.ID", c("Dataset", "CellLine.Name", "CellLine.Replicate"), remove = FALSE, sep = "_") %>%
+  unite("Sample.Name", c("CellLine.Name", "CellLine.Replicate"), remove = FALSE, sep = "_") %>%
+  mutate(Sample.ID = as.integer(as.factor(Sample.Name))) %>%
+  rename(ProteinGroup.UniprotIDs = Majority.protein.IDs) %>%
+  mutate(Reverse = Reverse == "+" | grepl("REVs", ProteinGroup.UniprotIDs),
+         Potential.Contaminant = Potential.contaminant == "+",
+         Only.Identified.By.Site = Only.identified.by.site == "+") %>%
+  group_by(ProteinGroup.UniprotIDs) %>%
+  mutate(Unidentified = all(Protein.Expression == 0) &
+           !Potential.Contaminant & !Reverse & !Only.Identified.By.Site,
+         Identified.In.All = all(Protein.Expression != 0) &
+           !Potential.Contaminant & !Reverse & !Only.Identified.By.Site,
+         Identified.In.Some = any(Protein.Expression != 0) &
+           !Potential.Contaminant & !Reverse & !Only.Identified.By.Site & !Identified.In.All) %>%
+  ungroup() %>%
+  select(Sample.ID, Sample.Name, Model.ID, CellLine.Name, CellLine.Replicate,
+         ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols))
 
 # === Filter & Normalize Dataset ===
 
