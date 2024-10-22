@@ -423,7 +423,6 @@ target_diff %>%
 
 
 # ToDo: Cleanup Code
-# ToDo: Rename MOA to Mechanism
 
 # Drug Mechanism Groups
 # drug_meta_long <- drug_meta %>%
@@ -437,3 +436,78 @@ target_diff %>%
 # dimnames(mechanism_dist) <- list(mechanisms$Drug.MOA, mechanisms$Drug.MOA)
 # mechanism_clust <- hclust(as.dist(mechanism_dist))
 # pheatmap::pheatmap(mechanism_dist)
+
+# === Difference in drug sensitivity between high-buffering, drug-responsive and drug-resistant cells
+median_response <- drug_screens %>%
+  group_by(Model.ID) %>%
+  summarize(Drug.Effect.Median = median(Drug.MFI.Log2FC, na.rm = TRUE),
+            Drug.Effect.Observations = sum(!is.na(Drug.MFI.Log2FC)),
+            .groups = "drop") %>%
+  filter(Drug.Effect.Observations > 1000)
+
+high_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.8)[[1]]
+low_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.2)[[1]]
+resistant_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.8)[[1]]
+responsive_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.2)[[1]]
+
+median_response_buf <- median_response %>%
+  left_join(model_buf_agg, by = "Model.ID") %>%
+  mutate(Buffering = case_when(Model.Buffering.MeanNormRank > high_buf_thresh ~ "High",
+                            Model.Buffering.MeanNormRank < low_buf_thresh ~ "Low",
+                            TRUE ~ NA)) %>%
+  mutate(DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
+                            Drug.Effect.Median < responsive_thresh ~ "Responsive",
+                            TRUE ~ NA))
+
+median_response_buf %>%
+  scatter_plot_reg_corr(Model.Buffering.MeanNormRank, Drug.Effect.Median) %>%
+  save_plot("median_drug_effect_correlation.png")
+
+median_response_plot_buf <- median_response_buf %>%
+  # drop_na(Model.Buffering.MeanNormRank) %>%
+  mutate(Buffering = replace_na(Buffering, "Other")) %>%
+  ggplot() +
+  aes(x = Buffering, y = Drug.Effect.Median, color = Buffering) +
+  geom_boxplot() +
+  geom_signif(comparisons = list(c("High", "Low"),
+                                 c("High", "Other")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = c(0.05, 0.1),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c("High" = color_palettes$BufferingClasses[["Buffered"]],
+                                "Low" = color_palettes$BufferingClasses[["Scaling"]],
+                                "Other" = default_color)) +
+  theme(legend.position = "none") +
+  ylim(c(-0.4, 0.15)) +
+  ylab("Median Drug Effect")
+
+median_response_plot_control <- median_response_buf %>%
+  drop_na(DrugStatus) %>%
+  ggplot() +
+  aes(x = DrugStatus, y = Drug.Effect.Median) +
+  geom_boxplot() +
+  theme(legend.position = "none") +
+  xlab("Drug Control") +
+  ylim(c(-0.4, 0.15))
+
+cowplot::plot_grid(median_response_plot_buf,
+                   median_response_plot_control
+                     + ylab(NULL)
+                     + theme(axis.text.y = element_blank(),
+                             axis.ticks.y = element_blank()),
+                   ncol = 2, rel_widths = c(1, 2/3)) %>%
+  save_plot("median_drug_effect.png")
+
+## Check if drug resistance and high buffering are stochastically independent
+response_counts <- median_response_buf %>%
+  mutate(Buffering = if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
+                             "Buffering", "Other"),
+         Resistant = if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
+                             "Resistant", "Other")) %>%
+  count(Buffering, Resistant) %>%
+  drop_na() %>%
+  pivot_wider(names_from = "Resistant", values_from = "n") %>%
+  tibble::column_to_rownames("Buffering") %>%
+  as.matrix()
+
+fisher.test(response_counts)
