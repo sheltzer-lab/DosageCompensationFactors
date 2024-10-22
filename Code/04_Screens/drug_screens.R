@@ -147,7 +147,7 @@ df_sensitivity_agg %>%
 
 # Scatter- & Violin-plot visualization of selected drugs
 selected_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749",
-                       "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE")
+                    "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE", "BAFILOMYCIN-A1")
 
 for (drug in selected_drugs) {
   df_sensitivity_agg %>%
@@ -394,7 +394,8 @@ moa_diff <- model_buf_agg %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.MOA, delim = ", ") %>%
   mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
-  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group",
+                     quantile_low = "20%", quantile_high = "80%") %>%
   differential_expression(Drug.MOA, CellLine.Buffering.Group, Drug.MFI.Log2FC,
                           groups = c("Low", "High"), log2fc_thresh = 0.2)
 
@@ -412,7 +413,8 @@ target_diff <- model_buf_agg %>%
   left_join(y = drug_meta, by = "Drug.ID") %>%
   separate_longer_delim(Drug.Target, delim = ", ") %>%
   mutate(Drug.Target = str_squish(Drug.Target)) %>%
-  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group") %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "CellLine.Buffering.Group",
+                     quantile_low = "20%", quantile_high = "80%") %>%
   differential_expression(Drug.Target, CellLine.Buffering.Group, Drug.MFI.Log2FC,
                           groups = c("Low", "High"), log2fc_thresh = 0.2)
 

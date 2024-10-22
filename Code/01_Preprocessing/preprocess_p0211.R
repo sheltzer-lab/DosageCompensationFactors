@@ -38,6 +38,9 @@ uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet")
 df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
 
 
+# TODO: === Add Chunduri to DatasetReferences.md ===
+# TODO: === Rename file to preprocess_engineered.R ===
+
 # === Tidy Dataset ===
 state_cols <- c("Identified.In.All", "Identified.In.Some", "Potential.Contaminant", "Reverse",
                 "Only.Identified.By.Site", "Unidentified")
@@ -128,6 +131,19 @@ p0211_expr_processed <- p0211_expr_tidy %>%
   # and defining batches as cell lines would remove differences between them
   select(-all_of(state_cols))
 
+chunduri_processed <- chunduri_tidy %>%
+  filter(Identified.In.All) %>%
+  filter(CellLine.Name %in% c("RPE1 p53 KO", "RM 10;18", "RM 13", "RM 19p")) %>%
+  mutate(Protein.Expression.Log2 = if_else(is.finite(log2(Protein.Expression)),
+                                           log2(Protein.Expression),
+                                           NA)) %>%
+  remove_noisefloor(Protein.Expression.Log2) %>%
+  normalize_samples(Sample.Name, Protein.Expression.Log2, ProteinGroup.UniprotIDs,
+                    normalized_colname = "Protein.Expression.Normalized") %>%
+  select(-all_of(state_cols))
+
+# TODO: Add batch effect correction, as PCA shows clusters per replicate not per cell line
+
 # === Annotation ===
 annotations <- p0211_expr_processed %>%
   select(ProteinGroup.UniprotIDs) %>%
@@ -206,26 +222,27 @@ plot_sample_expr <- function (df, value_col) {
     geom_boxplot()
 }
 
-prot_states <- plot_protein_states(p0211_expr_tidy) %>%
+## P0211
+prot_states_p0211 <- plot_protein_states(p0211_expr_tidy) %>%
   save_plot("p0211_protein_states.png")
 
-expr_dist <- plot_expr_dist(p0211_expr_annotated) %>%
+expr_dist_p0211 <- plot_expr_dist(p0211_expr_annotated) %>%
   save_plot("p0211_expression_distribution.png")
 
-sample_dist_pre <- p0211_expr_annotated %>%
+sample_dist_pre_p0211 <- p0211_expr_annotated %>%
   plot_sample_expr(Protein.Expression.Log2) %>%
   save_plot("p0211_sample_distribution_non-norm.png")
 
-sample_dist_norm <- p0211_expr_annotated %>%
+sample_dist_norm_p0211 <- p0211_expr_annotated %>%
   plot_sample_expr(Protein.Expression.Normalized) %>%
   save_plot("p0211_sample_distribution_norm.png")
 
-pca_pre <- p0211_expr_annotated %>%
+pca_pre_p0211 <- p0211_expr_annotated %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
   plot_pca() %>%
   save_plot("p0211_pca_non-norm.png")
 
-pca_norm <- p0211_expr_annotated %>%
+pca_norm_p0211 <- p0211_expr_annotated %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
   plot_pca() %>%
   save_plot("p0211_pca_norm.png")
@@ -273,6 +290,33 @@ for (sample in unique(p0211_expr_log2fc$Sample.ID)) {
                           x_lab = "Chromosome & Gene Position", title = title) %>%
     save_plot(paste0("p0211_log2fc_chr_sample", sample, ".png"), height = 100)
 }
+
+## Chunduri
+prot_states_chunduri <- plot_protein_states(chunduri_tidy) %>%
+  save_plot("chunduri_protein_states.png")
+
+expr_dist_chunduri <- plot_expr_dist(chunduri_processed) %>%
+  save_plot("chunduri_expression_distribution.png")
+
+sample_dist_pre_chunduri <- chunduri_processed %>%
+  plot_sample_expr(Protein.Expression.Log2) %>%
+  save_plot("chunduri_sample_distribution_non-norm.png")
+
+sample_dist_norm_chunduri <- chunduri_processed %>%
+  plot_sample_expr(Protein.Expression.Normalized) %>%
+  save_plot("chunduri_sample_distribution_norm.png")
+
+pca_pre_chunduri <- chunduri_processed %>%
+  calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
+  plot_pca() %>%
+  save_plot("chunduri_pca_non-norm.png")
+
+pca_norm_chunduri <- chunduri_processed %>%
+  calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
+  plot_pca() %>%
+  save_plot("chunduri_pca_norm.png")
+
+# === Publish ===
 
 title <- (p0211_expr_log2fc %>%
     filter(Sample.ID == 7) %>%
