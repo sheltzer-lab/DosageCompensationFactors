@@ -5,8 +5,14 @@ library(arrow)
 library(assertr)
 library(limma)
 
-normalize_samples <- function(df, sample_col, value_col, group_col, normalized_colname = "Normalized") {
+normalize_samples <- function(df, sample_col, value_col, group_col,
+                              normalized_colname = "Normalized", batch_col = NULL) {
+  require(limma)
   df_pre <- data.frame(df)
+  batch <- NULL
+
+  if (!quo_is_null(enquo(batch_col)))
+    batch <- df %>% distinct({{ sample_col }}, {{ batch_col }}) %>% pull({{ batch_col }}, name = {{ sample_col }})
 
   df %>%
     assert_rows(col_concat, is_uniq, {{ sample_col }}, {{ group_col }}) %>%
@@ -15,6 +21,7 @@ normalize_samples <- function(df, sample_col, value_col, group_col, normalized_c
     tibble::column_to_rownames(var = quo_name(enquo(group_col))) %>%
     select(where(is.numeric)) %>%
     normalizeBetweenArrays(method = "cyclicloess", cyclic.method = "fast") %>%
+  { if (!is.null(batch)) removeBatchEffect(., batch) else . } %>%
     as.data.frame() %>%
     tibble::rownames_to_column(var = quo_name(enquo(group_col))) %>%
     pivot_longer(everything() & !{{ group_col }},

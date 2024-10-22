@@ -139,7 +139,7 @@ chunduri_processed <- chunduri_tidy %>%
                                            NA)) %>%
   remove_noisefloor(Protein.Expression.Log2) %>%
   normalize_samples(Sample.Name, Protein.Expression.Log2, ProteinGroup.UniprotIDs,
-                    normalized_colname = "Protein.Expression.Normalized") %>%
+                    normalized_colname = "Protein.Expression.Normalized", batch_col = CellLine.Replicate) %>%
   select(-all_of(state_cols))
 
 # TODO: Add batch effect correction, as PCA shows clusters per replicate not per cell line
