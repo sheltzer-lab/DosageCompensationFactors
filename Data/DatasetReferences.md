@@ -52,6 +52,23 @@ Cohorts:  BRCA, ccRCC, COAD, GBM, HGSC, HNSCC, LSCC, LUAD, PDAC, UCEC
 #### Citation
 Li, Y., Dou, Y., da Veiga Leprevost, F., Geffen, Y., et al. (2023). Proteogenomic data and resources for pan-cancer analysis, Cancer Cell, 41, 1397-1406. https://doi.org/10.1016/j.ccell.2023.06.009
 
+### Lab-Engineered Cell Lines
+
+#### P0211
+
+Published as supplemental data to this project.
+
+* **Cell Lines:** RPE1 p53-/-, RM13, Rtr13
+* **Location:** `./Data/External/Expression/Chunduri/proteinGroups.txt`
+
+#### Chunduri
+
+* **Cell Lines:** RPE1 p53 KO, RM X, RM 10;18, RM 13, RPE1 p53 KD, RM 19p
+* **URL:** https://www.ebi.ac.uk/pride/archive/projects/PXD018440
+* **DOI:** https://doi.org/10.1038/s41467-021-25288-x
+* **Citation:** Chunduri, N.K., Menges, P., Zhang, X. et al. Systems approaches identify the consequences of monosomy in somatic human cells. Nat Commun 12, 5576 (2021). https://doi.org/10.1038/s41467-021-25288-x
+* **Location:**  `./Data/P0211/`
+
 ## Copy Number
 
 ### Arm-Level CNAs

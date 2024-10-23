@@ -19,27 +19,23 @@ source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 source(here("Code", "preprocessing.R"))
 
-expression_data_dir <- here(input_data_dir, "P0211")
+p0211_data_dir <- here(input_data_dir, "P0211")
 chunduri_data_dir <- here(external_data_dir, "Expression", "Chunduri")
 output_data_dir <- output_data_base_dir
-plots_dir <- here(plots_base_dir, "Preprocessing", "P0211")
+plots_dir <- here(plots_base_dir, "Preprocessing", "Engineered")
 
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
 
 # === Load Datasets ===
-p0211_raw <- read.table(here(expression_data_dir, "proteinGroups.txt"), sep="\t", dec=".",
+p0211_raw <- read.table(here(p0211_data_dir, "proteinGroups.txt"), sep="\t", dec=".",
                         header=TRUE, stringsAsFactors=FALSE)
-p0211_meta <- read_excel(here(expression_data_dir, "metadata.xlsx"))
+p0211_meta <- read_excel(here(p0211_data_dir, "metadata.xlsx"))
 # Chunduri et al. 2021, DOI: https://doi.org/10.1038/s41467-021-25288-x
 chunduri_raw <- read.table(here(chunduri_data_dir, "proteinGroups.txt"), sep="\t", dec=".",
                            header=TRUE, stringsAsFactors=FALSE)
 uniprot_mapping <- read_parquet(here(output_data_dir, "uniprot_mapping.parquet"))
 df_rep_filtered <- read_parquet(here(output_data_dir, "reproducibility_ranks_filtered.parquet"))
-
-
-# TODO: === Add Chunduri to DatasetReferences.md ===
-# TODO: === Rename file to preprocess_engineered.R ===
 
 # === Tidy Dataset ===
 state_cols <- c("Identified.In.All", "Identified.In.Some", "Potential.Contaminant", "Reverse",
@@ -145,8 +141,9 @@ chunduri_processed <- chunduri_tidy %>%
 # TODO: Add batch effect correction, as PCA shows clusters per replicate not per cell line
 
 # === Annotation ===
-annotations <- p0211_expr_processed %>%
-  select(ProteinGroup.UniprotIDs) %>%
+## P0211
+annotations <- bind_rows(p0211_expr_processed, chunduri_processed) %>%
+  distinct(ProteinGroup.UniprotIDs) %>%
   mutate(Protein.Uniprot.Accession = ProteinGroup.UniprotIDs) %>%
   separate_rows(Protein.Uniprot.Accession, sep = ";") %>%
   mutate(Protein.Uniprot.Accession = str_trim(Protein.Uniprot.Accession)) %>%
@@ -156,7 +153,6 @@ annotations <- p0211_expr_processed %>%
             na_matches = "never", relationship = "many-to-one") %>%
   updateGeneSymbols() %>%
   drop_na() %>%
-  distinct(Gene.Symbol, .keep_all = TRUE) %>%
   get_chromosome_arms() %>%
   filter(Gene.Chromosome %in% (1:22)) %>% # Only use autosomal genes
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
@@ -166,6 +162,16 @@ annotations <- p0211_expr_processed %>%
 p0211_expr_annotated <- p0211_expr_processed %>%
   inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
              na_matches = "never", relationship = "many-to-one") %>%
+  distinct(Sample.ID,Gene.Symbol, .keep_all = TRUE) %>%               # TODO: reconsider merging expression values
+  unite("UniqueId", c("Sample.ID", "Protein.Uniprot.Accession"),
+        sep = '_', remove = FALSE) %>%
+  # TODO: Executed before normalization in CCLE and ProCan
+  semi_join(df_rep_filtered, by = "Gene.Symbol") # Remove proteins with low reproducibilty across datasets
+
+chunduri_annotated <- chunduri_processed %>%
+  inner_join(y = annotations, by = "ProteinGroup.UniprotIDs",
+             na_matches = "never", relationship = "many-to-one") %>%
+  distinct(Sample.ID, Gene.Symbol, .keep_all = TRUE) %>%              # TODO: reconsider merging expression values
   unite("UniqueId", c("Sample.ID", "Protein.Uniprot.Accession"),
         sep = '_', remove = FALSE) %>%
   # TODO: Executed before normalization in CCLE and ProCan
@@ -189,6 +195,18 @@ p0211_copy_number <- p0211_expr_annotated %>%
          CellLine.AneuploidyScore = abs(ChromosomeArm.CNA)*2L + 1) %>% # RPE-1 is pseudo-disomic, trisomy on 10q
   select(all_of(id_cols), all_of(cn_cols))
 
+chunduri_copy_number <- chunduri_annotated %>%
+  mutate(Gene.CopyNumber = NA,    # ToDo: Ask for CN data
+         CellLine.Ploidy = 2L,
+         CellLine.WGD = 0L,
+         ChromosomeArm.CNA = case_when(
+           CellLine.Name == "RM 10;18" & (Gene.Chromosome == 10 | Gene.Chromosome == 18) ~ -1L,
+           CellLine.Name == "RM 13" & Gene.Chromosome == 13 ~ -1L,
+           CellLine.Name == "RM 19p" & Gene.ChromosomeArm == "19p" ~ -1L,
+           TRUE ~ 0L
+         ),
+         CellLine.AneuploidyScore = NA) %>% # TODO: RPE-1 is pseudo-disomic, trisomy on 10q
+  select(all_of(id_cols), all_of(cn_cols))
 
 # === Save Datasets ===
 p0211_expr_annotated %>%
@@ -197,6 +215,13 @@ p0211_expr_annotated %>%
 
 p0211_copy_number %>%
   write_parquet(here(output_data_dir, 'copy_number_p0211.parquet'), version = "2.6")
+
+chunduri_annotated %>%
+  select(-any_of(cn_cols)) %>%
+  write_parquet(here(output_data_dir, 'expression_chunduri.parquet'), version = "2.6")
+
+chunduri_copy_number %>%
+  write_parquet(here(output_data_dir, 'copy_number_chunduri.parquet'), version = "2.6")
 
 # === Evaluation & Quality Control ===
 plot_protein_states <- function(df) {
@@ -329,13 +354,13 @@ expr_bucket <- p0211_expr_log2fc %>%
                         threshold_high = log2(3) - log2(2),
                         x_lab = "Chromosome & Gene Position", title = title)
 
-grid1 <- cowplot::plot_grid(pca_norm + theme(legend.position = "none"), expr_bucket,
+grid1 <- cowplot::plot_grid(pca_norm_p0211 + theme(legend.position = "none"), expr_bucket,
                             nrow = 1, ncol = 2, rel_widths = c(1, 1.5), labels = c("B", "C"))
 
 grid2 <- cowplot::plot_grid(grid1, chr_heatmap$gtable, nrow = 2, ncol = 1,
                             rel_heights = c(1, 2/3), labels = c("", "D"))
 
-plot_publish <- cowplot::plot_grid(sample_dist_norm + theme(legend.position = "none"), grid2,
+plot_publish <- cowplot::plot_grid(sample_dist_norm_p0211 + theme(legend.position = "none"), grid2,
                                    nrow = 1, ncol = 2,
                                    rel_widths = c(1, 2), labels = c("A", ""))
 
