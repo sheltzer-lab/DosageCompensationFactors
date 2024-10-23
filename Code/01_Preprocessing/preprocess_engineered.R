@@ -110,7 +110,9 @@ chunduri_tidy <- chunduri_raw %>%
            !Potential.Contaminant & !Reverse & !Only.Identified.By.Site & !Identified.In.All) %>%
   ungroup() %>%
   select(Sample.ID, Sample.Name, Model.ID, CellLine.Name, CellLine.Replicate,
-         ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols))
+         ProteinGroup.UniprotIDs, Protein.Expression, all_of(state_cols)) %>%
+    mutate(Dataset = "Chunduri",
+           Model.Type = "Cell Line")
 
 # === Filter & Normalize Dataset ===
 

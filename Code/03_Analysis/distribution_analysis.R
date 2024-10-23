@@ -32,6 +32,8 @@ expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depm
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac.parquet"))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, "expression_buffering_p0211.parquet")) %>%
   mutate(Gene.Chromosome = as.character(Gene.Chromosome))
+expr_buf_chunduri <- read_parquet(here(output_data_dir, "expression_buffering_chunduri.parquet")) %>%
+  mutate(Gene.Chromosome = as.character(Gene.Chromosome))
 
 # === Summarize Distribution of Obersavtions ===
 
@@ -111,7 +113,7 @@ stacked_buf_cn %>%
   save_plot("buffering_class_gene.png", width = 200)
 
 ## Chr Arm only (across datasets)
-df_share_chr <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211) %>%
+df_share_chr <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211, expr_buf_chunduri) %>%
   filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
   mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Chr Arm Gain", "Chr Arm Loss")) %>%
   select(Buffering.ChrArmLevel.Class, Dataset, CNV) %>%
@@ -132,7 +134,7 @@ stacked_buf_chr %>%
   save_plot("buffering_class_chromosome.png", width = 200)
 
 ## Chr Arm Average only (across datasets)
-df_share_chr_avg <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211) %>%
+df_share_chr_avg <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211, expr_buf_chunduri) %>%
   distinct(Gene.Symbol, Dataset, Buffering.ChrArmLevel.Average.Class, ChromosomeArm.CNA) %>%
   filter(ChromosomeArm.CNA != 0) %>%
   mutate(CNV = if_else(ChromosomeArm.CNA > 0, "Chr Arm Gain", "Chr Arm Loss")) %>%
@@ -159,7 +161,7 @@ df_share_all <- bind_rows(df_share_gene, df_share_chr, df_share_chr_avg) %>%
                names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
   drop_na()
 
-dataset_order <- c("DepMap", "ProCan", "CPTAC", "P0211")
+dataset_order <- c("DepMap", "ProCan", "CPTAC", "P0211", "Chunduri")
 
 stacked_buf_class <- df_share_all %>%
   mutate(CNV = if_else(grepl("Gain", CNV), "Gain", "Loss"),
