@@ -97,4 +97,4 @@ dc_factor_cols <- c(
 dc_factor_cols_specific <- c("Protein Neutral CV")
 
 # === Misc ===
-dataset_order <- c("DepMap", "ProCan", "CPTAC")
+dataset_order <- c("DepMap", "ProCan", "Engin.", "CPTAC")

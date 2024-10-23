@@ -20,6 +20,7 @@ expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_proc
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, "expression_buffering_p0211.parquet"))
+expr_buf_chunduri <- read_parquet(here(output_data_dir, "expression_buffering_chunduri.parquet"))
 
 # === DC Class Illustration Panel ===
 dc_class_line <- expr_buf_depmap %>%
@@ -109,21 +110,26 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %
   labs(x = "Dataset", y = "Buffering Ratio")
 
 # === Buffering Gain vs. Loss Panel ===
-br_by_cnv_p0211 <- expr_buf_p0211 %>%
-  filter(CellLine.Name != "RPE1") %>%
-  filter(Gene.Chromosome == 13) %>%
-  mutate(CellLine.Name = factor(CellLine.Name, levels = c("Rtr13", "RM13"))) %>%
-  arrange(CellLine.Name) %>%
-  group_by(Gene.Symbol, CellLine.Name) %>%
+expr_buf_eng <- bind_rows(expr_buf_p0211, expr_buf_chunduri) %>%
+  mutate(Dataset = "Engin.",
+         Gene.Chromosome = as.character(Gene.Chromosome))
+
+br_by_cna <- bind_rows(expr_buf_cptac, expr_buf_depmap, expr_buf_eng) %>%
+  filter(ChromosomeArm.CopyNumber.Baseline == 2) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CopyNumber.Event = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss"),
+         Dataset = factor(Dataset, levels = dataset_order)) %>%
+  group_by(Gene.Symbol, CopyNumber.Event, Dataset) %>%
   summarize(Buffering.ChrArmLevel.Ratio = mean(Buffering.ChrArmLevel.Ratio)) %>%
   ggplot() +
-  aes(x = CellLine.Name, y = Buffering.ChrArmLevel.Ratio) +
+  aes(x = CopyNumber.Event, y = Buffering.ChrArmLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
-  geom_signif(comparisons = list(c("RM13", "Rtr13")),
+  geom_signif(comparisons = list(c("Gain", "Loss")),
               map_signif_level = print_signif, y_position = 1.9, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
+  labs(x = "Chromosome Arm", y = "Mean Buffering Ratio") +
   ylim(c(-0.5, 2.5)) +
-  labs(x = "Cell Line", y = "Mean Buffering Ratio")
+  facet_grid(~Dataset)
 
 br_by_cnv <- bind_rows(expr_buf_cptac, expr_buf_depmap) %>%
   filter(Gene.CopyNumber.Baseline == 2) %>%
@@ -185,12 +191,11 @@ figure1_sub1 <- cowplot::plot_grid(dc_class_line, stacked_buf_cn,
 figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist,
                                    rel_widths = c(1, 1), labels = c("E", "F"), ncol = 2)
 
-br_by_cnv_all <- cowplot::plot_grid(br_by_cnv_p0211, br_by_cnv,
-                                    rel_widths = c(0.5, 0.8), labels = c("G", "H"),
-                                    ncol = 2, align = "h", axis = "tb")
+br_by_cnv_all <- cowplot::plot_grid(br_by_cna, br_by_cnv,
+                                    labels = c("G", "H"), ncol = 2, align = "h", axis = "tb")
 
 figure1_sub3 <- cowplot::plot_grid(br_by_cnv_all, scatter_signif_buffered, ora_buf_terms,
-                                   rel_widths = c(1, 1, 1), labels = c("", "I", "J"), ncol = 3)
+                                   rel_widths = c(1, 0.8, 0.8), labels = c("", "I", "J"), ncol = 3)
 
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
                               nrow = 3, rel_heights = c(0.8, 1, 1))

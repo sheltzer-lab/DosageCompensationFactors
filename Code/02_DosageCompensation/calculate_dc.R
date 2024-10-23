@@ -35,12 +35,14 @@ copy_number_wgd <- read_parquet(here(output_data_dir, "copy_number_wgd.parquet")
 copy_number_no_wgd <- read_parquet(here(output_data_dir, "copy_number_no-wgd.parquet")) %>%
   select(-CellLine.DepMapModelId, -CellLine.SangerModelId, -CellLine.Name)
 copy_number_p0211 <- read_parquet(here(output_data_dir, 'copy_number_p0211.parquet'))
+copy_number_chunduri <- read_parquet(here(output_data_dir, 'copy_number_chunduri.parquet'))
 copy_number_cptac <- read_parquet((here(output_data_dir, 'copy_number_cptac.parquet')))
 
 expr_procan <- read_parquet(here(output_data_dir, "expression_procan.parquet"))
 expr_depmap <- read_parquet(here(output_data_dir, "expression_depmap.parquet"))
 expr_matched_renorm <- read_parquet(here(output_data_dir, "expression_matched_renorm.parquet"))
 expr_p0211 <- read_parquet(here(output_data_dir, 'expression_p0211.parquet'))
+expr_chunduri <- read_parquet(here(output_data_dir, 'expression_chunduri.parquet'))
 expr_cptac <- read_parquet(here(output_data_dir, 'expression_cptac.parquet'))
 
 meta_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
@@ -181,10 +183,30 @@ expr_buf_p0211 <- expr_p0211 %>%
   inner_join(y = copy_number_p0211, by = c("Sample.ID", "Gene.Symbol"),
              na_matches = "never", relationship = "many-to-one") %>%
   filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 2) %>%
+  filter(CellLine.Name == "RPE1" |
+           (CellLine.Name == "RM13" & Gene.Chromosome == 13) |
+           (CellLine.Name == "Rtr13" & Gene.Chromosome == 13)) %>%
   baseline_estimation() %>%
   calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
   calculate_dc() %>%
+  filter(CellLine.Name != "RPE1") %>%
   write_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'), version = "2.6")
+
+## Chunduri
+expr_buf_chunduri <- expr_chunduri %>%
+  inner_join(y = copy_number_chunduri, by = c("Sample.ID", "Gene.Symbol"),
+             na_matches = "never", relationship = "many-to-one") %>%
+  filter_genes(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized, min_samples = 2) %>%
+  filter(CellLine.Name == "RPE1 p53 KO" |
+           (CellLine.Name == "RM 10;18" & (Gene.Chromosome == 10 | Gene.Chromosome == 18)) |
+           (CellLine.Name == "RM 13" & Gene.Chromosome == 13) |
+           (CellLine.Name == "RM 19p" & Gene.ChromosomeArm == "19p")) %>%
+  baseline_estimation() %>%
+  calculate_protein_neutral_cv(Gene.Symbol, ChromosomeArm.CNA, Protein.Expression.Normalized) %>%
+  calculate_dc() %>%
+  filter(CellLine.Name != "RPE1 p53 KO") %>%
+  write_parquet(here(output_data_dir, 'expression_buffering_chunduri.parquet'), version = "2.6")
+
 
 ## CPTAC
 purity_cptac <- meta_cptac %>%
