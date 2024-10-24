@@ -76,15 +76,54 @@ top_diff <- df_crispr_model_buf %>%
   filter(Test.p.adj < p_threshold) %>%
   slice_max(abs(Log2FC), n = 10)
 
+essential_buf_only <- df_crispr_model_buf %>%
+  filter(Significant == "Up") %>%
+  filter(Mean_GroupA < 0.5 & Mean_GroupB > 0.5)
+
+essential_scaling_only <- df_crispr_model_buf %>%
+  filter(Significant == "Down") %>%
+  filter(Mean_GroupA > 0.5 & Mean_GroupB < 0.5)
+
+max_abs_log2fc <- df_crispr_model_buf %>% pull(Log2FC) %>% abs() %>% max(na.rm = TRUE)
+
 volcano_dep_diff <- df_crispr_model_buf %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%
-  mutate(Label = if_else(!is.na(Significant) & (!is.na(CancerDriverMode) | Gene.Symbol %in% top_diff$Gene.Symbol),
+  mutate(ExclusiveEssentiality = case_when(
+    Significant == "Up" & Mean_GroupA < 0.5 & Mean_GroupB > 0.5 ~ "High Buffering",
+    Significant == "Down" & Mean_GroupA > 0.5 & Mean_GroupB < 0.5 ~ "Low Buffering",
+    TRUE ~ NA
+  )) %>%
+  mutate(Label = if_else(!is.na(Significant) &
+                           (!is.na(CancerDriverMode) |
+                             Gene.Symbol %in% top_diff$Gene.Symbol |
+                             !is.na(ExclusiveEssentiality)),
                          Gene.Symbol, NA)) %>%
   arrange(!is.na(CancerDriverMode)) %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, CancerDriverMode,
-               value_threshold = 0.1, color_mapping = color_mapping_driver) +
-  labs(color = "Cancer Driver", x = "Log2FC (Dependency Score)", y = "-log10(p.adj)") +
-  theme(legend.position = "none")
+  mutate(`-log10(p)` = -log10(Test.p.adj)) %>%
+  ggplot() +
+  aes(x = Log2FC, y = `-log10(p)`, label = Label, color = CancerDriverMode) +
+  geom_point(aes(alpha = Significant, shape = ExclusiveEssentiality, size = ExclusiveEssentiality)) +
+  color_mapping_driver +
+  scale_shape_manual(values = c(`High Buffering` = 17, `Low Buffering` = 15), na.value = 16) +
+  scale_size_manual(values = c(`High Buffering` = 2, `Low Buffering` = 2), na.value = 1, guide = "none") +
+  scale_alpha_manual(values = c(Up = 1, Down = 1), na.value = 0.5, guide = "none") +
+  geom_hline(yintercept = -log10(p_threshold),
+             linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0.1,
+             linetype = "dashed", color = "black") +
+  geom_vline(xintercept = -0.1,
+             linetype = "dashed", color = "black") +
+  geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
+                   seed = 42, max.iter = 30000, max.time = 1.5,
+                   point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
+                   force = 5, max.overlaps = 20) +
+  xlim(c(-max_abs_log2fc, max_abs_log2fc)) +
+  labs(color = "Cancer Driver", x = "Log2FC (Dependency Score)",
+       y = "-log10(p.adj)", shape = "Exclusively Essential")
+#  theme(legend.position = "top", legend.direction = "horizontal",
+#        legend.box = "vertical", legend.box.just = "left", legend.margin = margin(0,0,0,0, unit = 'cm')) +
+#  guides(colour = guide_legend(title.position = "top", title.hjust = 0),
+#         shape = guide_legend(title.position = "top", title.hjust = 0, override.aes = list(alpha = 1, size = 3)))
 
 # === Model Buffering Enrichment Panel
 ora_up <- df_crispr_model_buf %>%
@@ -106,21 +145,20 @@ ora_down <- df_crispr_model_buf %>%
 # === Combine Panels into Figure ===
 gene_corr_panel <- cowplot::plot_grid(gene_corr_plots$EGFR + xlab(NULL), gene_corr_plots$CDK6 + xlab(NULL) + ylab(NULL),
                                       gene_corr_plots$ELMO2, gene_corr_plots$BRAT1 + ylab(NULL),
-                                      labels = c("B", "C", "D", "E"),
                                       nrow = 2, ncol = 2)
 
-figure6_sub1 <- cowplot::plot_grid(volcano_dep_corr, gene_corr_panel,
-                                   labels = c("A", ""),
+#figure6_sub1 <- cowplot::plot_grid(volcano_dep_corr, gene_corr_panel,
+#                                   labels = c("A", "B"),
+#                                   nrow = 1, ncol = 2)
+
+figure6_sub2 <- cowplot::plot_grid(ora_down, ora_up,
+                                   labels = c("B", "C"),
                                    nrow = 1, ncol = 2)
 
-figure6_sub2 <- cowplot::plot_grid(volcano_dep_diff, ora_down, ora_up,
-                                   labels = c("F", "G", "H"),
-                                   rel_widths = c(1, 0.8, 0.8),
-                                   nrow = 1, ncol = 3)
-
-figure6 <- cowplot::plot_grid(figure6_sub1, figure6_sub2,
+figure6 <- cowplot::plot_grid(volcano_dep_diff, figure6_sub2,
+                              labels = c("A", ""),
                               nrow = 2, ncol = 1)
 
-cairo_pdf(here(plots_dir, "figure06.pdf"), width = 13, height = 9)
+cairo_pdf(here(plots_dir, "figure06.pdf"), width = 8, height = 9)
 figure6
 dev.off()
