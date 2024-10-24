@@ -132,7 +132,7 @@ ora_up <- df_crispr_model_buf %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
   plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "CORUM"), string_trunc = 45,
-                     custom_color = color_palettes$DiffExp["Up"])
+                     custom_color = color_palettes$DiffExpBackground["Up"])
 
 ora_down <- df_crispr_model_buf %>%
   filter(Significant == "Down") %>%
@@ -140,7 +140,7 @@ ora_down <- df_crispr_model_buf %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
   plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "WP"), string_trunc = 45,
-                     custom_color = color_palettes$DiffExp["Down"])
+                     custom_color = color_palettes$DiffExpBackground["Down"])
 
 # === Combine Panels into Figure ===
 gene_corr_panel <- cowplot::plot_grid(gene_corr_plots$EGFR + xlab(NULL), gene_corr_plots$CDK6 + xlab(NULL) + ylab(NULL),

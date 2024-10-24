@@ -206,36 +206,40 @@ max_aneuploidy <- max(df_depmap$CellLine.AneuploidyScore)
 max_aneuploidy_leuk <- round(quantile(df_leuk$CellLine.AneuploidyScore, probs = 0.9))
 
 leuk_plot <- df_depmap %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
-  mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)),
+         `Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test)
 
 leuk_plot_low <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
-  mutate(`Myeloid / Lymphoid` = OncotreeCode %in% leukemia_codes) %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)),
+         `Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test)
 
 leuk_poster <- leuk_plot +
-  theme(legend.position = "top",
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        legend.position = "top",
         legend.title = element_text(hjust = 0.5),
-        legend.title.position = "top") +
+        legend.title.position = "top",
+        legend.margin = margin(0,0,0,0, unit = 'cm')) +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
-  labs(color = "\nAneuploidy Score", y = "Model Buffering Ratio") +
+  labs(color = "\nAneuploidy Score", y = "Model Buffering Ratio", x = NULL) +
   scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1, end = 0.8,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy))
 
 leuk_poster_low <- leuk_plot_low +
-  theme(legend.position = "top",
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        legend.position = "top",
         legend.title = element_text(hjust = 0.5),
-        legend.title.position = "top") +
+        legend.title.position = "top",
+        legend.margin = margin(0,0,0,0, unit = 'cm')) +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
-  labs(color = "Aneuploidy Score\n(Limited Range)", y = NULL) +
+  labs(color = "Aneuploidy Score\n(Limited Range)", y = NULL, x = NULL) +
   scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1, end = 0.8,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),

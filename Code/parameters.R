@@ -69,7 +69,9 @@ color_palettes <- list(
                        "Buffered" = viridis(2, begin = 0.15, end = 0.7)[2],
                        "Anti-Scaling" = "dimgrey"),
   DiffExp = c("Up" = bidirectional_color_pal[5],
-              "Down" = bidirectional_color_pal[1])
+              "Down" = bidirectional_color_pal[1]),
+  DiffExpBackground = c("Up" = rev(brewer.pal(9, "RdBu"))[8],
+                        "Down" = rev(brewer.pal(9, "RdBu"))[2])
 )
 
 base_size <- 15

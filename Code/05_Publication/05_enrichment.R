@@ -78,12 +78,14 @@ genes_down <- diff_exp_procan %>%
 ora_up <- genes_up %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
-  plot_terms_compact(selected_sources = c("REAC", "GO:MF", "CORUM"), custom_color = color_palettes$DiffExp["Up"])
+  plot_terms_compact(selected_sources = c("REAC", "GO:MF", "CORUM"),
+                     custom_color = color_palettes$DiffExpBackground["Up"])
 
 ora_down <- genes_down %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
-  plot_terms_compact(selected_sources = c("KEGG", "GO:MF", "CORUM"), custom_color = color_palettes$DiffExp["Down"])
+  plot_terms_compact(selected_sources = c("KEGG", "GO:MF", "CORUM"),
+                     custom_color = color_palettes$DiffExpBackground["Down"])
 
 # === STRING Panel ===
 string_db <- STRINGdb$new(version = "12.0", species = 9606, score_threshold = 700,

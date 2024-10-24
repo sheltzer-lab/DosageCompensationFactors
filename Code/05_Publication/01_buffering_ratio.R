@@ -48,7 +48,7 @@ dc_class_line <- expr_buf_depmap %>%
                      labels = paste0(seq(-0.5, 2.5, 0.5) * 100, "%")) +
   scale_color_manual(values = color_palettes$CopyNumbers) +
   labs(x = "Buffering Class", y = "Mean Protein Abundance", color = "Gene Copy Number") +
-  theme(legend.position = "top", legend.direction = "horizontal")
+  theme(legend.position = "top", legend.direction = "horizontal", legend.margin = margin(0,0,0,0, unit = 'cm'))
 
 # === Categorical Distribution Panel ===
 df_share_gene <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
@@ -81,7 +81,7 @@ stacked_buf_cn <- df_share_gene %>%
   scale_fill_manual(values = color_palettes$BufferingClasses) +
   scale_y_continuous(labels = scales::percent) +
   labs(fill = NULL, y = "Fraction") +
-  theme(legend.position = "top", legend.direction = "horizontal")
+  theme(legend.position = "top", legend.direction = "horizontal", legend.margin = margin(0,0,0,0, unit = 'cm'))
 
 stacked_buf_cn_chr <- df_share_chr %>%
   ggplot() +
@@ -184,7 +184,7 @@ scatter_signif_buffered <- low_var_buf %>%
   scale_alpha_manual(values = c(0.5, 1)) +
   labs(x = "Standard Deviation of Buffering Ratio", y = "Mean Buffering Ratio",
        color = "Frequently Buffered", alpha = "Frequently Buffered") +
-  theme(legend.position = "top", legend.direction = "horizontal") +
+  theme(legend.position = "top", legend.direction = "horizontal", legend.margin = margin(0,0,0,0, unit = 'cm')) +
   guides(colour = guide_legend(title.position="top", title.hjust = 0))
 
 ora_buf <- low_var_buf %>%
@@ -195,7 +195,7 @@ ora_buf <- low_var_buf %>%
   overrepresentation_analysis(ordered = TRUE)
 
 ora_buf_terms <- ora_buf %>%
-  plot_terms_compact(selected_sources = c("GO:MF", "KEGG", "WP"), custom_color = highlight_color)
+  plot_terms_compact(selected_sources = c("GO:MF", "KEGG", "WP"), custom_color = highlight_colors[3])
 
 # === Combine Panels into Figure ===
 #dc_illus <- cowplot::draw_image(here(illustrations_dir, "dc_illustration.svg"))
@@ -210,13 +210,14 @@ stacked_buf_all <- cowplot::plot_grid(stacked_buf_cn, stacked_buf_cn_chr + ylab(
                                       labels = c("D", "E"), rel_widths = c(1, 0.7))
 
 figure1_sub1 <- cowplot::plot_grid(dc_class_line, stacked_buf_all,
-                                   labels = c("C", ""), rel_widths = c(0.5, 1), ncol = 2)
+                                   rel_widths = c(0.5, 1), labels = c("C", ""), ncol = 2)
 
 figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist,
                                    rel_widths = c(1, 1), labels = c("F", "G"), ncol = 2)
 
-br_by_cnv_all <- cowplot::plot_grid(br_by_cnv, br_by_cna,
-                                    labels = c("H", "I"), ncol = 2, align = "h", axis = "tb")
+br_by_cnv_all <- cowplot::plot_grid(br_by_cnv, br_by_cna + ylab(NULL),
+                                    rel_widths = c(1, 0.9), labels = c("H", "I"), ncol = 2,
+                                    align = "h", axis = "tb")
 
 figure1_sub3 <- cowplot::plot_grid(br_by_cnv_all, scatter_signif_buffered, ora_buf_terms,
                                    rel_widths = c(1, 0.8, 0.8), labels = c("", "J", "K"), ncol = 3)
