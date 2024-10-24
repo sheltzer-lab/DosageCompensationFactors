@@ -498,23 +498,36 @@ df_cptac %>%
   scatter_plot_reg_corr(Model.TumorPurity, Model.Buffering.Ratio) %>%
   save_plot("tumor_purity_cptac.png")
 
-## Overall survival
-# TODO: facet by cancer type
+## Survival
 df_cptac %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, OS_days) %>%
   save_plot("overall_survival_cptac.png")
+
+df_cptac %>%
+  scatter_plot_reg_corr(Model.Buffering.Ratio, PFS_days) %>%
+  save_plot("progression_free_survival_cptac.png")
 
 df_cptac_split <- df_cptac %>%
   split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
                      quantile_high = "75%", quantile_low = "25%")
 
-fit <- survfit(Surv(OS_days, OS_event) ~ Model.Buffering.Group, data = df_cptac_split)
-ggsurvplot(fit, data = df_cptac_split, risk.table = TRUE)
+### Kaplan-Meyer Plots
+surv_os <- survfit(Surv(OS_days, OS_event) ~ Model.Buffering.Group, data = df_cptac_split)
+surv_pfs <- survfit(Surv(PFS_days, PFS_event) ~ Model.Buffering.Group, data = df_cptac_split)
+surv <- list(OS = fit_os, PFS = fit_pfs)
+surv_type <- survfit(Surv(OS_days, OS_event) ~ Model.CancerType, data = df_cptac)
 
-## Progression free survival
-fit <- survfit(Surv(PFS_days, PFS_event) ~ Model.Buffering.Group, data = df_cptac_split)
-ggsurvplot(fit, data = df_cptac_split, risk.table = TRUE)
+ggsurvplot_combine(surv, data = df_cptac_split, risk.table = TRUE)
 
+png(filename = here(plots_dir, "overall_survival_km-plot_cptac_cancer_types.png"), width = 700, height = 700)
+ggsurvplot(surv_type, data = df_cptac, risk.table = TRUE)
+dev.off()
+png(filename = here(plots_dir, "overall_survival_km-plot_cptac.png"))
+ggsurvplot(surv_os, data = df_cptac_split, risk.table = TRUE)
+dev.off()
+png(filename = here(plots_dir, "progression_free_survival_km-plot_cptac.png"))
+ggsurvplot(surv_pfs, data = df_cptac_split, risk.table = TRUE)
+dev.off()
 
 ## Misc
 df_procan %>%
