@@ -666,13 +666,16 @@ plot_terms <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", 
 }
 
 plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC", "WP", "GO:MF", "GO:BP"),
-                               terms_per_source = 5, p_thresh = p_threshold, string_trunc = 50, custom_color = NULL) {
+                               terms_per_source = 5, p_thresh = p_threshold, string_trunc = 50,
+                               custom_color = NULL, luminance_shift = +1) {
   require(forcats)
   require(stringr)
   require(ggplot2)
   require(shadowtext)
+  require(gt)
 
   if (is.null(ora)) return(NULL)
+  if (!is.null(custom_color)) custom_color <- adjust_luminance(custom_color, luminance_shift)
 
   df <- ora$result %>%
     filter(p_value < p_thresh) %>%
@@ -689,7 +692,6 @@ plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC"
         label = term_name) +
     { if (!is.null(custom_color)) geom_bar(fill = custom_color, stat = "identity")
       else geom_bar(aes(fill = source), stat = "identity") } +
-    # geom_shadowtext(color = "white", y = 1 + 0.18, hjust = 0, bg.colour = "dimgrey") +
     geom_text(color = default_color, y = 1, hjust = 0) +
     scale_y_continuous(breaks = seq(1, max(df$`-log10(p)`), 2)) +
     scale_fill_viridis(option = "G", direction = -1, begin = 0.2, end = 0.8, discrete = TRUE) +

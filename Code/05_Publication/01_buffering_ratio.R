@@ -195,7 +195,7 @@ ora_buf <- low_var_buf %>%
   overrepresentation_analysis(ordered = TRUE)
 
 ora_buf_terms <- ora_buf %>%
-  plot_terms_compact(selected_sources = c("GO:MF", "KEGG", "WP"), custom_color = highlight_colors[3])
+  plot_terms_compact(selected_sources = c("GO:MF", "KEGG", "WP"), custom_color = highlight_color)
 
 # === Combine Panels into Figure ===
 #dc_illus <- cowplot::draw_image(here(illustrations_dir, "dc_illustration.svg"))
