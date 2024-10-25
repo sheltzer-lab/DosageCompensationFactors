@@ -197,7 +197,7 @@ median_response_plot_control <- median_response_buf %>%
         axis.ticks.y = element_blank())
 
 panel_drug_response <- cowplot::plot_grid(median_response_plot_buf,
-                                          median_response_plot_control + scale_x_discrete(guide = guide_axis(n.dodge = 2)),
+                                          median_response_plot_control,
                                           align = "h", axis = "lr", ncol = 2, rel_widths = c(1, 0.8))
 
 panel_drug_response_horiz <- cowplot::plot_grid(median_response_plot_buf +
@@ -305,18 +305,16 @@ gene_corr_panel <- cowplot::plot_grid(gene_corr_plots$EGFR + xlab(NULL), gene_co
 #                                   labels = c("A", "B"),
 #                                   nrow = 1, ncol = 2)
 
-figure6_sub2 <- cowplot::plot_grid(ora_down, ora_up,
-                                   labels = c("B", "C"),
+figure6_sub2 <- cowplot::plot_grid(volcano_dep_diff, panel_drug_response,
+                                   labels = c("A", "D"), rel_widths = c(1, 0.7),
                                    nrow = 1, ncol = 2)
 
-figure6_sub3 <- cowplot::plot_grid(panel_drug_response, panel_drug_mechanism,
-                                   ncol = 2, labels = c("D", "E"),
-                                   rel_widths = c(1, 1))
+figure6_sub3 <- cowplot::plot_grid(ora_down, ora_up, panel_drug_mechanism,
+                                   ncol = 3, labels = c("B", "C", "E"))
 
-figure6 <- cowplot::plot_grid(volcano_dep_diff, figure6_sub2, figure6_sub3,
-                              labels = c("A", "", ""), rel_heights = c(0.75, 1, 0.8),
-                              nrow = 3, ncol = 1)
+figure6 <- cowplot::plot_grid(figure6_sub2, figure6_sub3,
+                              nrow = 2, ncol = 1)
 
-cairo_pdf(here(plots_dir, "figure06.pdf"), width = 8, height = 13)
+cairo_pdf(here(plots_dir, "figure06.pdf"), width = 12, height = 10)
 figure6
 dev.off()
