@@ -32,7 +32,7 @@ model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregat
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
-# Calculate Correlation between Drug Sensitivity and Cell Line Buffering
+# === Calculate Correlation between Drug Sensitivity and Cell Line Buffering ===
 analyze_sensitivity <- function(df_model_buf, df_drug_screens, buffering_col, drug_effect_col) {
   df_model_buf %>%
     inner_join(y = df_drug_screens, by = "Model.ID",
@@ -45,12 +45,14 @@ analyze_sensitivity <- function(df_model_buf, df_drug_screens, buffering_col, dr
     # https://stackoverflow.com/questions/48041504/calculate-pairwise-correlation-in-r-using-dplyrmutate
     summarize(
       # Correlation analysis Buffering vs Sensitivity
-      Corr.Sensitivity_Buffering = cor.test({ { buffering_col } }, { { drug_effect_col } },
+      Corr.DrugEffect_Buffering = cor.test({ { buffering_col } }, { { drug_effect_col } },
                                             method = "spearman")$estimate[["rho"]],
       Corr.p = cor.test({ { buffering_col } }, { { drug_effect_col } },
                         method = "spearman")$p.value,
       # Statistical test sensitivity low vs. high buffering
-      BufferingGroup.Sensitivity.Diff = Group.Median[Buffering.Group == "High"][1] - Group.Median[Buffering.Group == "Low"][1],
+      BufferingGroup.DrugEffect.High = Group.Median[Buffering.Group == "High"][1],
+      BufferingGroup.DrugEffect.Low = Group.Median[Buffering.Group == "Low"][1],
+      BufferingGroup.DrugEffect.Diff = BufferingGroup.DrugEffect.High - BufferingGroup.DrugEffect.Low,
       BufferingGroup.Diff.Test.p = wilcox.test({{drug_effect_col}}[Buffering.Group == "High"],
                                                {{drug_effect_col}}[Buffering.Group == "Low"])$p.value,
     ) %>%
@@ -70,13 +72,13 @@ drug_dc_corr_agg_mean <- model_buf_agg %>%
   analyze_sensitivity(drug_screens, Model.Buffering.StandardizedMean, Drug.MFI.Log2FC)
 
 
-# Evaluate Reproducibility of Results
-cor_datasets <- cor.test(drug_dc_corr_depmap$Corr.Sensitivity_Buffering,
-         drug_dc_corr_procan$Corr.Sensitivity_Buffering,
+# === Evaluate Reproducibility of Results ===
+cor_datasets <- cor.test(drug_dc_corr_depmap$Corr.DrugEffect_Buffering,
+         drug_dc_corr_procan$Corr.DrugEffect_Buffering,
          method = "pearson")
 
-cor_agg_methods <- cor.test(drug_dc_corr_agg_rank$Corr.Sensitivity_Buffering,
-         drug_dc_corr_agg_mean$Corr.Sensitivity_Buffering,
+cor_agg_methods <- cor.test(drug_dc_corr_agg_rank$Corr.DrugEffect_Buffering,
+         drug_dc_corr_agg_mean$Corr.DrugEffect_Buffering,
          method = "pearson")
 
 cat(capture.output(cor_datasets), file = here(reports_dir, "drug_correlation_datasets.txt"),
@@ -87,39 +89,46 @@ cat(capture.output(cor_agg_methods), file = here(reports_dir, "drug_correlation_
 
 drug_dc_corr_agg_rank %>% mutate(Method = "StandardizedMean") %>%
   bind_rows(drug_dc_corr_agg_mean %>% mutate(Method = "MeanNormRank")) %>%
-  ggplot(aes(x = Corr.Sensitivity_Buffering, color = Method)) +
+  ggplot(aes(x = Corr.DrugEffect_Buffering, color = Method)) +
   geom_density()
 
 # === Write results ===
-write.xlsx(drug_dc_corr_procan, here(tables_base_dir, "sensitivity_correlation_procan_gene_filtered.xlsx"),
-           colNames = TRUE)
-write.xlsx(drug_dc_corr_depmap, here(tables_base_dir, "sensitivity_correlation_depmap_gene_filtered.xlsx"),
-           colNames = TRUE)
-write.xlsx(drug_dc_corr_agg_rank, here(tables_base_dir, "sensitivity_correlation_mean-norm-rank.xlsx"),
-           colNames = TRUE)
-write.xlsx(drug_dc_corr_agg_mean, here(tables_base_dir, "sensitivity_correlation_standardized-mean.xlsx"),
-           colNames = TRUE)
+drug_dc_corr_procan %>%
+  write_parquet(here(output_data_dir, "sensitivity_correlation_procan_gene_filtered.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "sensitivity_correlation_procan_gene_filtered.xlsx"), colNames = TRUE)
+drug_dc_corr_depmap %>%
+  write_parquet(here(output_data_dir, "sensitivity_correlation_depmap_gene_filtered.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "sensitivity_correlation_depmap_gene_filtered.xlsx"), colNames = TRUE)
+drug_dc_corr_agg_rank %>%
+  write_parquet(here(output_data_dir, "sensitivity_correlation_mean-norm-rank.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "sensitivity_correlation_mean-norm-rank.xlsx"), colNames = TRUE)
+drug_dc_corr_agg_mean %>%
+  write_parquet(here(output_data_dir, "sensitivity_correlation_standardized-mean.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "sensitivity_correlation_standardized-mean.xlsx"), colNames = TRUE)
 
-# === Visualize results for rank aggregated sensitivities ===
+# === Determine Drug Candidates using Buffering-DrugEffect Correlation ===
+## Drug candidates for high-buffering cells
 top_sensitivity <- drug_dc_corr_agg_rank %>%
-  filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
-  filter(BufferingGroup.Sensitivity.Diff < 0) %>%
-  slice_min(Corr.Sensitivity_Buffering, n = 12)
+  filter(BufferingGroup.Diff.Test.p < p_threshold & Corr.p < p_threshold) %>%
+  filter(BufferingGroup.DrugEffect.Diff < 0 & BufferingGroup.DrugEffect.High < 0) %>%
+  slice_min(Corr.DrugEffect_Buffering, n = 10)
+## Drug candidates for high-buffering cells
 bot_sensitivity <- drug_dc_corr_agg_rank %>%
-  filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
-  filter(BufferingGroup.Sensitivity.Diff >= 0) %>%
-  slice_max(Corr.Sensitivity_Buffering, n = 12)
+  filter(BufferingGroup.Diff.Test.p < p_threshold & Corr.p < p_threshold) %>%
+  filter(BufferingGroup.DrugEffect.Diff > 0 & BufferingGroup.DrugEffect.Low < 0) %>%
+  slice_max(Corr.DrugEffect_Buffering, n = 10)
 
 df_sensitivity_agg <- model_buf_agg %>%
   inner_join(y = drug_screens, by = "Model.ID",
              relationship = "one-to-many", na_matches = "never") %>%
   mutate(Model.Buffering = if_else(Model.Buffering.MeanNormRank > 0.5, "High", "Low"))
 
+## Visualize drug effect of candidates in all cell lines
 df_sensitivity_agg %>%
   inner_join(y = top_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
-  mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
+  mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.DrugEffect_Buffering, 3),
                                                                  nsmall = 3, scientific = FALSE), ")")) %>%
-  mutate(Label = fct_reorder(Label, desc(Corr.Sensitivity_Buffering))) %>%
+  mutate(Label = fct_reorder(Label, desc(Corr.DrugEffect_Buffering))) %>%
   arrange(Model.Buffering.MeanNormRank) %>%
   jittered_boxplot(Label, Drug.MFI.Log2FC, Model.Buffering.MeanNormRank,
                    alpha = 3/4, jitter_width = 0.25) %>%
@@ -127,14 +136,15 @@ df_sensitivity_agg %>%
 
 df_sensitivity_agg %>%
   inner_join(y = bot_sensitivity, by = c("Drug.ID", "Drug.Name")) %>%
-  mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
+  mutate(Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.DrugEffect_Buffering, 3),
                                                                  nsmall = 3, scientific = FALSE), ")")) %>%
-  mutate(Label = fct_reorder(Label, Corr.Sensitivity_Buffering)) %>%
+  mutate(Label = fct_reorder(Label, Corr.DrugEffect_Buffering)) %>%
   arrange(Model.Buffering.MeanNormRank) %>%
   jittered_boxplot(Label, Drug.MFI.Log2FC, Model.Buffering.MeanNormRank,
                    alpha = 3/4, jitter_width = 0.25) %>%
   save_plot("correlation_buffering_sensitivity_bot.png", width = 300)
 
+## Visualize candidate drug effect difference between high and low buffering cells
 df_sensitivity_agg %>%
   semi_join(y = top_sensitivity, by = "Drug.ID") %>%
   signif_violin_plot(Model.Buffering, Drug.MFI.Log2FC, Drug.Name) %>%
@@ -145,7 +155,7 @@ df_sensitivity_agg %>%
   signif_violin_plot(Model.Buffering, Drug.MFI.Log2FC, Drug.Name) %>%
   save_plot(paste0("buffering_sensitivity_distributions_bot.png"), width = 350)
 
-# Scatter- & Violin-plot visualization of selected drugs
+## Scatter- & Violin-plot visualization of selected drugs
 selected_drugs <- c("REGORAFENIB", "MPS1-IN-5", "SECLIDEMSTAT", "ATIPRIMOD", "INARIGIVIR", "C-021", "G-749",
                     "NIMORAZOLE", "GELDANAMYCIN", "ZOTAROLIMUS", "LERCANIDIPINE", "BAFILOMYCIN-A1")
 
@@ -162,7 +172,7 @@ df_sensitivity_agg %>%
   signif_violin_plot(Model.Buffering, Drug.MFI.Log2FC, Drug.Name) %>%
   save_plot(paste0("buffering_sensitivity_distributions_selected.png"), width = 350)
 
-# Get mechanism of action and target of top drugs
+## Get mechanism of action and target of drug candidates
 top_meta <- drug_meta %>%
   semi_join(y = top_sensitivity, by = "Drug.ID")
 
@@ -172,69 +182,7 @@ bot_meta <- drug_meta %>%
 selected_meta <- drug_meta %>%
   filter(Drug.Name %in% selected_drugs)
 
-# Plot correlation by mechanism of action
-moa_corr <- model_buf_agg %>%
-  inner_join(y = drug_screens, by = "Model.ID",
-             relationship = "one-to-many", na_matches = "never") %>%
-  select(-"Drug.Name") %>%
-  left_join(y = drug_meta, by = "Drug.ID") %>%
-  separate_longer_delim(Drug.MOA, delim = ", ") %>%
-  drop_na(Drug.MOA) %>%
-  mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
-  group_by(Drug.MOA) %>%
-  summarize(
-    # ToDo: Avoid calculating correlation twice
-    Corr.Sensitivity_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
-                                          method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
-                      method = "pearson")$p.value
-  ) %>%
-  mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
-
-moa_corr %>%
-  filter(Corr.p.adj < p_threshold) %>%
-  #filter(Corr.Sensitivity_Buffering < -0.15) %>%
-  slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
-  mutate(Drug.MOA = fct_reorder(Drug.MOA, Corr.Sensitivity_Buffering, .desc = TRUE),
-         `-log10(p)` = -log10(Corr.p.adj)) %>%
-  vertical_bar_chart(Drug.MOA, Corr.Sensitivity_Buffering, `-log10(p)`,
-                     value_range = c(-0.1, 0.1), line_intercept = 0, bar_label_shift = 0.1,
-                     category_lab = "Mechanism of Action", value_lab = "Correlation Buffering-Sensitivity",
-                     color_lab = "-log10(p)") %>%
-  save_plot("mechanism_buffering_sensitivity_top.png", width = 200)
-
-# Plot correlation by drug target
-target_corr <- model_buf_agg %>%
-  inner_join(y = drug_screens, by = "Model.ID",
-             relationship = "one-to-many", na_matches = "never") %>%
-  select(-"Drug.Name") %>%
-  left_join(y = drug_meta, by = "Drug.ID") %>%
-  separate_longer_delim(Drug.Target, delim = ", ") %>%
-  mutate(Drug.Target = str_squish(Drug.Target)) %>%
-  drop_na(Drug.Target) %>%
-  group_by(Drug.Target) %>%
-  summarize(
-    # ToDo: Avoid calculating correlation twice
-    Corr.Sensitivity_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
-                                          method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
-                      method = "pearson")$p.value
-  ) %>%
-  mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
-
-target_corr %>%
-  filter(Corr.p.adj < p_threshold) %>%
-  #filter(Corr.Sensitivity_Buffering < -0.15) %>%
-  slice_min(Corr.Sensitivity_Buffering, n = 20) %>%
-  mutate(Drug.Target = fct_reorder(Drug.Target, Corr.Sensitivity_Buffering, .desc = TRUE),
-         `-log10(p)` = -log10(Corr.p.adj)) %>%
-  vertical_bar_chart(Drug.Target, Corr.Sensitivity_Buffering, `-log10(p)`,
-                     value_range = c(0, 0.1), line_intercept = 0, bar_label_shift = 0.005,
-                     category_lab = "Drug Target", value_lab = "Correlation Buffering-Sensitivity",
-                     color_lab = "-log10(p)") %>%
-  save_plot("target_buffering_sensitivity_top.png")
-
-# Heatmap plotting Drug Sensitivity, Cell Line Buffering and potential confounders
+## Heatmap plotting Drug Sensitivity, Cell Line Buffering and potential confounders
 drug_confounder_heatmap <- function(df, desc = FALSE) {
   theme_settings <- theme(axis.line.x = element_blank(),
                           axis.title.x = element_blank(),
@@ -249,9 +197,9 @@ drug_confounder_heatmap <- function(df, desc = FALSE) {
                              legend.title = element_blank())
 
   df <- df %>%
-    mutate(Drug.Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.Sensitivity_Buffering, 3),
+    mutate(Drug.Label = paste0(Drug.Name, " (", utf8_rho, " = ", format(round(Corr.DrugEffect_Buffering, 3),
                                                                         nsmall = 3, scientific = FALSE), ")")) %>%
-    mutate(Drug.Label = fct_reorder(Drug.Label, Corr.Sensitivity_Buffering, .desc = desc),
+    mutate(Drug.Label = fct_reorder(Drug.Label, Corr.DrugEffect_Buffering, .desc = desc),
            CellLine.Name = fct_reorder(CellLine.Name, Model.Buffering.MeanNormRank),
            CellLine.WGD = as.factor(CellLine.WGD))
 
@@ -328,15 +276,77 @@ model_buf_agg %>%
   drug_confounder_heatmap() %>%
   save_plot("drug_confounder_heatmap_bot.png")
 
+# === Determine Drug Mechanisms & Targets using Buffering-DrugEffect Correlation ===
+## Calculate & plot correlation by mechanism of action
+moa_corr <- model_buf_agg %>%
+  inner_join(y = drug_screens, by = "Model.ID",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.MOA, delim = ", ") %>%
+  drop_na(Drug.MOA) %>%
+  mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
+  group_by(Drug.MOA) %>%
+  summarize(
+    # ToDo: Avoid calculating correlation twice
+    Corr.DrugEffect_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
+                                          method = "spearman")$estimate[["rho"]],
+    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
+                      method = "pearson")$p.value
+  ) %>%
+  mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
 
-# Compare MOA & Target between high and low sensitivity groups
+moa_corr %>%
+  filter(Corr.p.adj < p_threshold) %>%
+  slice_max(abs(Corr.DrugEffect_Buffering), n = 20) %>%
+  mutate(Drug.MOA = fct_reorder(Drug.MOA, Corr.DrugEffect_Buffering, .desc = TRUE),
+         `-log10(p)` = -log10(Corr.p.adj)) %>%
+  vertical_bar_chart(Drug.MOA, Corr.DrugEffect_Buffering, `-log10(p)`,
+                     value_range = c(-0.2, 0.2), line_intercept = 0, bar_label_shift = 0.1,
+                     category_lab = "Mechanism of Action", value_lab = "Correlation Buffering-DrugEffect",
+                     color_lab = "-log10(p)") %>%
+  save_plot("mechanism_buffering_sensitivity_top.png", width = 200)
+
+## Calculate & plot correlation by drug target
+target_corr <- model_buf_agg %>%
+  inner_join(y = drug_screens, by = "Model.ID",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.Target, delim = ", ") %>%
+  mutate(Drug.Target = str_squish(Drug.Target)) %>%
+  drop_na(Drug.Target) %>%
+  group_by(Drug.Target) %>%
+  summarize(
+    # ToDo: Avoid calculating correlation twice
+    Corr.DrugEffect_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
+                                          method = "spearman")$estimate[["rho"]],
+    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
+                      method = "pearson")$p.value
+  ) %>%
+  mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
+
+target_corr %>%
+  filter(Corr.p.adj < p_threshold) %>%
+  slice_max(abs(Corr.DrugEffect_Buffering), n = 20) %>%
+  mutate(Drug.Target = fct_reorder(Drug.Target, Corr.DrugEffect_Buffering, .desc = TRUE),
+         `-log10(p)` = -log10(Corr.p.adj)) %>%
+  vertical_bar_chart(Drug.Target, Corr.DrugEffect_Buffering, `-log10(p)`,
+                     value_range = c(0, 0.15), line_intercept = 0, bar_label_shift = 0.005,
+                     category_lab = "Drug Target", value_lab = "Correlation Buffering-DrugEffect",
+                     color_lab = "-log10(p)") %>%
+  save_plot("target_buffering_sensitivity_top.png")
+
+# === Compare MOA & Target between groups of positive and negative drug effect difference ===
+## Note: nothing significant when filtering for adjusted p-value
+
 lower_diff <- drug_dc_corr_agg_rank %>%
-  filter(BufferingGroup.Sensitivity.Diff < -0.2) %>%
+  filter(BufferingGroup.DrugEffect.Diff < -0.15 & BufferingGroup.DrugEffect.High < 0) %>%
   filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
-  left_join(y = drug_meta, by = "Drug.ID")
+  left_join(y = drug_meta %>% select(-Drug.Name), by = "Drug.ID")
 
 higher_diff <- drug_dc_corr_agg_rank %>%
-  filter(BufferingGroup.Sensitivity.Diff > 0.2) %>%
+  filter(BufferingGroup.DrugEffect.Diff > 0.15 & BufferingGroup.DrugEffect.Low < 0) %>%
   filter(BufferingGroup.Diff.Test.p < p_threshold) %>%
   left_join(y = drug_meta, by = "Drug.ID")
 
@@ -345,7 +355,7 @@ lower_diff_moa <- lower_diff %>%
   mutate(Drug.MOA = trimws(Drug.MOA)) %>%
   group_by(Drug.MOA) %>%
   add_count() %>%
-  summarize(BufferingGroup.Diff.MOA.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+  summarize(BufferingGroup.Diff.MOA.Median = median(BufferingGroup.DrugEffect.Diff, na.rm = TRUE),
             MOA.Count = first(n))
 
 higher_diff_moa <- higher_diff %>%
@@ -353,7 +363,7 @@ higher_diff_moa <- higher_diff %>%
   mutate(Drug.MOA = trimws(Drug.MOA)) %>%
   group_by(Drug.MOA) %>%
   add_count() %>%
-  summarize(BufferingGroup.Diff.MOA.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+  summarize(BufferingGroup.Diff.MOA.Median = median(BufferingGroup.DrugEffect.Diff, na.rm = TRUE),
             MOA.Count = first(n))
 
 lower_diff_target <- lower_diff %>%
@@ -361,7 +371,7 @@ lower_diff_target <- lower_diff %>%
   mutate(Drug.Target = trimws(Drug.Target)) %>%
   group_by(Drug.Target) %>%
   add_count() %>%
-  summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+  summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.DrugEffect.Diff, na.rm = TRUE),
             Target.Count = first(n))
 
 higher_diff_target <- higher_diff %>%
@@ -369,10 +379,10 @@ higher_diff_target <- higher_diff %>%
   mutate(Drug.Target = trimws(Drug.Target)) %>%
   group_by(Drug.Target) %>%
   add_count() %>%
-  summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.Sensitivity.Diff, na.rm = TRUE),
+  summarize(BufferingGroup.Diff.Target.Median = median(BufferingGroup.DrugEffect.Diff, na.rm = TRUE),
             Target.Count = first(n))
 
-# === Difference in Sensitivity between High and Low Buffering Groups ===
+# === Difference in Drug Effect between High and Low Buffering Groups ===
 model_buf_sensitivity <- model_buf_agg %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group",
                      quantile_low = "20%", quantile_high = "80%") %>%
@@ -423,24 +433,51 @@ target_diff %>%
   plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
   save_plot("buffering_drug_target_volcano.png", width = 300, height = 250)
 
+# === Common Mechanisms and Targets between correlation and fold-change methods ===
+## Mechanisms
+moa_corr_lowbuf <- moa_corr %>%
+  filter(Corr.p.adj < p_threshold & Corr.DrugEffect_Buffering > 0)
+moa_corr_highbuf <- moa_corr %>%
+  filter(Corr.p.adj < p_threshold & Corr.DrugEffect_Buffering < 0)
 
-# ToDo: Cleanup Code
+common_moa_lowbuf <- moa_diff %>%
+  filter(Significant == "Up" & Mean_GroupA < 0) %>%
+  #inner_join(higher_diff_moa, by = "Drug.MOA") %>%
+  inner_join(moa_corr_lowbuf, by = "Drug.MOA")
 
-# Drug Mechanism Groups
-# drug_meta_long <- drug_meta %>%
-#   separate_longer_delim(Drug.MOA, ", ") %>%
-#   mutate(Drug.MOA = str_squish(Drug.MOA))
-# mechanisms <- drug_meta_long %>%
-#   count(Drug.MOA) %>%
-#   drop_na()
-# mechanism_dist <- outer(mechanisms$Drug.MOA, mechanisms$Drug.MOA,
-#                         \(x, y) stringdist::stringdist(x, y, method = "lv"))
-# dimnames(mechanism_dist) <- list(mechanisms$Drug.MOA, mechanisms$Drug.MOA)
-# mechanism_clust <- hclust(as.dist(mechanism_dist))
-# pheatmap::pheatmap(mechanism_dist)
+common_moa_highbuf <- moa_diff %>%
+  filter(Significant == "Down" & Mean_GroupB < 0) %>%
+  #inner_join(lower_diff_moa, by = "Drug.MOA") %>%
+  inner_join(moa_corr_highbuf, by = "Drug.MOA")
 
-# === Difference in drug sensitivity between high-buffering, drug-responsive and drug-resistant cells
+## Targets
+target_corr_lowbuf <- target_corr %>%
+  filter(Corr.p.adj < p_threshold & Corr.DrugEffect_Buffering > 0)
+target_corr_highbuf <- target_corr %>%
+  filter(Corr.p.adj < p_threshold & Corr.DrugEffect_Buffering < 0)
+
+common_target_lowbuf <- target_diff %>%
+  filter(Significant == "Up" & Mean_GroupA < 0) %>%
+  #inner_join(higher_diff_target, by = "Drug.Target") %>%
+  inner_join(target_corr_lowbuf, by = "Drug.Target")
+
+common_target_highbuf <- target_diff %>%
+  filter(Significant == "Down" & Mean_GroupB < 0) %>%
+  #inner_join(lower_diff_target, by = "Drug.Target") %>%
+  inner_join(target_corr_highbuf, by = "Drug.Target")
+
+## Save results
+bind_rows(common_moa_lowbuf, common_moa_highbuf) %>%
+  write_parquet(here(output_data_dir, "drug_mechanisms_common.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "drug_mechanisms_common.xlsx"), colNames = TRUE)
+
+bind_rows(common_target_lowbuf, common_target_highbuf) %>%
+  write_parquet(here(output_data_dir, "drug_targets_common.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "drug_targets_common.xlsx"), colNames = TRUE)
+
+# === Difference in drug sensitivity between high-buffering, drug-responsive and drug-resistant cells ===
 median_response <- drug_screens %>%
+  #semi_join(model_buf_agg, by = "Model.ID") %>%
   group_by(Model.ID) %>%
   summarize(Drug.Effect.Median = median(Drug.MFI.Log2FC, na.rm = TRUE),
             Drug.Effect.Observations = sum(!is.na(Drug.MFI.Log2FC)),
@@ -513,3 +550,16 @@ response_counts <- median_response_buf %>%
   as.matrix()
 
 fisher.test(response_counts)
+
+# === Drug Mechanism Groups ===
+# drug_meta_long <- drug_meta %>%
+#   separate_longer_delim(Drug.MOA, ", ") %>%
+#   mutate(Drug.MOA = str_squish(Drug.MOA))
+# mechanisms <- drug_meta_long %>%
+#   count(Drug.MOA) %>%
+#   drop_na()
+# mechanism_dist <- outer(mechanisms$Drug.MOA, mechanisms$Drug.MOA,
+#                         \(x, y) stringdist::stringdist(x, y, method = "lv"))
+# dimnames(mechanism_dist) <- list(mechanisms$Drug.MOA, mechanisms$Drug.MOA)
+# mechanism_clust <- hclust(as.dist(mechanism_dist))
+# pheatmap::pheatmap(mechanism_dist)

@@ -20,6 +20,10 @@ cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
 df_crispr_model_buf <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap.parquet"))
 df_crispr_buf <- read_parquet(here(output_data_dir, "buffering_gene_dependency_depmap.parquet"))
+model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
+drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet")) %>% select(-CellLine.Name)
+common_drug_targets <- read_parquet(here(output_data_dir, "drug_targets_common.parquet"))
+common_drug_mechanisms <- read_parquet(here(output_data_dir, "drug_mechanisms_common.parquet"))
 
 # === Dependency-Buffering Correlation Panel
 color_mapping_driver <- scale_color_manual(values = discrete_color_pal1b, na.value = color_palettes$Missing)
@@ -142,6 +146,156 @@ ora_down <- df_crispr_model_buf %>%
   plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "WP"), string_trunc = 45,
                      custom_color = color_palettes$DiffExp["Down"])
 
+# === Drug Response Panel
+median_response <- drug_screens %>%
+  semi_join(model_buf_agg, by = "Model.ID") %>%
+  group_by(Model.ID) %>%
+  summarize(Drug.Effect.Median = median(Drug.MFI.Log2FC, na.rm = TRUE),
+            Drug.Effect.Observations = sum(!is.na(Drug.MFI.Log2FC)),
+            .groups = "drop") %>%
+  filter(Drug.Effect.Observations > 1000)
+
+high_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.8)[[1]]
+low_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.2)[[1]]
+resistant_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.8)[[1]]
+responsive_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.2)[[1]]
+
+median_response_buf <- median_response %>%
+  left_join(model_buf_agg, by = "Model.ID") %>%
+  mutate(Buffering = case_when(Model.Buffering.MeanNormRank > high_buf_thresh ~ "High",
+                            Model.Buffering.MeanNormRank < low_buf_thresh ~ "Low",
+                            TRUE ~ NA)) %>%
+  mutate(DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
+                            Drug.Effect.Median < responsive_thresh ~ "Responsive",
+                            TRUE ~ NA))
+
+median_response_plot_buf <- median_response_buf %>%
+  drop_na(Buffering) %>%
+  ggplot() +
+  aes(x = Buffering, y = Drug.Effect.Median, color = Buffering) +
+  geom_boxplot() +
+  geom_signif(comparisons = list(c("High", "Low")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = 0.06,
+              size = 0.8, tip_length = 0, color = "black") +
+  scale_color_manual(values = c("High" = color_palettes$BufferingClasses[["Buffered"]],
+                                "Low" = color_palettes$BufferingClasses[["Scaling"]])) +
+  theme(legend.position = "none") +
+  ylim(c(-0.35, 0.15)) +
+  labs(x = "Model Buffering", y = "Median Drug Effect")
+
+median_response_plot_control <- median_response_buf %>%
+  drop_na(DrugStatus) %>%
+  ggplot() +
+  aes(x = DrugStatus, y = Drug.Effect.Median) +
+  geom_boxplot() +
+  theme(legend.position = "none") +
+  xlab("Drug Control") +
+  ylim(c(-0.35, 0.15)) +
+  ylab(NULL) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+panel_drug_response <- cowplot::plot_grid(median_response_plot_buf,
+                                          median_response_plot_control + scale_x_discrete(guide = guide_axis(n.dodge = 2)),
+                                          align = "h", axis = "lr", ncol = 2, rel_widths = c(1, 0.8))
+
+panel_drug_response_horiz <- cowplot::plot_grid(median_response_plot_buf +
+                                                  labs(x = "Model\nBuffering", y = NULL) +
+                                                  coord_flip() +
+                                                  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()),
+                                                median_response_plot_control +
+                                                  labs(x = "Drug\nControl", y = "Median Drug Effect") +
+                                                  coord_flip() +
+                                                  theme(axis.text.y = element_text(), axis.ticks.y = element_line()),
+                                                align = "v", axis = "tb",
+                                                nrow = 2, rel_heights = c(0.8, 1))
+
+# === Drug Mechanism Panel
+moa_heatmap_diff <- common_drug_mechanisms %>%
+  mutate(Label = map_signif(Corr.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+  ggplot() +
+  aes(y = Drug.MOA, x = "Drug Effect Log2FC (High - Low Buffering)", label = Label,
+      fill = Log2FC, color = Corr.DrugEffect_Buffering) +
+  scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                       limits = c(-0.6, 0.6), breaks = c(-0.6, -0.3, 0, 0.3, 0.6), oob = scales::squish) +
+  scale_color_gradientn(colors = bidirectional_color_pal2, space = "Lab",
+                       limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
+  scale_x_discrete(position = "top") +
+  geom_tile() +
+  geom_text(color = "black") +
+  labs(x = NULL, y = NULL,
+       color = "Correlation (Drug Effect, Model BR)", fill = "Drug Effect Log2FC (High - Low Buffering)") +
+  theme_void() +
+  guides(fill = guide_colourbar(order = 1),
+         colour = guide_colourbar(order = 2)) +
+  theme(axis.text.y = element_text(hjust = 1, vjust = 0.5),
+        legend.key.size = unit(16, "points"),
+        legend.box = "vertical",
+        legend.position = "bottom",
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.margin = margin(0,0,5, -200))
+
+moa_heatmap_corr <- common_drug_mechanisms %>%
+  mutate(Label = map_signif(Test.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+  ggplot() +
+  aes(y = Drug.MOA, x = "Correlation (Drug Effect ~ Model BR)", fill = Corr.DrugEffect_Buffering, label = Label) +
+  scale_fill_gradientn(colors = bidirectional_color_pal2, space = "Lab",
+                       limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
+  geom_tile() +
+  geom_text(color = "black") +
+  labs(x = "Drug Mechanism", y = NULL) +
+  theme_void() +
+  theme(legend.position = "none")
+
+panel_drug_mechanism <- cowplot::plot_grid(moa_heatmap_diff, moa_heatmap_corr,
+                                           nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                           rel_widths = c(1, 0.1))
+
+# === Drug Target Panel
+target_heatmap_diff <- common_drug_targets %>%
+  mutate(Label = map_signif(Corr.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+  ggplot() +
+  aes(x = Drug.Target, y = "Drug Effect Log2FC (High - Low Buffering)", label = Label,
+      fill = Log2FC, color = Corr.DrugEffect_Buffering) +
+  scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
+                       limits = c(-0.6, 0.6), breaks = c(-0.6, -0.3, 0, 0.3, 0.6), oob = scales::squish) +
+  scale_color_gradientn(colors = bidirectional_color_pal2, space = "Lab",
+                       limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
+  scale_x_discrete(position = "top") +
+  geom_tile() +
+  geom_text(color = "black") +
+  labs(x = NULL, y = NULL, color = "Correlation") +
+  theme_void() +
+  guides(fill = guide_colourbar(order = 1),
+         colour = guide_colourbar(order = 2)) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 1, vjust = 0.5),
+        axis.text.y = element_text(hjust = 1, vjust = 0.5),
+        legend.key.size = unit(16, "points"),
+        legend.box = "horizontal",
+        legend.position = "right",
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0))
+
+target_heatmap_corr <- common_drug_targets %>%
+  mutate(Label = map_signif(Test.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+  ggplot() +
+  aes(x = Drug.Target, y = "Correlation (Drug Effect ~ Model BR)", fill = Corr.DrugEffect_Buffering, label = Label) +
+  scale_fill_gradientn(colors = bidirectional_color_pal2, space = "Lab",
+                       limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
+  geom_tile() +
+  geom_text(color = "black") +
+  labs(x = "Drug Target", y = NULL) +
+  theme_void() +
+  theme(legend.position = "none",
+        axis.title.x.bottom = element_text(),
+        axis.text.y = element_text(hjust = 1, vjust = 0.5))
+
+panel_drug_target <- cowplot::plot_grid(target_heatmap_diff, target_heatmap_corr,
+                                        nrow = 2, ncol = 1, align = "v", axis = "tb",
+                                        rel_heights = c(1, 0.6))
+
 # === Combine Panels into Figure ===
 gene_corr_panel <- cowplot::plot_grid(gene_corr_plots$EGFR + xlab(NULL), gene_corr_plots$CDK6 + xlab(NULL) + ylab(NULL),
                                       gene_corr_plots$ELMO2, gene_corr_plots$BRAT1 + ylab(NULL),
@@ -155,10 +309,14 @@ figure6_sub2 <- cowplot::plot_grid(ora_down, ora_up,
                                    labels = c("B", "C"),
                                    nrow = 1, ncol = 2)
 
-figure6 <- cowplot::plot_grid(volcano_dep_diff, figure6_sub2,
-                              labels = c("A", ""),
-                              nrow = 2, ncol = 1)
+figure6_sub3 <- cowplot::plot_grid(panel_drug_response, panel_drug_mechanism,
+                                   ncol = 2, labels = c("D", "E"),
+                                   rel_widths = c(1, 1))
 
-cairo_pdf(here(plots_dir, "figure06.pdf"), width = 8, height = 9)
+figure6 <- cowplot::plot_grid(volcano_dep_diff, figure6_sub2, figure6_sub3,
+                              labels = c("A", "", ""), rel_heights = c(0.75, 1, 0.8),
+                              nrow = 3, ncol = 1)
+
+cairo_pdf(here(plots_dir, "figure06.pdf"), width = 8, height = 13)
 figure6
 dev.off()
