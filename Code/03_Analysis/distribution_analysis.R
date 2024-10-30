@@ -133,6 +133,27 @@ stacked_buf_chr <- df_share_chr %>%
 stacked_buf_chr %>%
   save_plot("buffering_class_chromosome.png", width = 200)
 
+## Chr Arm only (across datasets, Log2FC)
+df_share_chr_lfc <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211, expr_buf_chunduri) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Chr Arm Gain", "Chr Arm Loss")) %>%
+  select(Buffering.ChrArmLevel.Log2FC.Class, Dataset, CNV) %>%
+  drop_na() %>%
+  count(Buffering.ChrArmLevel.Log2FC.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_chr_lfc <- df_share_chr_lfc %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Log2FC.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
+
+stacked_buf_chr_lfc %>%
+  save_plot("buffering_class_chromosome_log2fc.png", width = 200)
+
 ## Chr Arm Average only (across datasets)
 df_share_chr_avg <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_p0211, expr_buf_chunduri) %>%
   distinct(Gene.Symbol, Dataset, Buffering.ChrArmLevel.Average.Class, ChromosomeArm.CNA) %>%
@@ -156,8 +177,9 @@ stacked_buf_chr_avg %>%
   save_plot("buffering_class_chromosome_average.png", width = 200)
 
 ## Compare all methods
-df_share_all <- bind_rows(df_share_gene, df_share_chr, df_share_chr_avg) %>%
-  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class, Buffering.ChrArmLevel.Average.Class),
+df_share_all <- bind_rows(df_share_gene, df_share_chr, df_share_chr_lfc, df_share_chr_avg) %>%
+  pivot_longer(c(Buffering.GeneLevel.Class, Buffering.ChrArmLevel.Class,
+                 Buffering.ChrArmLevel.Log2FC.Class, Buffering.ChrArmLevel.Average.Class),
                names_to = "AnalysisVariant", values_to = "BufferingClass") %>%
   drop_na()
 
@@ -168,6 +190,7 @@ stacked_buf_class <- df_share_all %>%
          Dataset = factor(Dataset, levels = dataset_order),
          AnalysisVariant = case_when(AnalysisVariant == "Buffering.GeneLevel.Class" ~ "Gene CN",
                                      AnalysisVariant == "Buffering.ChrArmLevel.Class" ~ "ChrArm",
+                                     AnalysisVariant == "Buffering.ChrArmLevel.Log2FC.Class" ~ "ChrArm (Log2FC)",
                                      AnalysisVariant == "Buffering.ChrArmLevel.Average.Class" ~ "ChrArm (avg.)")) %>%
   ggplot() +
   aes(fill = BufferingClass, y = Share, x = AnalysisVariant) +
