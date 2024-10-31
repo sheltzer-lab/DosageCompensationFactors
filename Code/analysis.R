@@ -701,3 +701,25 @@ plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC"
     theme(legend.position = "none",
           axis.text.y = element_blank())
 }
+
+# === Mutual Exclusivity ===
+df2contingency <- function(df, x_col, y_col, count_col = n) {
+  df %>%
+    select({ { x_col } }, { { y_col } }, { { count_col } }) %>%
+    drop_na() %>%
+    pivot_wider(names_from = quo_name(enquo(y_col)), values_from = quo_name(enquo(count_col))) %>%
+    tibble::column_to_rownames(quo_name(enquo(x_col))) %>%
+    as.matrix()
+}
+
+mutex_score <- function (contingency_matrix, ignore_bad_matrix = TRUE) {
+  if (nrow(contingency_matrix) != 2 || ncol(contingency_matrix) != 2 || any(is.na(contingency_matrix))) {
+    if (ignore_bad_matrix) return(NA)
+    stop("Contingency matrix must have exactly 2 rows and columns and no NA values")
+  }
+
+  # Source: Girish, et al. “Oncogene-like Addiction to Aneuploidy in Human Cancers.” Preprint. Cancer Biology, January 10, 2023. https://doi.org/10.1101/2023.01.09.523344.
+  test <- fisher.test(contingency_matrix)
+  score <- abs(qnorm(test$p.value)) * sign(-log2(test$estimate[[1]]))
+  return(list(MutEx = score, p = test$p.value, OR = test$estimate[[1]]))
+}
