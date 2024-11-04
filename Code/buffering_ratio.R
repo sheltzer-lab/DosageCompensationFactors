@@ -35,34 +35,34 @@ log_buffering_score <- function(expr_base, expr_obs, cn_base = 2, cn_obs = 3) {
 ## Anti-Scaling:  Change in protein expression is opposite to the change in DNA copy number
 
 br_cutoffs <- list(Buffered = 0.2, AntiScaling = 0.3)
-buffering_class <- function(buffering_ratio, expr_base, expr_obs, cn_base, cn_obs) {
+buffering_class <- function(buffering_ratio, expr_base, expr_obs, cn_base, cn_obs, br_cutoffs_ = br_cutoffs) {
   scaling_direction <- sign(expr_obs - expr_base) * sign(cn_obs - cn_base)
 
   ifelse(scaling_direction >= 0,
-         ifelse(buffering_ratio > br_cutoffs$Buffered, "Buffered",
+         ifelse(buffering_ratio > br_cutoffs_$Buffered, "Buffered",
                 "Scaling"),
-         ifelse(buffering_ratio > br_cutoffs$AntiScaling, "Anti-Scaling",
+         ifelse(buffering_ratio > br_cutoffs_$AntiScaling, "Anti-Scaling",
                 "Buffered")
   )
 }
 
 sf_cutoffs <- list(Scaling = 0.3784142, Buffered = -0.133934)
-buffering_class_sf <- function(scaling_factor) {
-  ifelse(scaling_factor > sf_cutoffs$Scaling, "Scaling",
-         ifelse(scaling_factor > sf_cutoffs$Buffered, "Buffered",
+buffering_class_sf <- function(scaling_factor, sf_cutoffs_ = sf_cutoffs) {
+  ifelse(scaling_factor > sf_cutoffs_$Scaling, "Scaling",
+         ifelse(scaling_factor > sf_cutoffs_$Buffered, "Buffered",
                 "Anti-Scaling"))
 }
 
 sr_cutoffs <- list(Scaling = 0.8, Buffered = -0.2)
-buffering_class_sr <- function(scaling_ratio) {
-  ifelse(scaling_ratio > sr_cutoffs$Scaling, "Scaling",
-         ifelse(scaling_ratio > sr_cutoffs$Buffered, "Buffered",
+buffering_class_sr <- function(scaling_ratio, sr_cutoffs_ = sr_cutoffs) {
+  ifelse(scaling_ratio > sr_cutoffs_$Scaling, "Scaling",
+         ifelse(scaling_ratio > sr_cutoffs_$Buffered, "Buffered",
                 "Anti-Scaling"))
 }
 
 lbs_cutoffs <- list(Buffered = 0.3)
-buffering_class_lbs <- function (log_buffering_score) {
-  ifelse(log_buffering_score > lbs_cutoffs$Buffered, "Buffered", "Scaling")
+buffering_class_lbs <- function (log_buffering_score, lbs_cutoffs_ = lbs_cutoffs) {
+  ifelse(log_buffering_score > lbs_cutoffs_$Buffered, "Buffered", "Scaling")
 }
 
 # Values from Schukken & Sheltzer, 2022 (DOI: 10.1101/gr.276378.121) for chromosome arm gain (inverted for arm loss):
