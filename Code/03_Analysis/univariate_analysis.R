@@ -576,9 +576,15 @@ br_factor_cor <- bind_rows(expr_buf_procan, expr_buf_depmap, expr_buf_cptac) %>%
   ungroup() %>%
   mutate(p.adj = p.adjust(p, method = "BY"))
 
+br_factor_cor %>%
+  write_parquet(here(output_data_dir, 'factor_correlation_univariate.parquet'),
+                version = "2.6") %>%
+  write.xlsx(here(tables_base_dir, "factor_correlation_univariate.xlsx"),
+             colNames = TRUE)
+
 br_factor_cor_heatmap <- br_factor_cor %>%
   mutate(Label = map_signif(p.adj),
-         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, abs(cor), .desc = TRUE)) %>%
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, cor, .desc = TRUE)) %>%
   distinct(DosageCompensation.Factor, Dataset, Gene.CNV, cor, Label) %>%
   ggplot() +
   aes(x = DosageCompensation.Factor, y = "", fill = cor, label = Label) +

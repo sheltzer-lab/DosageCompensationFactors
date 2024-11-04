@@ -514,7 +514,7 @@ df_cptac_split <- df_cptac %>%
 ### Kaplan-Meyer Plots
 surv_os <- survfit(Surv(OS_days, OS_event) ~ Model.Buffering.Group, data = df_cptac_split)
 surv_pfs <- survfit(Surv(PFS_days, PFS_event) ~ Model.Buffering.Group, data = df_cptac_split)
-surv <- list(OS = fit_os, PFS = fit_pfs)
+surv <- list(OS = surv_os, PFS = surv_pfs)
 surv_type <- survfit(Surv(OS_days, OS_event) ~ Model.CancerType, data = df_cptac)
 
 ggsurvplot_combine(surv, data = df_cptac_split, risk.table = TRUE)
