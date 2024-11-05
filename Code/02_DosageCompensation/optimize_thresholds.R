@@ -4,11 +4,13 @@ library(dplyr)
 library(arrow)
 library(ggplot2)
 library(ggpubr)
+library(ggsignif)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
 source(here("Code", "parameters.R"))
 source(here("Code", "buffering_ratio.R"))
+source(here("Code", "visualization.R"))
 
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "Preprocessing", "DosageCompensation")
@@ -63,6 +65,7 @@ df_cptac <- expr_cptac %>%
              na_matches = "never", relationship = "many-to-one")
 
 df_cptac %>%
+  mutate(Gene.CopyNumber = if_else(Model.SampleType == "Normal", 2, Gene.CopyNumber)) %>%
   filter(Gene.CopyNumber < 5 & Gene.CopyNumber > 0) %>%
   filter(Protein.Expression.Normalized > 15 & Protein.Expression.Normalized < 35) %>% # For visualization only
   mutate(Gene.CopyNumber = as.factor(Gene.CopyNumber)) %>%
@@ -99,16 +102,7 @@ datasets_opt <- datasets %>%
                                            2, Gene.CopyNumber))
 
 # === Iterate through threshold combinations and determine distance of estimated to optimal Buffered cohorts ===
-df_results <- data.frame(
-  Dataset = character(),
-  Gene.CopyNumber = integer(),
-  Threshold.Buffered = numeric(),
-  Threshold.AntiScaling = numeric(),
-  Buffered.Optimal.Count = integer(),
-  Buffered.Estimate.Count = integer(),
-  Buffered.Distance.Wasserstein = numeric(),
-  Buffered.Distance.Log2FC = numeric()
-)
+df_results <- data.frame()
 
 for (thresh_buf in seq(0, 1, 0.1)) {
   for (thresh_as in seq(0, 1, 0.1)) {
@@ -134,7 +128,9 @@ for (thresh_buf in seq(0, 1, 0.1)) {
     df_results <- df_thresh_res %>%
       group_by(Dataset, Gene.CopyNumber) %>%
       summarize(Buffered.Optimal.Count = sum(Buffered.Optimal, na.rm = TRUE),
+                Buffered.Optimal.Share = sum(Buffered.Estimate, na.rm = TRUE) / n(),
                 Buffered.Estimate.Count = sum(Buffered.Estimate, na.rm = TRUE),
+                Buffered.Estimate.Share = sum(Buffered.Estimate, na.rm = TRUE) / n(),
                 Buffered.Distance.Wasserstein = transport::wasserstein1d(Log2FC[Buffered.Estimate], Log2FC[Buffered.Optimal]),
                 Buffered.Distance.Log2FC = mean(Log2FC[Buffered.Estimate]) - mean(Log2FC[Buffered.Optimal]),
                 .groups = "drop") %>%
@@ -149,21 +145,56 @@ for (thresh_buf in seq(0, 1, 0.1)) {
 # === Get optimal thresholds ===
 df_opt_thresholds <- df_results %>%
   group_by(Threshold.Buffered, Threshold.AntiScaling) %>%
-  summarize(Median.Count.Diff = median(Buffered.Estimate.Count - Buffered.Optimal.Count),
+  summarize(Median.Count.Diff = median(abs(Buffered.Estimate.Count - Buffered.Optimal.Count)),
+            Median.Buffered.Share = median(Buffered.Estimate.Share),
             Mean.Wasserstein = mean(Buffered.Distance.Wasserstein),
             Max.Wasserstein = max(Buffered.Distance.Wasserstein),
             Min.Wasserstein = min(Buffered.Distance.Wasserstein),
             Sum.Wasserstein = sum(Buffered.Distance.Wasserstein))
 
-df_opt_thresholds %>%
-  filter(Threshold.Buffered == 0.2) %>%
-  arrange(Median.Count.Diff, Mean.Wasserstein)
-
-df_opt_thresholds %>%
-  filter(Threshold.AntiScaling > 0.2 & Threshold.AntiScaling < 0.4) %>%
-  arrange(Median.Count.Diff, Mean.Wasserstein)
-
 # === Plot protein abundance (Buffered vs. Disomic, Buffered vs. Scaling, Buffered vs. AntiScaling)
+thresholds <- list(Buffered = 0.2, AntiScaling = 0.3)
+
+datasets_opt_classes <- datasets_opt %>%
+  mutate(Buffering.Class = buffering_class(Buffering.Ratio,
+                                           Protein.Expression.Disomic, Protein.Expression.Normalized,
+                                           2, Gene.CopyNumber, br_cutoffs_ = thresholds)) %>%
+  drop_na(Buffering.Class)
+
+datasets_opt_classes %>%
+  filter(Dataset == "ProCan") %>%
+  group_by(Gene.Symbol, Gene.CopyNumber, Buffering.Class) %>%
+  summarize(Protein.Expression = mean(Protein.Expression.Normalized, na.rm = TRUE),
+            Disomic = mean(Protein.Expression.Disomic, na.rm = TRUE),
+            Log2FC = Protein.Expression - Disomic) %>%
+  ggplot() +
+  aes(x = Buffering.Class, y = Log2FC) +
+  geom_hline(yintercept = 0, color = "red") +
+  geom_hline(yintercept = c(log2(1/2), log2(3/2), log2(4/2)), color = default_color) +
+  geom_boxplot(outliers = FALSE, alpha = 3/4) +
+  facet_grid(~Gene.CopyNumber) +
+  geom_signif(comparisons = list(c("Anti-Scaling", "Buffered"),
+                                 c("Buffered", "Scaling"),
+                                 c("Anti-Scaling", "Scaling")),
+              test = wilcox.test, map_signif_level = print_signif, y_position = c(1, 1, 1.5),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  ylim(c(-3,3))
+
+datasets_opt_classes %>%
+  filter(Buffering.Class == "Buffered" & Dataset == "ProCan") %>%
+  group_by(Gene.Symbol, Gene.CopyNumber) %>%
+  summarize(Buffered = mean(Protein.Expression.Normalized),
+            Disomic = mean(Protein.Expression.Disomic)) %>%
+  pivot_longer(c("Buffered", "Disomic"),
+               names_to = "Group", values_to = "Protein.Expression") %>%
+  ggplot() +
+  aes(x = Group, y = Protein.Expression) +
+  geom_boxplot(outliers = FALSE) +
+  geom_signif(comparisons = list(c("Buffered", "Disomic")),
+              test = wilcox.test, map_signif_level = print_signif, y_position = 8,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  facet_grid(~Gene.CopyNumber) +
+  ylim(c(0,10))
 
 # === Obtain alternative optimal thresholds ===
 # Contraints: Buffered vs. Disomic insignificant, Buffered vs. Scaling significant, Buffered vs. AntiScaling significant
