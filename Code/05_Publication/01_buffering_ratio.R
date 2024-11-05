@@ -41,7 +41,7 @@ dc_class_line <- expr_buf_depmap %>%
   ggplot() +
   aes(x = Buffering.GeneLevel.Class, y = Mean.Protein.Ratio,
       group = Gene.CopyNumber, color = Gene.CopyNumber, label = Gene.CopyNumber) +
-  geom_hline(yintercept = 0, color = "darkgrey") +
+  geom_hline(yintercept = 0, color = default_color) +
   geom_path(linewidth = 1) +
   scale_y_continuous(limits = c(-0.6, 2.5),
                      breaks = seq(-0.5, 2.5, 0.5),
@@ -102,6 +102,7 @@ prot_exp_dc_class <- expr_buf_depmap %>%
                                             levels = c("Scaling", "Buffered", "Anti-Scaling"))) %>%
   ggplot() +
   aes(x = Buffering.GeneLevel.Class, y = Protein.Expression.Normalized, color = Buffering.GeneLevel.Class) +
+  geom_hline(aes(yintercept = mean(Protein.Expression.Normalized, na.rm = TRUE)), color = default_color) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
   geom_signif(comparisons = list(c("Anti-Scaling", "Buffered"),
                                  c("Buffered", "Scaling"),
