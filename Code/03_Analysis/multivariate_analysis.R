@@ -28,8 +28,10 @@ source(here("Code", "evaluation.R"))
 models_base_dir <- here("Output", "Models")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "FactorAnalysis", "Multivariate")
+tables_dir <- tables_base_dir
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 # === Load Datasets ===
 dc_factors <- read_parquet(here(output_data_dir, "dosage_compensation_factors_filtered.parquet"))
@@ -40,7 +42,12 @@ expr_buf_matched_renorm <- read_parquet(here(output_data_dir, 'expression_buffer
 buf_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_wgd.parquet"))
 buf_no_wgd <- read_parquet(here(output_data_dir, "expression_buffering_depmap_no-wgd.parquet"))
 expr_buf_p0211 <- read_parquet(here(output_data_dir, 'expression_buffering_p0211.parquet'))
+expr_buf_chunduri <- read_parquet(here(output_data_dir, 'expression_buffering_chunduri.parquet'))
 expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
+
+expr_buf_eng <- bind_rows(expr_buf_p0211, expr_buf_chunduri) %>%
+  mutate(Dataset = "Engin.",
+         Gene.Chromosome = as.character(Gene.Chromosome))
 
 # === Define Functions ===
 prepare_datasets <- function(dataset, buffering_class_col, filter_func,
@@ -135,9 +142,9 @@ tc_p0211["number"] <- 10
 
 ## Define models to be trained
 models <- list(
-  list(modelName = "xgbLinear", tc = tc_base)
-#  list(modelName = "rf", tc = tc_base),
-#  list(modelName = "pcaNNet", tc = tc_nn)
+  list(modelName = "xgbLinear", tc = tc_base),
+  list(modelName = "rf", tc = tc_base),
+  list(modelName = "pcaNNet", tc = tc_nn)
 )
 
 ## Define datasets to train models on
@@ -148,6 +155,7 @@ datasets <- list(
   list(dataset = buf_wgd, name = "DepMap-WGD", sourceDataset = "DepMap"),
   list(dataset = buf_no_wgd, name = "DepMap-NoWGD", sourceDataset = "DepMap"),
   # list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211, sourceDataset = "P0211"),
+  list(dataset = expr_buf_eng, name = "Engineered", cv_eval = TRUE, tc = tc_p0211, sourceDataset = "Engin."),
   list(dataset = expr_buf_cptac, name = "CPTAC", sourceDataset = "CPTAC")
 )
 
@@ -171,6 +179,8 @@ analysis_conditions <- list(
 excluded_factors <- c("Homology Score", "Protein Abundance", "mRNA Abundance",
                       "Transcription Factors (Repressor)", "Transcription Factors (Activator)",
                       "Triplosensitivity")
+
+analysis_summary <- data.frame()
 
 pb <- txtProgressBar(min = 0,
                      max = length(models) * length(datasets) * length(analysis_conditions) * 3,
@@ -198,14 +208,38 @@ for (model in models) {
                                   cv_eval = isTRUE(dataset$cv_eval))
         }) })
       result_id <- paste0(analysis$sub_dir, collapse = "_")
-      if (is.list(results))
+
+      if (is.list(results)) {
+        roc_auc <- NA
+        if (!is.null(results$roc)) roc_auc <- as.numeric(auc(results$roc))
+
         analysis_results[[result_id]] <- results
+        analysis_summary <- analysis_summary %>%
+          bind_rows(data.frame(
+            Model.Filename = results$modelFileName,
+            Model.ROC.AUC = roc_auc,
+            Model.BaseModel = model$modelName,
+            Model.Variant = result_id,
+            Model.Dataset = dataset$sourceDataset,
+            Model.Subset = case_when(grepl("-WGD", dataset$name) ~ "WGD",
+                                     grepl("-NoWGD", dataset$name) ~ "Non-WGD",
+                                     TRUE ~ "All"),
+            Model.Condition = if_else(grepl("Gain", result_id), "Gain", "Loss"),        # TODO: Rename to CNEvent
+            Model.Level = if_else(grepl("Gene", result_id), "Gene", "Chromosome Arm"),  # TODO: Rename to CNSource
+            Model.Samples = if_else(grepl("Average", result_id), "Averaged", "Unaveraged"),
+            Model.BufferingMethod = if_else(grepl("Log2FC", result_id) | grepl("Average", result_id),
+                                            "Log2FC", "BR")
+          ))
+      }
       else
         warning("No results for analysis! Model: ", model$modelName,
                 ", Dataset: ", dataset$name, ", Analysis: ", result_id)
     }
-    rocs <- lapply(analysis_results, \(x) x$roc)
-    rocs_to_df(rocs) %>%
+    df_rocs <- analysis_results %>%
+      lapply(\(x) x$roc) %>%
+      rocs_to_df()
+
+    df_rocs %>%
       plot_rocs() %>%
       save_plot(paste0(paste("roc-summary", model$modelName, dataset$name, sep = "_"), ".png"),
                 width = 250)
@@ -213,7 +247,10 @@ for (model in models) {
 }
 close(pb)
 
-## ToDo: Train and compare a set of models on one dataset (or multiple)
+analysis_summary %>%
+  write_parquet(here(output_data_dir, 'multivariate_model_results.parquet')) %>%
+  write.xlsx(here(tables_dir, 'multivariate_model_results.xlsx'), colNames = TRUE)
+
 ## ToDo: Train a "universal" model (multiple conditions, or multiple datasets, or both)
 
 # === SHAP Analysis ===
@@ -273,4 +310,3 @@ shap_results <- shap_results %>%
   mutate(DosageCompensation.Factor = sapply(DosageCompensation.Factor.ID, \(x) dc_factor_cols_mapping[[x]])) %>%
   write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
   write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)
-

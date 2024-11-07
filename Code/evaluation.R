@@ -34,10 +34,13 @@ df2reportlist <- function(df, collapse_cols = "\t\t") {
 }
 
 # Multivariate
-evaluate_model <- function(model, test_set, dir, filename = NULL, cv_eval = FALSE) {
+evaluate_model <- function(model, test_set, dir = NULL, filename = NULL, cv_eval = FALSE) {
   require(dplyr)
   require(pROC)
   require(caret)
+
+  test_predicted_reponse <- NULL
+  test_performance_metrics <- NULL
 
   if (cv_eval == TRUE) {
     # Use results from cross validation generated during training for evaluation
@@ -64,22 +67,22 @@ evaluate_model <- function(model, test_set, dir, filename = NULL, cv_eval = FALS
       recall = recall(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response),
       F1 = F_meas(data = test_predicted_reponse$Prediction, reference = test_predicted_reponse$Response)
     )
-
-    return(list(roc = model_roc,
-                predictedResponse = test_predicted_reponse,
-                performanceMetrics = test_performance_metrics))
   }
 
-  if (is.null(filename))
-    return(model_roc)
+  eval_results <- list(roc = model_roc,
+                       predictedResponse = test_predicted_reponse,
+                       performanceMetrics = test_performance_metrics)
+
+  if (is.null(filename) || is.null(dir))
+    return(eval_results)
 
   png(here(dir, filename),
       width = 200, height = 200, units = "mm", res = 200)
-  plot(model_roc, print.thres = "best", print.thres.best.method = "closest.topleft",
+  plot(eval_results$roc, print.thres = "best", print.thres.best.method = "closest.topleft",
        print.auc = TRUE, print.auc.x = 0.4, print.auc.y = 0.1)
   dev.off()
 
-  return(model_roc)
+  return(eval_results)
 }
 
 explain_model <- function(model, dir, filename = NULL) {
