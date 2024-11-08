@@ -155,7 +155,7 @@ datasets <- list(
   list(dataset = buf_wgd, name = "DepMap-WGD", sourceDataset = "DepMap"),
   list(dataset = buf_no_wgd, name = "DepMap-NoWGD", sourceDataset = "DepMap"),
   # list(dataset = expr_buf_p0211, name = "P0211", cv_eval = TRUE, tc = tc_p0211, sourceDataset = "P0211"),
-  list(dataset = expr_buf_eng, name = "Engineered", cv_eval = TRUE, tc = tc_p0211, sourceDataset = "Engin."),
+  list(dataset = expr_buf_eng, name = "Engineered", cv_eval = TRUE, tc = tc_p0211, sourceDataset = "Engineered"),
   list(dataset = expr_buf_cptac, name = "CPTAC", sourceDataset = "CPTAC")
 )
 
@@ -273,18 +273,7 @@ for (dataset in datasets) {
     df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
       estimate_shap(n_samples = 300, n_combinations = 300) %>%
       shap2df() %>%
-      mutate(Model.Filename = model_filename,
-             Model.BaseModel = model_name,
-             Model.Variant = paste0(sub_dir, collapse = "_"),
-             Model.Dataset = dataset$sourceDataset,
-             Model.Subset = case_when(grepl("-WGD", dataset$name) ~ "WGD",
-                                      grepl("-NoWGD", dataset$name) ~ "Non-WGD",
-                                      TRUE ~ "All"),
-             Model.Condition = if_else(grepl("Gain", Model.Variant), "Gain", "Loss"),
-             Model.Level = if_else(grepl("Gene", Model.Variant), "Gene", "Chromosome Arm"),
-             Model.Samples = if_else(grepl("Average", Model.Variant), "Averaged", "Unaveraged"),
-             Model.BufferingMethod = if_else(grepl("Log2FC", Model.Variant) | grepl("Average", Model.Variant),
-                                             "Log2FC", "BR"))
+      mutate(Model.Filename = model_filename)
 
     df_explanation %>%
       shap_plot() %>%
@@ -306,6 +295,8 @@ names(dc_factor_cols_mapping) <- janitor::make_clean_names(dc_factor_cols)
 ### Write results to disk
 shap_results <- shap_results %>%
   bind_rows() %>%
+  left_join(y = analysis_summary, by = "Model.Filename",
+            relationship = "many-to-one", unmatched = "error") %>%
   rename(DosageCompensation.Factor.ID = DosageCompensation.Factor) %>%
   mutate(DosageCompensation.Factor = sapply(DosageCompensation.Factor.ID, \(x) dc_factor_cols_mapping[[x]])) %>%
   write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%

@@ -313,15 +313,15 @@ plot_rocs <- function(df_rocs, legend_position = "right", legend_rows = 10, labe
 }
 
 print_signif <- function(p, digits = 3, scientific = TRUE, digits_scientific = 1) {
-  if (!is.na(p) & p == 0) return("p < 1.0e-99")
-
-  if (scientific) {
-    return(paste0("p = ", formatC(p, format = "e", digits = digits_scientific)))
-  }
-
-  return(paste0("p ", if_else(p < 10^(-digits),
-                              paste0("< ", format(10^(-digits), nsmall = digits, scientific = FALSE)),
-                              paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE)))))
+  ifelse(!is.na(p) & p == 0,
+         "p < 1.0e-99",
+         ifelse(scientific,
+                paste0("p = ", formatC(p, format = "e", digits = digits_scientific)),
+                paste0("p ", if_else(p < 10^(-digits),
+                                     paste0("< ", format(10^(-digits), nsmall = digits, scientific = FALSE)),
+                                     paste0("= ", format(round(p, digits), nsmall = digits, scientific = FALSE))))
+         )
+  )
 }
 
 print_corr <- function(corr, p.value = NULL, estimate_symbol = utf8_rho, signif = FALSE, digits = 3, map_p = FALSE) {
