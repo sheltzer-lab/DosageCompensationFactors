@@ -10,6 +10,7 @@ library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
+source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 source(here("Code", "evaluation.R"))
@@ -36,9 +37,12 @@ for (model_filename in model_results$Model.Filename) {
     dataset_model <- readRDS(here(models_base_dir, dataset_filename))
     dataset <- bind_rows(dataset_model$datasets)
 
-    suppressMessages({ suppressWarnings({
-      eval <- evaluate_model(model, dataset)
-    }) })
+    tryCatch({
+      suppressMessages({ suppressWarnings({ eval <- evaluate_model(model, dataset) }) })
+    }, error = function(e) {
+      warning(paste("Unable to evaluate model:", model_filename, "on dataset:", dataset_filename))
+      next
+    })
 
     oos_results <- list(oos = eval$roc) %>%
       rocs_to_df() %>%
@@ -54,16 +58,15 @@ close(pb)
 dataset_results <- model_results %>%
   rename_all(~str_replace(., "^Model", "Dataset"))
 
-
 oos_results <- oos_results %>%
-  inner_join(y = model_results, by = "Model.Filename") %>%
-  inner_join(y = dataset_results, by = "Dataset.Filename") %>%
-  write_parquet(here(output_data_dir, "out-of-sample-evaluation.parquet")) %T>%
-  write.xlsx(here(output_data_dir, "out-of-sample-evaluation.parquet"), colNames = TRUE)
+  write_parquet(here(output_data_dir, "out-of-sample-evaluation.parquet"))
 
 oos_summary <- oos_results %>%
-  select(-Sensitivity, -Specificity) %>%
+  rename(OOS.ROC.AUC = AUC) %>%
+  select(OOS.ROC.AUC, Model.Filename, Dataset.Filename) %>%
   distinct() %>%
+  left_join(y = model_results, by = "Model.Filename") %>%
+  left_join(y = dataset_results, by = "Dataset.Filename") %>%
   write_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet")) %T>%
   write.xlsx(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"), colNames = TRUE)
 
@@ -72,8 +75,7 @@ oos_summary %>%
   filter(Model.Condition == Dataset.Condition, Model.Condition == "Gain") %>%
   filter(Model.BaseModel == "xgbLinear", Model.Dataset == "ProCan") %>%
   ggplot() +
-  aes(x = Model.Variant, y = Dataset.Variant, fill = AUC) +
+  aes(x = Model.Variant, y = Dataset.Variant, fill = OOS.ROC.AUC) +
   geom_tile() +
   scale_fill_viridis_c(option = "magma", direction = 1,
                        limits = c(0.5, 1), oob = scales::squish)
-
