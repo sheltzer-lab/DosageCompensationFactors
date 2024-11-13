@@ -252,6 +252,22 @@ rae_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   drop_na() %>%
   mutate(`Random Allelic Expression` = `Random Allelic Expression` > 0)
 
+rae_buf_plot <- rae_buf %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  ggplot() +
+  aes(x = `Random Allelic Expression`, y = Buffering.GeneLevel.Ratio, color = `Random Allelic Expression`) +
+  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_signif(comparisons = list(c("FALSE", "TRUE")), test = t.test,
+              map_signif_level = print_signif, y_position = 1.5,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c("FALSE" = default_color, "TRUE" = highlight_color), guide = "none") +
+  #scale_y_continuous(limits = c(-2.5, 2.5), breaks = seq(-2, 2, 1)) +
+  facet_grid(~Dataset)
+
+rae_buf_plot %>%
+  save_plot("random_allelic_expression.png")
+
 rae_buf_plot_gain <- rae_buf %>%
   filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
   filter_cn_gain_abs() %>%
@@ -268,7 +284,7 @@ rae_buf_plot_gain <- rae_buf %>%
 rae_buf_plot_gain %>%
   save_plot("random_allelic_expression_cn-gain.png")
 
-rae_buf_plot_loss <-rae_buf %>%
+rae_buf_plot_loss <- rae_buf %>%
   filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
   filter_cn_loss_abs() %>%
   ggplot() +
@@ -283,3 +299,37 @@ rae_buf_plot_loss <-rae_buf %>%
 
 rae_buf_plot_loss %>%
   save_plot("random_allelic_expression_cn-loss.png")
+
+rae_buf_plot_cnv <- rae_buf %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  filter(`Random Allelic Expression`) %>%
+  mutate(Event = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  ggplot() +
+  aes(x = Event, y = Buffering.GeneLevel.Ratio) +
+  geom_boxplot(outliers = FALSE, size = 0.8) +
+  geom_signif(comparisons = list(c("Gain", "Loss")), test = t.test,
+              map_signif_level = print_signif, y_position = 1.5,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  #scale_y_continuous(limits = c(-2.5, 2.5), breaks = seq(-2, 2, 1)) +
+  facet_grid(~Dataset)
+
+rae_buf_plot_cnv %>%
+  save_plot("random_allelic_expression_gene-cnv.png")
+
+## Check if RAE leads to change in Buffered proteins
+rae_buf_counts <- rae_buf %>%
+  filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(Buffering = factor(if_else(Buffering.GeneLevel.Class == "Buffered", "Buffering", "Other"),
+                            levels = c("Buffering", "Other")),
+         RAE = factor(if_else(`Random Allelic Expression`, "RAE", "Other"),
+                            levels = c("RAE", "Other"))) %>%
+  count(Buffering, RAE) %>%
+  drop_na() %>%
+  arrange(Buffering, RAE) %>%
+  pivot_wider(names_from = "RAE", values_from = "n") %>%
+  tibble::column_to_rownames("Buffering") %>%
+  as.matrix()
+
+rae_buf_test <- fisher.test(rae_buf_counts)

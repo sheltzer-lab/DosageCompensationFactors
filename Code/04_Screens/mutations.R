@@ -37,6 +37,7 @@ cptac_buf_mut <- cptac_mut %>%
   count(Gene.Symbol, Buffered, Mutated, CNEvent) %>%
   complete(Gene.Symbol, Buffered, Mutated, CNEvent, fill = list(n = 0))
 
+## MutEx analysis seperated by gain and loss events
 cptac_buf_mut_mutex <- cptac_buf_mut %>%
   group_by(Gene.Symbol, CNEvent) %>%
   group_modify(~ {
@@ -48,6 +49,7 @@ cptac_buf_mut_mutex <- cptac_buf_mut %>%
   ungroup() %>%
   mutate(p.adj = p.adjust(p, method = "BH"))
 
+## MutEx analysis for gain and loss events combined
 cptac_buf_mut_mutex_comb <- cptac_mut %>%
   inner_join(cptac_buf, by = c("Model.ID", "Gene.Symbol")) %>%
   count(Gene.Symbol, Buffered, Mutated) %>%

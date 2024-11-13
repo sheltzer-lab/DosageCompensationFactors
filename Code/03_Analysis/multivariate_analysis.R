@@ -254,6 +254,8 @@ analysis_summary %>%
 ## ToDo: Train a "universal" model (multiple conditions, or multiple datasets, or both)
 
 # === SHAP Analysis ===
+analysis_summary <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))
+
 ## Explain XGBoost models using SHAP values
 shap_results <- list()
 pb <- txtProgressBar(min = 0, max = length(datasets) * length(analysis_conditions), style = 3)

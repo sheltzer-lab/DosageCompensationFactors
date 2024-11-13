@@ -539,12 +539,13 @@ cowplot::plot_grid(median_response_plot_buf,
 
 ## Check if drug resistance and high buffering are stochastically independent
 response_counts <- median_response_buf %>%
-  mutate(Buffering = if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
-                             "Buffering", "Other"),
-         Resistant = if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
-                             "Resistant", "Other")) %>%
+  mutate(Buffering = factor(if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
+                             "Buffering", "Other"), levels = c("Buffering", "Other")),
+         Resistant = factor(if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
+                             "Resistant", "Other"), levels = c("Resistant", "Other"))) %>%
   count(Buffering, Resistant) %>%
   drop_na() %>%
+  arrange(Buffering, Resistant) %>%
   pivot_wider(names_from = "Resistant", values_from = "n") %>%
   tibble::column_to_rownames("Buffering") %>%
   as.matrix()

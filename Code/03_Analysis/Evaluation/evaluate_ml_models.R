@@ -71,6 +71,8 @@ oos_summary <- oos_results %>%
   write.xlsx(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"), colNames = TRUE)
 
 # === Plot results ===
+oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))
+
 oos_summary %>%
   filter(Model.Condition == Dataset.Condition, Model.Condition == "Gain") %>%
   filter(Model.BaseModel == "xgbLinear", Model.Dataset == "ProCan") %>%

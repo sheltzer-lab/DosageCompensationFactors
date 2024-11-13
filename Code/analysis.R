@@ -707,6 +707,7 @@ df2contingency <- function(df, x_col, y_col, count_col = n) {
   df %>%
     select({ { x_col } }, { { y_col } }, { { count_col } }) %>%
     drop_na() %>%
+    arrange({ { x_col } }, { { y_col } }) %>%
     pivot_wider(names_from = quo_name(enquo(y_col)), values_from = quo_name(enquo(count_col))) %>%
     tibble::column_to_rownames(quo_name(enquo(x_col))) %>%
     as.matrix()
