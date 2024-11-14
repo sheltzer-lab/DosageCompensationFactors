@@ -7,6 +7,7 @@ library(arrow)
 library(limma)
 library(pROC)
 library(openxlsx)
+library(shadowtext)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -73,11 +74,27 @@ oos_summary <- oos_results %>%
 # === Plot results ===
 oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))
 
-oos_summary %>%
-  filter(Model.Condition == Dataset.Condition, Model.Condition == "Gain") %>%
-  filter(Model.BaseModel == "xgbLinear", Model.Dataset == "ProCan") %>%
+oos_pan_cancer <- oos_summary %>%
+  filter(Model.Condition == Dataset.Condition,
+         Model.BaseModel == Dataset.BaseModel,    # Datasets should be equal across base models; avoid duplicates
+         Model.Subset == Dataset.Subset,
+         Model.Level == Dataset.Level,
+         Model.Samples == Dataset.Samples,
+         Model.BufferingMethod == Dataset.BufferingMethod,
+         Model.Dataset != "Engin.",
+         Dataset.Dataset != "Engin.",
+         Model.Samples == "Unaveraged",
+         Model.BufferingMethod == "BR",
+         Model.Subset == "All",
+         Model.BaseModel == "xgbLinear") %>%
   ggplot() +
-  aes(x = Model.Variant, y = Dataset.Variant, fill = OOS.ROC.AUC) +
+  aes(y = Model.Dataset, x = Dataset.Dataset, fill = OOS.ROC.AUC,
+      label = format(round(OOS.ROC.AUC, 2), nsmall = 2, scientific = FALSE)) +
   geom_tile() +
+  geom_shadowtext(color = "white", bg.colour = default_color) +
   scale_fill_viridis_c(option = "magma", direction = 1,
-                       limits = c(0.5, 1), oob = scales::squish)
+                       limits = c(0.5, 1), oob = scales::squish) +
+  facet_grid(Model.Level ~ Model.Condition)
+
+oos_pan_cancer %>%
+  save_plot("oos_pan-cancer_xgbLinear.png")
