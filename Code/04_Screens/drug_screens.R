@@ -12,6 +12,7 @@ source(here("Code", "parameters.R"))
 source(here("Code", "analysis.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "buffering_ratio.R"))
+source(here("Code", "evaluation.R"))
 
 output_data_dir <- output_data_base_dir
 tables_dir <- tables_base_dir
@@ -545,12 +546,28 @@ response_counts <- median_response_buf %>%
                              "Resistant", "Other"), levels = c("Resistant", "Other"))) %>%
   count(Buffering, Resistant) %>%
   drop_na() %>%
-  arrange(Buffering, Resistant) %>%
+  arrange(Buffering, Resistant)
+
+buf_res_plot <- response_counts %>%
+  group_by(Buffering) %>%
+  mutate(Share = (n / sum(n))) %>%
+  ungroup() %>%
+  ggplot() +
+  aes(x = Buffering, y = Share, fill = Resistant, label = n) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_y_continuous(labels = scales::percent)
+
+buf_res_plot %>%
+  save_plot("drug_resistance_buffering_share.png")
+
+buf_res_test <- response_counts %>%
   pivot_wider(names_from = "Resistant", values_from = "n") %>%
   tibble::column_to_rownames("Buffering") %>%
-  as.matrix()
+  as.matrix() %>%
+  fisher.test()
 
-fisher.test(response_counts)
+buf_res_test %>%
+  write_report(here(reports_base_dir, "drug_resistance_buffering_test.txt"))
 
 # === Drug Mechanism Groups ===
 # drug_meta_long <- drug_meta %>%

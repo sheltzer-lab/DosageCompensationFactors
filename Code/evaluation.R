@@ -15,7 +15,7 @@ report_list2lines <- function(report) {
 }
 
 write_report <- function(report, report_file) {
-  file.remove(report_file)
+  if (file.exists(report_file)) file.remove(report_file)
   lines <- c("===== Report =====\n",
              format(Sys.time(), "%a %b %d %X %Y"),
              "\n\n",
