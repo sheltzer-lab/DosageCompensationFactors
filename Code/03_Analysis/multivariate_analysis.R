@@ -272,8 +272,10 @@ for (dataset in datasets) {
       next
     }
 
-    df_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
-      estimate_shap(n_samples = 300, n_combinations = 300) %>%
+    shap_explanation <- readRDS(here(models_base_dir, model_filename)) %>%
+      estimate_shap(n_samples = 300, n_combinations = 300)
+
+    df_explanation <- shap_explanation %>%
       shap2df() %>%
       mutate(Model.Filename = model_filename)
 

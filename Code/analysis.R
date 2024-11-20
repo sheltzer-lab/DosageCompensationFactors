@@ -460,23 +460,22 @@ estimate_shap <- function(model, n_samples = 100, n_combinations = 250, method =
       ungroup() %>%
       tibble::column_to_rownames("ID") %>%
       split_train_test(training_set_ratio = 0.5)  # From preprocessing.R
-
     training_x_small <- x_small$training
     test_x_small <- x_small$test
   } else {
     training_x_small <- training_set %>%
       group_by(buffered) %>%
       slice_sample(n = n_samples) %>%
-      ungroup() %>%
-      select(-buffered)
+      ungroup()
     test_x_small <- test_set %>%
       tibble::rownames_to_column("ID") %>%
       group_by(buffered) %>%
       slice_sample(n = n_samples) %>%
       ungroup() %>%
-      tibble::column_to_rownames("ID") %>%
-      select(-buffered)
+      tibble::column_to_rownames("ID")
   }
+  training_x_small <- training_x_small %>% select(-buffered)
+  test_x_small <- test_x_small %>% select(-buffered)
 
   # https://cran.r-project.org/web/packages/shapr/vignettes/understanding_shapr.html
   explainer <- shapr(training_x_small, model$finalModel, n_combinations = n_combinations)
