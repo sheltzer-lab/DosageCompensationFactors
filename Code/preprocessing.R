@@ -68,9 +68,26 @@ shuffle_rows <- function(df) {
 }
 
 # ToDo: Explore further imputation methods
-impute_na <- function(df) {
+impute_na <- function(df, factor_cols = NULL) {
+  imputation_func <- \(x) replace_na(x, median(x, na.rm = TRUE))
+
+  if (is.null(factor_cols)) {
+    df %>%
+      mutate_if(is.numeric, imputation_func) %>%
+      return()
+  }
+
   df %>%
-    mutate_if(is.numeric, \(x) replace_na(x, median(x, na.rm = TRUE)))
+    mutate_at(factor_cols, imputation_func) %>%
+    return()
+}
+
+impute_na_long <- function(df, group_col, value_col) {
+  df %>%
+    group_by({ { group_col } }) %>%
+    mutate(!!target_group_col := replace_na({ { value_col } }, median({ { value_col } }, na.rm = TRUE)),
+           IsImputed = is.na({ { value_col } })) %>%
+    ungroup()
 }
 
 balanced_sample <- function(df, class_col, n_per_class) {

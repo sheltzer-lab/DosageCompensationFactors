@@ -58,12 +58,12 @@ prepare_datasets <- function(dataset, buffering_class_col, filter_func,
   # Filter and clean dataset before training
   df_prep <- dataset %>%
     add_factors(df_factors, factor_cols = factor_cols) %>%
+    # ToDo: Only use imputation on training set
+    # ToDo: Add shadow matrix - https://cran.r-project.org/web/packages/naniar/vignettes/getting-started-w-naniar.html
+    impute_na(factor_cols = factor_cols) %>%
     normalize_features(method = "min-max", factor_cols = factor_cols) %>%
     filter_func() %>%
     clean_data({ { buffering_class_col } }, factor_cols = factor_cols) %>%
-    # ToDo: Only use imputation on training set
-    impute_na() %>%
-    # ToDo: Add shadow matrix - https://cran.r-project.org/web/packages/naniar/vignettes/getting-started-w-naniar.html
     select(where(~!all(is.na(.x)))) %>% # Remove empty factors
     # rebalance_binary(buffered, target_balance = target_balance)
     shuffle_rows()
@@ -300,7 +300,7 @@ names(dc_factor_cols_mapping) <- janitor::make_clean_names(dc_factor_cols)
 shap_results <- shap_results %>%
   bind_rows() %>%
   left_join(y = analysis_summary, by = "Model.Filename",
-            relationship = "many-to-one", unmatched = "error") %>%
+            relationship = "many-to-one") %>%
   rename(DosageCompensation.Factor.ID = DosageCompensation.Factor) %>%
   mutate(DosageCompensation.Factor = sapply(DosageCompensation.Factor.ID, \(x) dc_factor_cols_mapping[[x]])) %>%
   write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
