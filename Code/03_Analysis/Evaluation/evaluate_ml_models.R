@@ -19,11 +19,21 @@ source(here("Code", "evaluation.R"))
 models_base_dir <- here("Output", "Models")
 output_data_dir <- output_data_base_dir
 plots_dir <- here(plots_base_dir, "FactorAnalysis", "Multivariate", "OOS-Evaluation")
+tables_dir <- tables_base_dir
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 # Load datasets
 model_results <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))
+
+# === Create summary statistics to evaluate performance of ML pipeline ===
+model_statistics <- analysis_summary %>%
+  filter(Model.Dataset %in% c("DepMap", "ProCan", "CPTAC")) %>%
+  group_by(Model.BaseModel, Model.Level, Model.Condition) %>%
+  skimr::skim(Model.ROC.AUC) %>%
+  write_parquet(here(output_data_dir, "multivariate_model_statistics.parquet")) %T>%
+  write.xlsx(here(tables_dir, "multivariate_model_statistics.xlsx"), colNames = TRUE)
 
 # === Out of Sample evaluation of trained models ===
 oos_results <- data.frame()
@@ -69,7 +79,7 @@ oos_summary <- oos_results %>%
   left_join(y = model_results, by = "Model.Filename") %>%
   left_join(y = dataset_results, by = "Dataset.Filename") %>%
   write_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet")) %T>%
-  write.xlsx(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"), colNames = TRUE)
+  write.xlsx(here(tables_dir, "out-of-sample-evaluation_summary.xlsx"), colNames = TRUE)
 
 # === Plot results ===
 oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))

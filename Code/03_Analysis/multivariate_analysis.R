@@ -126,7 +126,7 @@ run_analysis <- function(dataset, buffering_class_col, filter_func, model_name, 
 # === Build Models ===
 ## Define training parameters
 tc_base <- trainControl(method = "cv",
-                        number = 2,
+                        number = 3,
                         savePredictions = TRUE,
                         classProbs = TRUE,
                         verboseIter = FALSE,
@@ -135,7 +135,6 @@ tc_base <- trainControl(method = "cv",
                         summaryFunction = twoClassSummary)
 
 tc_nn <- tc_base # ToDo: Increase training iterations
-tc_nn["number"] <- 3
 
 tc_p0211 <- tc_base
 tc_p0211["number"] <- 10

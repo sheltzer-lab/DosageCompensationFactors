@@ -69,7 +69,7 @@ shuffle_rows <- function(df) {
 
 # ToDo: Explore further imputation methods
 impute_na <- function(df, factor_cols = NULL) {
-  imputation_func <- \(x) replace_na(x, median(x, na.rm = TRUE))
+  imputation_func <- \(x) replace_na(as.double(x), median(x, na.rm = TRUE))   # median() can return double for integers
 
   if (is.null(factor_cols)) {
     df %>%
@@ -85,7 +85,7 @@ impute_na <- function(df, factor_cols = NULL) {
 impute_na_long <- function(df, group_col, value_col) {
   df %>%
     group_by({ { group_col } }) %>%
-    mutate(!!target_group_col := replace_na({ { value_col } }, median({ { value_col } }, na.rm = TRUE)),
+    mutate(!!target_group_col := replace_na(as.double({ { value_col } }), median({ { value_col } }, na.rm = TRUE)),
            IsImputed = is.na({ { value_col } })) %>%
     ungroup()
 }
