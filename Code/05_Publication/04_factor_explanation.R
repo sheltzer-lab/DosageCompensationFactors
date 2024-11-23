@@ -102,12 +102,12 @@ panel_roc <- cowplot::plot_grid(models_depmap, models_procan, models_cptac,
 # === SHAP Value Panel ===
 ### Select models for visualization
 shap_gain <- shap_results %>%
-  filter(Model.Variant == "CPTAC_Gene-Level_Filtered_Gain") %>%
+  filter(Model.Variant == "Gene-Level_Filtered_Gain" & Model.Dataset == "CPTAC") %>%
   group_by(DosageCompensation.Factor) %>%
   slice_sample(n = 200) %>%     # Simplify visualization
   ungroup()
 shap_loss <- shap_results %>%
-  filter(Model.Variant == "CPTAC_Gene-Level_Filtered_Loss") %>%
+  filter(Model.Variant == "Gene-Level_Filtered_Loss" & Model.Dataset == "CPTAC") %>%
   group_by(DosageCompensation.Factor) %>%
   slice_sample(n = 200) %>%     # Simplify visualization
   ungroup()

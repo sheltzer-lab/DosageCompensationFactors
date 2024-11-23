@@ -28,7 +28,7 @@ dir.create(tables_dir, recursive = TRUE)
 model_results <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))
 
 # === Create summary statistics to evaluate performance of ML pipeline ===
-model_statistics <- analysis_summary %>%
+model_statistics <- model_results %>%
   filter(Model.Dataset %in% c("DepMap", "ProCan", "CPTAC")) %>%
   group_by(Model.BaseModel, Model.Level, Model.Condition) %>%
   skimr::skim(Model.ROC.AUC) %>%

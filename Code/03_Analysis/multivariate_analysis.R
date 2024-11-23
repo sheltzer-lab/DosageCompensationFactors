@@ -302,5 +302,5 @@ shap_results <- shap_results %>%
             relationship = "many-to-one") %>%
   rename(DosageCompensation.Factor.ID = DosageCompensation.Factor) %>%
   mutate(DosageCompensation.Factor = sapply(DosageCompensation.Factor.ID, \(x) dc_factor_cols_mapping[[x]])) %>%
-  write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %>%
+  write_parquet(here(output_data_dir, 'shap-analysis.parquet'), version = "2.6") %T>%
   write.xlsx(here(tables_base_dir, "shap-analysis.xlsx"), colNames = TRUE)
