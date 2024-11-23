@@ -29,6 +29,8 @@ df_growth_chronos <- read_parquet(here(output_data_dir, "cellline_growth_chronos
   select(-n)
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 # Load copy number dataset to obtain metadata
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
@@ -40,6 +42,7 @@ merge_datasets <- function(cellline_dc_dataset, copy_number_dataset, prolif_data
     distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
   df_prolif <- cellline_dc_dataset %>%
+    # TODO: Join by Model.ID
     inner_join(y = prolif_dataset, by = "CellLine.Name",
                relationship = "one-to-one", na_matches = "never") %>%
     inner_join(y = cellline_cn_metadata, by = "CellLine.Name",
@@ -118,6 +121,56 @@ results_agg <- cellline_buf_agg %>%
   mutate(Model.Buffering.Ratio = Model.Buffering.MeanNormRank) %>%
   proliferation_analysis(copy_number, df_growth, dataset_name = "Aggregated")
 
+# === Gene & Chromosome dependent analysis ===
+## Check proliferation on single gene buffering
+expr_buf_procan %>%
+  filter(Gene.Symbol == "EGFR") %>%
+  filter(ChromosomeArm.CopyNumber < ChromosomeArm.CopyNumber.Baseline) %>%
+  inner_join(y = df_growth, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never") %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  scatter_plot_reg_corr(Buffering.ChrArmLevel.Ratio, CellLine.GrowthRatio,
+                        point_size = 2, color_col = WGD)
+
+expr_buf_procan %>%
+  filter(Gene.Symbol == "ITGAV") %>%
+  filter(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline) %>%
+  inner_join(y = df_growth, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never") %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  scatter_plot_reg_corr(Buffering.ChrArmLevel.Ratio, CellLine.GrowthRatio,
+                        point_size = 2, color_col = WGD)
+
+## Check proliferation if chromosome where EGFR is encoded is gained and its genes are buffered
+expr_buf_procan %>%
+  filter(Gene.ChromosomeArm == Gene.ChromosomeArm[Gene.Symbol == "EGFR"]) %>%
+  filter(Gene.Symbol != "EGFR") %>%
+  filter(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline) %>%
+  group_by(CellLine.Name, CellLine.WGD) %>%
+  summarize(MeanBR = mean(Buffering.ChrArmLevel.Ratio, na.rm = TRUE)) %>%
+  ungroup() %>%
+  inner_join(y = df_growth, by = "CellLine.Name",
+             relationship = "one-to-one", na_matches = "never") %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  scatter_plot_reg_corr(MeanBR, CellLine.GrowthRatio,
+                        point_size = 2, color_col = WGD)
+
+## By chromosome
+prolif_chr_corr <- bind_rows(expr_buf_procan, expr_buf_depmap) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNA = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline,
+                       "Gain", "Loss")) %>%
+  # filter(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline) %>%
+  inner_join(y = df_growth, by = "CellLine.Name",
+             relationship = "many-to-one", na_matches = "never") %>%
+  group_by(Dataset, Gene.Chromosome, CellLine.Name) %>%
+  mutate(MeanBR = mean(Buffering.ChrArmLevel.Ratio, na.rm = TRUE),
+         CellLine.GrowthRatio = first(CellLine.GrowthRatio)) %>%
+  ungroup() %>%
+  distinct(Dataset, Gene.Chromosome, MeanBR, CellLine.GrowthRatio, CNA) %>%
+  group_by(Dataset, Gene.Chromosome, CNA) %>%
+  rstatix::cor_test(MeanBR, CellLine.GrowthRatio,
+                    method = "spearman", use = "na.or.complete")
 
 # === Combine Plots for publishing ===
 plot_publish <- cowplot::plot_grid(results_procan$All$scatter_plot, results_procan$NonWGD$scatter_plot,
