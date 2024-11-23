@@ -122,6 +122,9 @@ results_agg <- cellline_buf_agg %>%
   proliferation_analysis(copy_number, df_growth, dataset_name = "Aggregated")
 
 # === Gene & Chromosome dependent analysis ===
+candidate_genes <- c("EGFR", "ITGAV", "CDK4", "CDK6", "ELMO2", "BRAT1",
+                     "TUBE1", "TUBD1", "CENPI", "MDM4", "MDM2")
+
 ## Check proliferation on single gene buffering
 expr_buf_procan %>%
   filter(Gene.Symbol == "EGFR") %>%
@@ -154,6 +157,31 @@ expr_buf_procan %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
   scatter_plot_reg_corr(MeanBR, CellLine.GrowthRatio,
                         point_size = 2, color_col = WGD)
+
+## Check proliferation-buffering-correlation per gene
+prolif_gene_corr <- bind_rows(expr_buf_procan, expr_buf_depmap) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline,
+                       "Gain", "Loss")) %>%
+  inner_join(y = df_growth, by = "CellLine.Name",
+             relationship = "many-to-one", na_matches = "never") %>%
+  group_by(Dataset, Gene.Symbol, CNV) %>%
+  mutate(n = min(c(sum(!is.na(Buffering.GeneLevel.Ratio)),
+                   sum(!is.na(CellLine.GrowthRatio))))) %>%
+  ungroup() %>%
+  filter(n > 10) %>%
+  group_by(Dataset, Gene.Symbol, CNV) %>%
+  rstatix::cor_test(Buffering.GeneLevel.Ratio, CellLine.GrowthRatio,
+                    method = "spearman", use = "na.or.complete") %>%
+  mutate(p.adj = p.adjust(p, method = "BH"))
+
+prolif_gene_corr_signif <- prolif_gene_corr %>%
+  filter(p.adj < p_threshold) %>%
+  group_by(Gene.Symbol) %>%
+  add_count() %>%
+  mutate(MeanCorr = mean(cor)) %>%
+  ungroup() %>%
+  filter(n > 1 & abs(MeanCorr) > 0.2)
 
 ## By chromosome
 prolif_chr_corr <- bind_rows(expr_buf_procan, expr_buf_depmap) %>%
