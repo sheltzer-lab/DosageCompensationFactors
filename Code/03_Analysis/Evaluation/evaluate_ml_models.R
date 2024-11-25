@@ -91,8 +91,8 @@ oos_pan_cancer <- oos_summary %>%
          Model.Level == Dataset.Level,
          Model.Samples == Dataset.Samples,
          Model.BufferingMethod == Dataset.BufferingMethod,
-         Model.Dataset != "Engin.",
-         Dataset.Dataset != "Engin.",
+         Model.Dataset != "Engineered",
+         Dataset.Dataset != "Engineered",
          Model.Samples == "Unaveraged",
          Model.BufferingMethod == "BR",
          Model.Subset == "All",
@@ -104,7 +104,8 @@ oos_pan_cancer <- oos_summary %>%
   geom_shadowtext(color = "white", bg.colour = default_color) +
   scale_fill_viridis_c(option = "magma", direction = 1,
                        limits = c(0.5, 1), oob = scales::squish) +
-  facet_grid(Model.Level ~ Model.Condition)
+  facet_grid(Model.Level ~ Model.Condition) +
+  labs(fill = "ROC AUC", x = "Evaluation Dataset (training + test)", y = "Model Training Dataset")
 
 oos_pan_cancer %>%
-  save_plot("oos_pan-cancer_xgbLinear.png")
+  save_plot("oos_pan-cancer_xgbLinear.png", width = 200)
