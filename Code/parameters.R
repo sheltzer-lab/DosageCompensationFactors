@@ -69,7 +69,13 @@ color_palettes <- list(
                        "Buffered" = viridis(2, begin = 0.15, end = 0.7)[2],
                        "Anti-Scaling" = "dimgrey"),
   DiffExp = c("Up" = bidirectional_color_pal[5],
-              "Down" = bidirectional_color_pal[1])
+              "Down" = bidirectional_color_pal[1]),
+  ModelVariants = c("Gene-Level_Filtered_Gain" = adjust_luminance(rev(brewer.pal(11, "RdBu"))[10], -0.5),
+                    "Gene-Level_Filtered_Loss" = adjust_luminance(rev(brewer.pal(11, "RdBu"))[2], -0.5),
+                    "ChromosomeArm-Level_Gain" = adjust_luminance(rev(brewer.pal(11, "RdBu"))[9], -0.5),
+                    "ChromosomeArm-Level_Loss" = adjust_luminance(rev(brewer.pal(11, "RdBu"))[3], -0.5),
+                    "ChromosomeArm-Level_Gain_Average" = adjust_luminance(rev(brewer.pal(11, "RdBu"))[8], -0.5),
+                    "ChromosomeArm-Level_Loss_Average" = adjust_luminance(rev(brewer.pal(11, "RdBu"))[4], -0.5))
 )
 
 base_size <- 15

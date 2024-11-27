@@ -44,15 +44,15 @@ plot_rocs_publish <- function(df_rocs, auc_prefix = "AUC = ", title = "") {
     mutate(Model.Level = case_when(grepl("Chr", Model.Variant) & grepl("Average", Model.Variant) ~ "ChrArm (avg.)",
                                    grepl("Chr", Model.Variant) & !grepl("Average", Model.Variant) ~ "ChrArm",
                                    grepl("Gene", Model.Variant) & !grepl("Average", Model.Variant) ~ "Gene CN"),
-           x = if_else(Model.Condition == "Gain", 0.25, 0),
-           y = case_when(Model.Level == "ChrArm" ~ 0,
-                         Model.Level == "ChrArm (avg.)" ~ 0.1,
-                         Model.Level == "Gene CN" ~ 0.2),
+           x = if_else(Model.Condition == "Gain", 0.2, 0),
+           y = case_when(Model.Level == "Gene CN" ~ 0.2,
+                         Model.Level == "ChrArm" ~ 0.1,
+                         Model.Level == "ChrArm (avg.)" ~ 0),
            AUC = paste0(auc_prefix, format(round(AUC, 3), nsmall = 3)))
 
   df_legend <- data.frame(
-    Label = c("ChrArm", "ChrArm (avg.)", "Gene CN", "Gain", "Loss"),
-    x = c(0.5, 0.5, 0.5, 0.25, 0),
+    Label = c("ChrArm (avg.)", "ChrArm", "Gene CN", "Gain", "Loss"),
+    x = c(0.4, 0.4, 0.4, 0.2, 0),
     y = c(0.01, 0.11, 0.21, 0.31, 0.31)
   )
 
@@ -70,6 +70,7 @@ plot_rocs_publish <- function(df_rocs, auc_prefix = "AUC = ", title = "") {
               hjust = 1, vjust = 0) +
     annotate("text", x = 1, y = 1, hjust = 0, size = 5, label = title) +
     scale_x_reverse(limits = c(1, 0)) +
+    scale_color_manual(values = color_palettes$ModelVariants) +
     labs(x = "Specificity", y = "Sensitivity", color = "Model") +
     theme(legend.position = "none")
 }
@@ -104,12 +105,12 @@ panel_roc <- cowplot::plot_grid(models_depmap, models_procan, models_cptac,
 shap_gain <- shap_results %>%
   filter(Model.Variant == "Gene-Level_Filtered_Gain" & Model.Dataset == "CPTAC") %>%
   group_by(DosageCompensation.Factor) %>%
-  slice_sample(n = 200) %>%     # Simplify visualization
+  #slice_sample(n = 200) %>%     # Simplify visualization
   ungroup()
 shap_loss <- shap_results %>%
   filter(Model.Variant == "Gene-Level_Filtered_Loss" & Model.Dataset == "CPTAC") %>%
   group_by(DosageCompensation.Factor) %>%
-  slice_sample(n = 200) %>%     # Simplify visualization
+  #slice_sample(n = 200) %>%     # Simplify visualization
   ungroup()
 
 shap_arrows_plot_gain <- shap_gain %>%

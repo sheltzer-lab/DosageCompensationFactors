@@ -839,13 +839,13 @@ shap_plot_arrows <- function(df_shap, show_legend = TRUE, title = NULL,
     ggplot() +
     aes(x = SHAP.Value) +
     geom_segment(aes(x = -max_abs_shap * 0.05, y = 2, xend = -max_abs_shap, yend = 2),
-                 arrow = arrow_element, color = bidirectional_color_pal[1]) +
+                 arrow = arrow_element, color = color_palettes$BufferingClasses[["Buffered"]]) +
     geom_segment(aes(x = max_abs_shap * 0.05, y = 2, xend = max_abs_shap, yend = 2),
-                 arrow = arrow_element, color = tail(bidirectional_color_pal, n = 1)) +
+                 arrow = arrow_element, color = color_palettes$BufferingClasses[["Scaling"]]) +
     geom_text(aes(x = -max_abs_shap * 0.5, y = 1, label = "Buffering"),
-              color = bidirectional_color_pal[1]) +
+              color = color_palettes$BufferingClasses[["Buffered"]]) +
     geom_text(aes(x = max_abs_shap * 0.5, y = 1, label = "Scaling"),
-              color = tail(bidirectional_color_pal, n = 1)) +
+              color = color_palettes$BufferingClasses[["Scaling"]]) +
     ylim(c(0, 3)) +
     xlim(c(-max_abs_shap, max_abs_shap)) +
     cowplot::theme_nothing()
@@ -864,8 +864,8 @@ nested_shap_heatmap <- function(df, nesting_formula) {
     geom_raster() +
     geom_text(color = "black") +
     ggh4x::facet_nested(nesting_formula, switch = "y") +
-    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
-                         limits = c(-1, 1), oob = scales::squish) +
+    scale_fill_gradientn(colors = c(bidirectional_color_pal_viridis[4], "white", bidirectional_color_pal_viridis[2]),
+                         space = "Lab", limits = c(-1, 1), oob = scales::squish) +
     labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
     cowplot::theme_minimal_grid() +
     theme(panel.spacing = unit(0, "lines"),
