@@ -298,38 +298,44 @@ gene_sets <- hallmark_gene_set %>%
 names(gene_sets) <- unique(hallmark_gene_set$gs_name)
 
 gsea_cptac <- expr_buf_cptac %>%
-  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
-
-gsea_procan <- expr_buf_procan %>%
-  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
-
-gsea_depmap <- expr_buf_depmap %>%
-  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID)
-
-## Proteotoxic Stress / Unfolded Proteins / Autophagosome
-gsea_cptac %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Model.ID") %>%
+  write_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
+
+gsea_procan <- expr_buf_procan %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
+  t() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Model.ID") %>%
+  write_parquet(here(output_data_dir, "ssgsea_unfolded_procan.parquet"))
+
+gsea_depmap <- expr_buf_depmap %>%
+  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
+  t() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Model.ID") %>%
+  write_parquet(here(output_data_dir, "ssgsea_unfolded_depmap.parquet"))
+
+## Proteotoxic Stress / Unfolded Proteins / Autophagosome
+gsea_cptac %>%
   inner_join(y = model_buf_cptac, by = "Model.ID") %>%
   left_join(y = metadata_cptac %>% select(-HALLMARK_UNFOLDED_PROTEIN_RESPONSE), by = "Model.ID") %>%
+  filter(Observations > 500) %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
                         color_col = Model.AneuploidyScore.Estimate) %>%
   save_plot("gsea_unfolded_cptac.png")
 
 gsea_procan %>%
-  t() %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column("Model.ID") %>%
   inner_join(y = model_buf_procan, by = "Model.ID") %>%
+  filter(Observations > 500) %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE) %>%
   save_plot("gsea_unfolded_procan.png")
 
 gsea_depmap %>%
-  t() %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column("Model.ID") %>%
   inner_join(y = model_buf_procan, by = "Model.ID") %>%
+  filter(Observations > 500) %>%
   scatter_plot_reg_corr(Model.Buffering.Ratio, HALLMARK_UNFOLDED_PROTEIN_RESPONSE) %>%
   save_plot("gsea_unfolded_depmap.png")
 
@@ -410,7 +416,8 @@ fgsea_cptac <- fgsea::fgsea(pathways = gene_sets, stats = ranks_cptac)
 
 fgsea_results <- bind_rows(fgsea_depmap %>% mutate(Dataset = "DepMap"),
                            fgsea_procan %>% mutate(Dataset = "ProCan"),
-                           fgsea_cptac %>% mutate(Dataset = "CPTAC"))
+                           fgsea_cptac %>% mutate(Dataset = "CPTAC")) %>%
+  write_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parequet"))
 
 ### CPTAC vs ProCan
 enrichment_2d_procan <- fgsea_results %>%

@@ -110,6 +110,11 @@ expr_cptac_processed <- expr_cptac %>%
                     normalized_colname = "Protein.Expression.Normalized")
 
 ## Metadata
+metadata_cptac_processed <- bind_rows(df_list_meta) %>%
+  rename(Model.ID = idx) %>%
+  mutate_all(~type.convert(., as.is = TRUE)) %>%
+  mutate(Model.TumorPurity = pmin(WES_purity, WGS_purity, na.rm = TRUE))
+
 ### Estimate Aneuploidy Score & WGD
 df_as <- copy_number_cptac %>%
   left_join(y = metadata_cptac_processed %>% select(Model.ID, ends_with("ploidy")), by = "Model.ID") %>%
@@ -117,29 +122,23 @@ df_as <- copy_number_cptac %>%
          Model.WGD.Estimate = Model.Ploidy > 3,
          Model.Ploidy.Rounded = round(Model.Ploidy),
          CopyNumber.Gain = Gene.CopyNumber > Model.Ploidy.Rounded,
-         CopyNumber.Loss = Gene.CopyNumber < Model.Ploidy.Rounded,
-         CopyNumber.Neutral = Gene.CopyNumber == Model.Ploidy.Rounded) %>%
+         CopyNumber.Loss = Gene.CopyNumber < Model.Ploidy.Rounded) %>%
   group_by(Model.ID, Gene.ChromosomeArm, Model.Ploidy, Model.Ploidy.Rounded, Model.WGD.Estimate) %>%
   summarize(Genes = n(),
-            CopyNumber.Median = median(Gene.CopyNumber, na.rm = TRUE),
             CopyNumber.Gain.Freq = sum(CopyNumber.Gain, na.rm = TRUE) / Genes,
             CopyNumber.Loss.Freq = sum(CopyNumber.Loss, na.rm = TRUE) / Genes,
-            CopyNumber.Neutral.Freq = sum(CopyNumber.Neutral, na.rm = TRUE) / Genes,
             .groups = "drop") %>%
-  mutate(ChromosomeArm.CNA = case_when(CopyNumber.Gain.Freq > CopyNumber.Neutral.Freq & CopyNumber.Gain.Freq > CopyNumber.Loss.Freq ~ 1L,
-                                       CopyNumber.Loss.Freq > CopyNumber.Neutral.Freq & CopyNumber.Loss.Freq > CopyNumber.Gain.Freq ~ -1L,
-                                       TRUE ~ 0L),
-         ChromosomeArm.CNA.Alternative = as.integer(CopyNumber.Median - Model.Ploidy.Rounded)) %>%
+  # Inspired by Taylor et al. 2018 & Boekenkamp et al. 2024
+  mutate(ChromosomeArm.CNA = case_when(CopyNumber.Gain.Freq > 0.75 ~ 1L,
+                                       CopyNumber.Loss.Freq > 0.75 ~ -1L,
+                                       TRUE ~ 0L)) %>%
   group_by(Model.ID) %>%
   mutate(Model.AneuploidyScore.Estimate = if_else(is.na(Model.Ploidy.Rounded), NA, sum(abs(ChromosomeArm.CNA)))) %>%
   ungroup() %>%
   distinct(Model.ID, Model.Ploidy, Model.WGD.Estimate, Model.AneuploidyScore.Estimate) %>%
   drop_na()
 
-metadata_cptac_processed <- bind_rows(df_list_meta) %>%
-  rename(Model.ID = idx) %>%
-  mutate_all(~type.convert(., as.is = TRUE)) %>%
-  mutate(Model.TumorPurity = pmin(WES_purity, WGS_purity, na.rm = TRUE)) %>%
+metadata_cptac_processed <- metadata_cptac_processed %>%
   left_join(df_as, by = "Model.ID")
 
 # === Save Datasets ===

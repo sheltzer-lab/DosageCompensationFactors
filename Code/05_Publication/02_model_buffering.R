@@ -100,7 +100,7 @@ waterfall_depmap <- model_buf_depmap %>%
   waterfall_plot(Model.Buffering.Ratio.ZScore, Rank, CellLine.Name, centrality_measure = median,
                  color_low = color_palettes$BufferingClasses["Scaling"],
                  color_high = color_palettes$BufferingClasses["Buffered"]) +
-  labs(y = "Model Buffering Ratio (z-score)")
+  labs(y = "Sample Buffering Ratio (z-score)")
 
 model_buf_celllines <- model_buf_procan %>%
   bind_rows(model_buf_depmap) %>%
@@ -227,7 +227,7 @@ leuk_poster <- leuk_plot +
         legend.title.position = "top",
         legend.margin = margin(0,0,0,0, unit = 'cm')) +
   guides(color = guide_colourbar(ticks.linewidth = 1)) +
-  labs(color = "\nAneuploidy Score", y = "Model Buffering Ratio", x = NULL) +
+  labs(color = "\nAneuploidy Score", y = "Sample Buffering Ratio", x = NULL) +
   scale_colour_viridis_c(option = color_palettes$AneuploidyScore, direction = 1, end = 0.8,
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy))
@@ -266,7 +266,7 @@ wgd_base_panel <- df_procan_wgd %>%
            label = paste0(print_corr(cor_as_test$estimate), ", ", print_signif(cor_as_test$p.value))) +
   # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
   scale_color_manual(values = color_palettes$WGD) +
-  labs(x = "Aneuploidy Score", y = "Model Buffering Ratio") +
+  labs(x = "Aneuploidy Score", y = "Sample Buffering Ratio") +
   theme(legend.position = c("left", "top"),
         legend.position.inside = c(0.01, 0.90),
         legend.justification = c("left", "top"),

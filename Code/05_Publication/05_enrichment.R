@@ -25,9 +25,11 @@ expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac
 model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
 metadata_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 
-
 diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
 diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
+
+ssgsea_cptac <- read_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
+gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parequet"))
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
   select(Model.ID, CellLine.GrowthRatio)
@@ -62,7 +64,7 @@ diff_exp_procan <- diff_exp_procan  %>%
 panel_volcano <- diff_exp_procan %>%
   plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
   theme(legend.position = "none") +
-  labs(y = "-log10(p.adj)", x = "Log2FC (High - Low Buffering)")
+  labs(y = "-log10(p.adj)", x = "Protein Log2FC (High - Low Buffering)")
 
 # === ORA Panel ===
 genes_up <- diff_exp_procan %>%
@@ -103,33 +105,13 @@ string_down <- genes_down %>%
 # TODO: Why are more samples in df_agg than in df_procan and df_depmap?
 
 # === 2D Enrichment Panel ===
-hallmark_gene_set <- msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
-  rename(Gene.Symbol = "gene_symbol")
-
-gene_sets <- hallmark_gene_set %>%
-  group_by(gs_name) %>%
-  group_map(~list(.x$Gene.Symbol)) %>%
-  purrr::list_flatten()
-names(gene_sets) <- unique(hallmark_gene_set$gs_name)
-
-fgsea_procan <- diff_exp_procan %>%
-  arrange(Log2FC) %>%
-  pull(Log2FC, name = Gene.Symbol) %>%
-  fgsea::fgsea(pathways = gene_sets, stats = .)
-
-fgsea_cptac <- diff_exp_cptac %>%
-  arrange(Log2FC) %>%
-  pull(Log2FC, name = Gene.Symbol) %>%
-  fgsea::fgsea(pathways = gene_sets, stats = .)
-
-max_abs_nes_procan <- round(max(abs(fgsea_procan$NES)))
-max_abs_nes_cptac <- round(max(abs(fgsea_cptac$NES)))
+max_abs_nes_procan <- gsea_all %>% filter(Dataset == "ProCan") %>% pull(NES) %>% abs() %>% max() %>% round()
+max_abs_nes_cptac <- gsea_all %>% filter(Dataset == "CPTAC") %>% pull(NES) %>% abs() %>% max() %>% round()
 
 selected_pathways <- c("DNA_REPAIR", "APOPTOSIS", "G2M_CHECKPOINT", "MYC_TARGETS_V2", "IL2_STAT5_SIGNALING",
                        "UNFOLDED_PROTEIN_RESPONSE", "EPITHELIAL_MESENCHYMAL_TRANSITION", "APICAL_JUNCTION")
 
-panel_2d_enrichment <- bind_rows(fgsea_procan %>% mutate(Dataset = "ProCan"),
-                                  fgsea_cptac %>% mutate(Dataset = "CPTAC")) %>%
+panel_2d_enrichment <- gsea_all %>%
   filter(Dataset %in% c("CPTAC", "ProCan")) %>%
   select(pathway, Dataset, NES, padj) %>%
   pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
@@ -147,8 +129,8 @@ panel_2d_enrichment <- bind_rows(fgsea_procan %>% mutate(Dataset = "ProCan"),
   geom_hline(yintercept = 0, color = default_color) +
   geom_vline(xintercept = 0, color = default_color) +
   geom_abline(xintercept = 0, yintercept = 0, slope = 1, color = default_color) +
-  geom_point() +
-  geom_label_repel(force = 30, min.segment.length = 0.01) +
+  geom_point(size = 2) +
+  geom_label_repel(size = ceiling(base_size / 4), force = 30, min.segment.length = 0.01) +
   scale_color_manual(values = c(Both = highlight_colors[1], color_palettes$Datasets,
                                 None = default_color)) +
   lims(x = c(-max_abs_nes_procan, max_abs_nes_procan), y = c(-max_abs_nes_cptac, max_abs_nes_cptac)) +
@@ -157,24 +139,17 @@ panel_2d_enrichment <- bind_rows(fgsea_procan %>% mutate(Dataset = "ProCan"),
   theme(legend.position = "top", legend.direction = "horizontal")
 
 # === Proteotoxic Stress Panel ===
-gsea_cptac_all <- expr_buf_cptac %>%
-  ssGSEA(gene_sets, Protein.Expression.Normalized, Model.ID) %>%
-  t() %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column("Model.ID") %>%
+quantile(model_buf_cptac$Observations, probs = seq(0,1,0.1))
+
+ssgsea_cptac_filtered <- ssgsea_cptac %>%
   inner_join(y = model_buf_cptac, by = "Model.ID") %>%
+  filter(Observations > 500) %>%
   left_join(y = metadata_cptac %>% select(-HALLMARK_UNFOLDED_PROTEIN_RESPONSE), by = "Model.ID")
 
+cor_proteotox_test <- cor.test(ssgsea_cptac_filtered$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
+                               ssgsea_cptac_filtered$Model.Buffering.Ratio, method = "spearman")
 
-quantile(gsea_cptac_all$Observations, probs = seq(0,1,0.1))
-
-gsea_cptac <- gsea_cptac_all %>%
-  filter(Observations > 500)
-
-cor_proteotox_test <- cor.test(gsea_cptac$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
-                               gsea_cptac$Model.Buffering.Ratio, method = "spearman")
-
-panel_proteotox <- gsea_cptac %>%
+panel_proteotox <- ssgsea_cptac_filtered %>%
   mutate(Ploidy = if_else(Model.Ploidy >= 3, "\u2265 3", "< 3")) %>%
   ggplot() +
   aes(x = Model.Buffering.Ratio, y = HALLMARK_UNFOLDED_PROTEIN_RESPONSE, color = Model.AneuploidyScore.Estimate) +
@@ -182,7 +157,7 @@ panel_proteotox <- gsea_cptac %>%
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
            label = paste0(print_corr(cor_proteotox_test$estimate), ", ", print_signif(cor_proteotox_test$p.value))) +
-  labs(x = "Model Buffering Ratio", y = "Unfolded Protein Response", color = "eAS") +
+  labs(x = "Sample Buffering Ratio", y = "Unfolded Protein Response", color = "eAS") +
   ylim(c(0.085, 0.275)) +
   scale_color_viridis_c(option = color_palettes$AneuploidyScore, end = 0.8) +
   theme(legend.position = c("left", "bottom"),
@@ -212,7 +187,7 @@ panel_prolif_base <- df_prolif %>%
            label = paste0(print_corr(cor_prolif$estimate), ", ", print_signif(cor_prolif$p.value))) +
   # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
   scale_color_manual(values = color_palettes$WGD) +
-  labs(x = "Mean Normalized Buffering Ranks", y = "Growth Ratio (Day4/Day1)") +
+  labs(x = "Mean Normalized Sample Buffering Ranks", y = "Growth Ratio (Day4/Day1)") +
   theme(legend.position = c("left", "top"),
         legend.position.inside = c(0.01, 0.90),
         legend.justification = c("left", "top"),

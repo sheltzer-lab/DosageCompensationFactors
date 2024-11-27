@@ -122,7 +122,7 @@ volcano_dep_diff <- df_crispr_model_buf %>%
                    point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
                    force = 5, max.overlaps = 20) +
   xlim(c(-max_abs_log2fc, max_abs_log2fc)) +
-  labs(color = "Cancer Driver", x = "Log2FC (Dependency Score)",
+  labs(color = "Cancer Driver", x = "Dependency Score Log2FC",
        y = "-log10(p.adj)", shape = "Exclusively Essential")
 #  theme(legend.position = "top", legend.direction = "horizontal",
 #        legend.box = "vertical", legend.box.just = "left", legend.margin = margin(0,0,0,0, unit = 'cm')) +
@@ -182,7 +182,7 @@ median_response_plot_buf <- median_response_buf %>%
                                 "Low" = color_palettes$BufferingClasses[["Scaling"]])) +
   theme(legend.position = "none") +
   ylim(c(-0.35, 0.15)) +
-  labs(x = "Model Buffering", y = "Median Drug Effect")
+  labs(x = "Sample Buffering", y = "Median Drug Effect")
 
 median_response_plot_control <- median_response_buf %>%
   drop_na(DrugStatus) %>%
@@ -201,7 +201,7 @@ panel_drug_response <- cowplot::plot_grid(median_response_plot_buf,
                                           align = "h", axis = "lr", ncol = 2, rel_widths = c(1, 0.8))
 
 panel_drug_response_horiz <- cowplot::plot_grid(median_response_plot_buf +
-                                                  labs(x = "Model\nBuffering", y = NULL) +
+                                                  labs(x = "Sample\nBuffering", y = NULL) +
                                                   coord_flip() +
                                                   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()),
                                                 median_response_plot_control +
@@ -225,7 +225,7 @@ moa_heatmap_diff <- common_drug_mechanisms %>%
   geom_tile() +
   geom_text(color = "black") +
   labs(x = NULL, y = NULL,
-       color = "Correlation (Drug Effect, Model BR)", fill = "Drug Effect Log2FC (High - Low Buffering)") +
+       color = "Correlation (Drug Effect, Sample BR)", fill = "Drug Effect Log2FC (High - Low Buffering)") +
   theme_void() +
   guides(fill = guide_colourbar(order = 1),
          colour = guide_colourbar(order = 2)) +
@@ -240,7 +240,7 @@ moa_heatmap_diff <- common_drug_mechanisms %>%
 moa_heatmap_corr <- common_drug_mechanisms %>%
   mutate(Label = map_signif(Test.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
   ggplot() +
-  aes(y = Drug.MOA, x = "Correlation (Drug Effect ~ Model BR)", fill = Corr.DrugEffect_Buffering, label = Label) +
+  aes(y = Drug.MOA, x = "Correlation (Drug Effect ~ Sample BR)", fill = Corr.DrugEffect_Buffering, label = Label) +
   scale_fill_gradientn(colors = bidirectional_color_pal2, space = "Lab",
                        limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
   geom_tile() +
