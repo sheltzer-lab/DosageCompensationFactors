@@ -210,7 +210,7 @@ leuk_plot <- df_depmap %>%
          `Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
-                       test = wilcox.test)
+                       test = wilcox.test, count_y = 0)
 
 leuk_plot_low <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
@@ -218,7 +218,7 @@ leuk_plot_low <- df_depmap %>%
          `Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
-                       test = wilcox.test)
+                       test = wilcox.test, count_y = 0)
 
 leuk_poster <- leuk_plot +
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5),

@@ -105,6 +105,7 @@ prot_exp_dc_class <- expr_buf_depmap %>%
   geom_hline(yintercept = 0, color = default_color) +
   geom_hline(aes(yintercept = mean(Protein.Expression.Baseline, na.rm = TRUE)), color = highlight_colors[2]) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
+  stat_summary(aes(y = -2), fun.data = show.n, geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("Anti-Scaling", "Buffered"),
                                  c("Buffered", "Scaling"),
                                  c("Anti-Scaling", "Scaling")),
@@ -126,6 +127,7 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %
   ggplot() +
   aes(x = Dataset, y = Buffering.GeneLevel.Ratio, color = Dataset) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
+  stat_summary(aes(y = -1), fun.data = show.n, geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("DepMap", "ProCan"),
                                  c("CPTAC", "ProCan"),
                                  c("CPTAC", "DepMap")),
@@ -138,7 +140,7 @@ dc_dataset_dist <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %
   labs(x = "Dataset", y = "Buffering Ratio")
 
 # === Buffering Gain vs. Loss Panel ===
-br_by_cna <- bind_rows(expr_buf_cptac, expr_buf_depmap, expr_buf_eng) %>%
+br_by_cna <- bind_rows(expr_buf_depmap, expr_buf_eng) %>%
   filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
   mutate(CopyNumber.Event = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss"),
          Dataset = factor(Dataset, levels = dataset_order)) %>%
@@ -147,6 +149,8 @@ br_by_cna <- bind_rows(expr_buf_cptac, expr_buf_depmap, expr_buf_eng) %>%
   ggplot() +
   aes(x = CopyNumber.Event, y = Buffering.ChrArmLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
+  stat_summary(aes(y = -0.3), fun.data = \(x) show.n(x, prefix = "n="),
+               geom = "text", color = default_color, size = floor(base_size / 4)) +
   geom_signif(comparisons = list(c("Gain", "Loss")),
               map_signif_level = print_signif, y_position = 1.9, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
@@ -163,6 +167,8 @@ br_by_cnv <- bind_rows(expr_buf_cptac, expr_buf_depmap) %>%
   ggplot() +
   aes(x = Gene.CopyNumber.Event, y = Buffering.GeneLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
+  stat_summary(aes(y = -0.3), fun.data = \(x) show.n(x, prefix = "n="),
+               geom = "text", color = default_color, size = floor(base_size / 4)) +
   geom_signif(comparisons = list(c("Gain", "Loss")),
               map_signif_level = print_signif, y_position = 1.9, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
@@ -222,7 +228,7 @@ br_by_cnv_all <- cowplot::plot_grid(br_by_cnv, br_by_cna + ylab(NULL),
                                     align = "h", axis = "tb")
 
 figure1_sub3 <- cowplot::plot_grid(br_by_cnv_all, scatter_signif_buffered, ora_buf_terms,
-                                   rel_widths = c(1, 0.8, 0.8), labels = c("", "J", "K"), ncol = 3)
+                                   rel_widths = c(1, 0.8, 0.75), labels = c("", "J", "K"), ncol = 3)
 
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
                               nrow = 3, rel_heights = c(0.8, 1, 1))
