@@ -417,7 +417,7 @@ fgsea_cptac <- fgsea::fgsea(pathways = gene_sets, stats = ranks_cptac)
 fgsea_results <- bind_rows(fgsea_depmap %>% mutate(Dataset = "DepMap"),
                            fgsea_procan %>% mutate(Dataset = "ProCan"),
                            fgsea_cptac %>% mutate(Dataset = "CPTAC")) %>%
-  write_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parequet"))
+  write_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parquet"))
 
 ### CPTAC vs ProCan
 enrichment_2d_procan <- fgsea_results %>%
@@ -429,8 +429,7 @@ enrichment_2d_procan <- fgsea_results %>%
     padj_ProCan >= p_threshold & padj_CPTAC < p_threshold ~ "CPTAC",
     padj_ProCan < p_threshold & padj_CPTAC >= p_threshold ~ "ProCan",
     TRUE ~ "None"),
-         Label = if_else(Significant != "None", pathway, NA),
-         Label = str_replace(Label, "HALLMARK_", "")) %>%
+         Label = str_replace(pathway, "HALLMARK_", "")) %>%
   ggplot() +
   aes(x = NES_ProCan, y = NES_CPTAC, label = Label, color = Significant) +
   geom_hline(yintercept = 0, color = default_color) +
@@ -443,7 +442,7 @@ enrichment_2d_procan <- fgsea_results %>%
        y = "Normalized Enrichment Score (CPTAC, High vs. Low Model Buffering)")
 
 enrichment_2d_procan %>%
-  save_plot("gsea_2d_hallmark_procan_cptac.png", height = 250, width = 250)
+  save_plot("gsea_2d_hallmark_cptac_procan.png", height = 250, width = 300)
 
 ### CPTAC vs DepMap
 enrichment_2d_depmap <- fgsea_results %>%
@@ -455,8 +454,7 @@ enrichment_2d_depmap <- fgsea_results %>%
     padj_DepMap >= p_threshold & padj_CPTAC < p_threshold ~ "CPTAC",
     padj_DepMap < p_threshold & padj_CPTAC >= p_threshold ~ "DepMap",
     TRUE ~ "None"),
-         Label = if_else(Significant != "None", pathway, NA),
-         Label = str_replace(Label, "HALLMARK_", "")) %>%
+         Label = str_replace(pathway, "HALLMARK_", "")) %>%
   ggplot() +
   aes(x = NES_DepMap, y = NES_CPTAC, label = Label, color = Significant) +
   geom_hline(yintercept = 0, color = default_color) +
@@ -469,7 +467,7 @@ enrichment_2d_depmap <- fgsea_results %>%
        y = "Normalized Enrichment Score (CPTAC, High vs. Low Model Buffering)")
 
 enrichment_2d_depmap %>%
-  save_plot("gsea_2d_hallmark_depmap_cptac.png", height = 250, width = 250)
+  save_plot("gsea_2d_hallmark_cptac_depmap.png", height = 250, width = 300)
 
 ### DepMap vs ProCan
 enrichment_2d_procan_depmap <- fgsea_results %>%
@@ -481,8 +479,7 @@ enrichment_2d_procan_depmap <- fgsea_results %>%
     padj_ProCan >= p_threshold & padj_DepMap < p_threshold ~ "DepMap",
     padj_ProCan < p_threshold & padj_DepMap >= p_threshold ~ "ProCan",
     TRUE ~ "None"),
-         Label = if_else(Significant != "None", pathway, NA),
-         Label = str_replace(Label, "HALLMARK_", "")) %>%
+         Label = str_replace(pathway, "HALLMARK_", "")) %>%
   ggplot() +
   aes(x = NES_ProCan, y = NES_DepMap, label = Label, color = Significant) +
   geom_hline(yintercept = 0, color = default_color) +
@@ -495,4 +492,126 @@ enrichment_2d_procan_depmap <- fgsea_results %>%
        y = "Normalized Enrichment Score (DepMap, High vs. Low Model Buffering)")
 
 enrichment_2d_procan_depmap %>%
-  save_plot("gsea_2d_hallmark_procan_depmap.png", height = 250, width = 250)
+  save_plot("gsea_2d_hallmark_procan_depmap.png", height = 250, width = 300)
+
+# === Split datasets by aneuploidy score as control and perform DiffExp & GSEA ===
+## DiffExp
+diff_exp_as_procan <- expr_buf_procan %>%
+  split_by_quantiles(CellLine.AneuploidyScore, target_group_col = "Aneuploidy") %>%
+  select(Aneuploidy, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Aneuploidy, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "aneuploidy_diff-exp_procan.parquet"))
+
+diff_exp_as_depmap <- expr_buf_depmap %>%
+  split_by_quantiles(CellLine.AneuploidyScore, target_group_col = "Aneuploidy") %>%
+  select(Aneuploidy, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Aneuploidy, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "aneuploidy_diff-exp_depmap.parquet"))
+
+diff_exp_as_cptac <- expr_buf_cptac %>%
+  inner_join(y = metadata_cptac %>% select(Model.ID, Model.AneuploidyScore.Estimate),
+             by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  split_by_quantiles(Model.AneuploidyScore.Estimate, target_group_col = "Aneuploidy") %>%
+  select(Aneuploidy, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Aneuploidy, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "aneuploidy_diff-exp_cptac.parquet"))
+
+## GSEA
+ranks_as_depmap <- diff_exp_as_depmap %>%
+  arrange(Log2FC) %>%
+  pull(Log2FC, name = Gene.Symbol)
+
+ranks_as_procan <- diff_exp_as_procan %>%
+  arrange(Log2FC) %>%
+  pull(Log2FC, name = Gene.Symbol)
+
+ranks_as_cptac <- diff_exp_as_cptac %>%
+  arrange(Log2FC) %>%
+  pull(Log2FC, name = Gene.Symbol)
+
+fgsea_as_depmap <- fgsea::fgsea(pathways = gene_sets, stats = ranks_as_depmap)
+fgsea_as_procan <- fgsea::fgsea(pathways = gene_sets, stats = ranks_as_procan)
+fgsea_as_cptac <- fgsea::fgsea(pathways = gene_sets, stats = ranks_as_cptac)
+
+fgsea_results_as <- bind_rows(fgsea_as_depmap %>% mutate(Dataset = "DepMap"),
+                           fgsea_as_procan %>% mutate(Dataset = "ProCan"),
+                           fgsea_as_cptac %>% mutate(Dataset = "CPTAC")) %>%
+  write_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer_aneuploidy.parquet"))
+
+### CPTAC vs. ProCan
+enrichment_2d_as_cptac_procan <- fgsea_results_as %>%
+  filter(Dataset %in% c("CPTAC", "ProCan")) %>%
+  select(pathway, Dataset, NES, padj) %>%
+  pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+    padj_ProCan < p_threshold & padj_CPTAC < p_threshold ~ "Both",
+    padj_ProCan >= p_threshold & padj_CPTAC < p_threshold ~ "CPTAC",
+    padj_ProCan < p_threshold & padj_CPTAC >= p_threshold ~ "ProCan",
+    TRUE ~ "None"),
+         Label = str_replace(pathway, "HALLMARK_", "")) %>%
+  ggplot() +
+  aes(x = NES_ProCan, y = NES_CPTAC, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(slope = 1, color = default_color) +
+  geom_point() +
+  geom_label_repel() +
+  scale_color_manual(values = c(Both = "purple", CPTAC = "blue", ProCan = "red", None = default_color)) +
+  labs(x = "Normalized Enrichment Score (ProCan, High vs. Low Model Buffering)",
+       y = "Normalized Enrichment Score (CPTAC, High vs. Low Model Buffering)")
+
+enrichment_2d_as_cptac_procan %>%
+  save_plot("gsea_2d_hallmark_aneuploidy_cptac_procan.png", height = 250, width = 300)
+
+### CPTAC vs. DepMap
+enrichment_2d_as_cptac_depmap <- fgsea_results_as %>%
+  filter(Dataset %in% c("CPTAC", "DepMap")) %>%
+  select(pathway, Dataset, NES, padj) %>%
+  pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+    padj_DepMap < p_threshold & padj_CPTAC < p_threshold ~ "Both",
+    padj_DepMap >= p_threshold & padj_CPTAC < p_threshold ~ "CPTAC",
+    padj_DepMap < p_threshold & padj_CPTAC >= p_threshold ~ "DepMap",
+    TRUE ~ "None"),
+         Label = str_replace(pathway, "HALLMARK_", "")) %>%
+  ggplot() +
+  aes(x = NES_DepMap, y = NES_CPTAC, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(slope = 1, color = default_color) +
+  geom_point() +
+  geom_label_repel() +
+  scale_color_manual(values = c(Both = "purple", CPTAC = "blue", DepMap = "red", None = default_color)) +
+  labs(x = "Normalized Enrichment Score (DepMap, High vs. Low Model Buffering)",
+       y = "Normalized Enrichment Score (CPTAC, High vs. Low Model Buffering)")
+
+enrichment_2d_as_cptac_depmap %>%
+  save_plot("gsea_2d_hallmark_aneuploidy_cptac_depmap.png", height = 250, width = 300)
+
+### DepMap vs. ProCan
+enrichment_2d_as_procan_depmap <- fgsea_results_as %>%
+  filter(Dataset %in% c("DepMap", "ProCan")) %>%
+  select(pathway, Dataset, NES, padj) %>%
+  pivot_wider(id_cols = "pathway", names_from = "Dataset", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+    padj_ProCan < p_threshold & padj_DepMap < p_threshold ~ "Both",
+    padj_ProCan >= p_threshold & padj_DepMap < p_threshold ~ "DepMap",
+    padj_ProCan < p_threshold & padj_DepMap >= p_threshold ~ "ProCan",
+    TRUE ~ "None"),
+         Label = str_replace(pathway, "HALLMARK_", "")) %>%
+  ggplot() +
+  aes(x = NES_ProCan, y = NES_DepMap, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(slope = 1, color = default_color) +
+  geom_point() +
+  geom_label_repel() +
+  scale_color_manual(values = c(Both = "purple", DepMap = "blue", ProCan = "red", None = default_color)) +
+  labs(x = "Normalized Enrichment Score (ProCan, High vs. Low Model Buffering)",
+       y = "Normalized Enrichment Score (DepMap, High vs. Low Model Buffering)")
+
+enrichment_2d_as_procan_depmap %>%
+  save_plot("gsea_2d_hallmark_aneuploidy_procan_depmap.png", height = 250, width = 300)

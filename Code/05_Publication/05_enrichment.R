@@ -29,7 +29,7 @@ diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.p
 diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
 
 ssgsea_cptac <- read_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
-gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parequet"))
+gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parquet"))
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
   select(Model.ID, CellLine.GrowthRatio)
