@@ -201,3 +201,58 @@ stacked_buf_class <- df_share_all %>%
 
 stacked_buf_class %>%
   save_plot("buffering_class_all.png", width = 400)
+
+# === Control: Compare Buffering Class fractions for extreme copy number gains
+df_share_gene_high_cn <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  filter(Gene.CopyNumber > Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber - Gene.CopyNumber.Baseline > 3, "Gene CN Gain (>+3)", "Gene CN Gain (<+3)")) %>%
+  select(Buffering.GeneLevel.Class, Dataset, CNV) %>%
+  drop_na() %>%
+  count(Buffering.GeneLevel.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_high_cn <- df_share_gene_high_cn %>%
+  ggplot() +
+  aes(fill = Buffering.GeneLevel.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
+
+stacked_buf_high_cn %>%
+  save_plot("buffering_class_gene_cn_gain.png", width = 200)
+
+# === Control: Apply classification to Average BR
+## Note: Average per gene and CN to be able to classify Anti-Scaling
+df_share_gene_avg <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  group_by(Dataset, Gene.Symbol, Gene.CopyNumber, Gene.CopyNumber.Baseline) %>%
+  summarize(Protein.Expression.Average = mean(Protein.Expression.Normalized, na.rm = TRUE),
+            Protein.Expression.Baseline = first(Protein.Expression.Baseline),
+            n = sum(!is.na(Protein.Expression.Normalized)),
+            .groups = "drop") %>%
+  filter(n > 10) %>%
+  mutate(Buffering.GeneLevel.Average.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Average,
+                                                             Gene.CopyNumber.Baseline, Gene.CopyNumber),
+         Buffering.GeneLevel.Average.Class = buffering_class(Buffering.GeneLevel.Average.Ratio,
+                                                             2^Protein.Expression.Baseline, 2^Protein.Expression.Average,
+                                                             Gene.CopyNumber.Baseline, Gene.CopyNumber),
+         CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss")) %>%
+  select(Buffering.GeneLevel.Average.Class, Dataset, CNV) %>%
+  drop_na() %>%
+  count(Buffering.GeneLevel.Average.Class, Dataset, CNV) %>%
+  group_by(Dataset, CNV) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_gene_avg <- df_share_gene_avg %>%
+  ggplot() +
+  aes(fill = Buffering.GeneLevel.Average.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~CNV) +
+  scale_fill_manual(values = color_palettes$BufferingClasses) +
+  labs(fill = "Buffering Class (Gene CN Avg.)")
+
+stacked_buf_gene_avg %>%
+  save_plot("buffering_class_gene_cn_avg.png", width = 200)
