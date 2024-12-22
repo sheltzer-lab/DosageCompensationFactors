@@ -557,6 +557,22 @@ expr_buf_cptac %>%
   scatter_plot_reg_corr(Ploidy, Model.TumorPurity) %>%
   save_plot("cptac_purity_ploidy.png")
 
+# Compare Tumor Purity against Buffering Ratio
+purity_br_plot <- expr_buf_cptac %>%
+  select(Gene.Symbol, Model.ID, Buffering.GeneLevel.Ratio, Model.TumorPurity) %>%
+  slice_sample(n = 20000) %>%
+  scatter_plot_reg_corr(Buffering.GeneLevel.Ratio, Model.TumorPurity) %>%
+  save_plot("cptac_purity_buffering_ratio.png")
+
+purity_br_sd_plot <- expr_buf_cptac %>%
+  select(Gene.Symbol, Model.ID, Buffering.GeneLevel.Ratio, Model.TumorPurity) %>%
+  group_by(Model.ID) %>%
+  summarize(BR.SD = sd(Buffering.GeneLevel.Ratio, na.rm = TRUE),
+            Model.TumorPurity = first(Model.TumorPurity),
+            .groups = "drop") %>%
+  scatter_plot_reg_corr(BR.SD, Model.TumorPurity) %>%
+  save_plot("cptac_purity_buffering_ratio_variance.png")
+
 # === Write Report ===
 report_file <- here(reports_dir, "dc_report.txt")
 write_report(dc_report, report_file)
