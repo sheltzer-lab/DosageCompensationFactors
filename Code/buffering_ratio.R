@@ -86,6 +86,17 @@ buffering_ratio_confidence <- function(cn_base, cn_obs, expr_neutral_cv) {
   ifelse(is.finite(conf), conf, NA)
 }
 
+# Convert BR cutoffs to Log2FC cutoffs
+br2logfc_cutoffs <- function(br_cutoff, cn_base, cn_obs) {
+  if (cn_obs == cn_base) return(NA)
+
+  cn_logfc <- log2(cn_obs / cn_base)
+  expr_logfc <- ifelse(cn_obs > cn_base,
+                       cn_logfc - br_cutoff,
+                       cn_logfc + br_cutoff)
+  return(expr_logfc)
+}
+
 # === Example Code ===
 plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {
   require(tibble)
