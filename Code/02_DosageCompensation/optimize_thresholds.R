@@ -153,7 +153,7 @@ df_opt_thresholds <- df_results %>%
             Sum.Wasserstein = sum(Buffered.Distance.Wasserstein))
 
 # === Plot protein abundance (Buffered vs. Disomic, Buffered vs. Scaling, Buffered vs. AntiScaling)
-thresholds <- list(Buffered = 0.2, AntiScaling = 0.3)
+thresholds <- list(Buffered = 0.2, AntiScaling = 0.6)
 
 datasets_opt_classes <- datasets_opt %>%
   mutate(Buffering.Class = buffering_class(Buffering.Ratio,

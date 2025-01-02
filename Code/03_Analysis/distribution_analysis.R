@@ -252,7 +252,7 @@ stacked_buf_gene_avg <- df_share_gene_avg %>%
   geom_bar(stat = "identity") +
   facet_wrap(~CNV) +
   scale_fill_manual(values = color_palettes$BufferingClasses) +
-  labs(fill = "Buffering Class (Gene CN Avg.)")
+  labs(fill = "Buffering Class (GeneCNAvg)")
 
 stacked_buf_gene_avg %>%
   save_plot("buffering_class_gene_cn_avg.png", width = 200)
@@ -271,8 +271,7 @@ df_share_chr_avg_br <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
                                                              ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
          Buffering.GeneLevel.Average.Class = buffering_class(Buffering.GeneLevel.Average.Ratio,
                                                              2^Protein.Expression.Baseline, 2^Protein.Expression.Average,
-                                                             ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber,
-                                                             br_cutoffs_ = list(Buffered = 0.2, AntiScaling = 0.6)),
+                                                             ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
          CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Chr Arm Gain", "Chr Arm Loss")) %>%
   select(Buffering.GeneLevel.Average.Class, Dataset, CNV) %>%
   drop_na() %>%
@@ -290,8 +289,9 @@ stacked_buf_chr_avg_br <- df_share_chr_avg_br %>%
   labs(fill = "Buffering Class (ChrAvgBR)")
 
 stacked_buf_chr_avg_br %>%
-  save_plot("buffering_class_gene_chr_avg_br.png", width = 200)
+  save_plot("buffering_class_chr_avg_br.png", width = 200)
 
-stacked_buf_chr_avg +
+(stacked_buf_chr_avg +
   scale_x_discrete(limits = c("DepMap", "ProCan")) +
-  labs(fill = "Buffering Class (ChrAvg)")
+  labs(fill = "Buffering Class (ChrAvg)")) %>%
+  save_plot("buffering_class_chromosome_average_pan-cancer.png", width = 200)
