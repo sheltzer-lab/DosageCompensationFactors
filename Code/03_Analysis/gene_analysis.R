@@ -333,3 +333,32 @@ rae_buf_counts <- rae_buf %>%
   as.matrix()
 
 rae_buf_test <- fisher.test(rae_buf_counts)
+
+# === Analyze Genes that are frequently Anti-Scaling ===
+frequent_as_genes <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac)  %>%
+  filter(Buffering.GeneLevel.Class == "Anti-Scaling") %>%
+  mutate(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline,
+         CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  group_by(Gene.Symbol, CNV, Dataset) %>%
+  summarize(Log2FC.Abs.Mean = mean(abs(Log2FC)),
+            Log2FC.Abs.SD = sd(abs(Log2FC)),
+            count = n(), .groups = "drop") %>%
+  group_by(CNV, Dataset) %>%
+  mutate(Log2FC.Abs.Mean.ZScore = (Log2FC.Abs.Mean - mean(Log2FC.Abs.Mean)) / sd(Log2FC.Abs.Mean)) %>%
+  ungroup() %>%
+  filter(count > 50)
+
+common_as_genes <- frequent_as_genes %>%
+  filter(Log2FC.Abs.Mean.ZScore > 0.2, Log2FC.Abs.SD < 1) %>%
+  add_count(Gene.Symbol, CNV) %>%
+  filter(n == 3)
+
+ora_as_gain <- common_as_genes %>%
+  filter(CNV == "Gain") %>%
+  pull(Gene.Symbol) %>%
+  unique() %>%
+  overrepresentation_analysis(ordered = FALSE)
+
+ora_as_gain %>%
+  plot_terms() %>%
+  save_plot("frequently_anti-scaling_genes_ora-terms.png", height = 200)
