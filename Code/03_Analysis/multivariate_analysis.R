@@ -2,6 +2,7 @@ library(here)
 library(tidyr)
 library(dplyr)
 library(stringr)
+library(magrittr)
 library(arrow)
 library(readxl)
 library(assertr)
@@ -296,7 +297,7 @@ dc_factor_cols_mapping <- dc_factor_cols
 names(dc_factor_cols_mapping) <- janitor::make_clean_names(dc_factor_cols)
 
 ### Write results to disk
-shap_results <- shap_results %>%
+df_shap_results <- shap_results %>%
   bind_rows() %>%
   left_join(y = analysis_summary, by = "Model.Filename",
             relationship = "many-to-one") %>%
