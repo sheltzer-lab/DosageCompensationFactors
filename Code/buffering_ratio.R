@@ -100,13 +100,11 @@ buffering_ratio_confidence <- function(cn_base, cn_obs, expr_neutral_cv) {
 
 # Convert BR cutoffs to Log2FC cutoffs
 br2logfc_cutoffs <- function(br_cutoff, cn_base, cn_obs) {
-  if (cn_obs == cn_base) return(NA)
-
-  cn_logfc <- log2(cn_obs / cn_base)
-  expr_logfc <- ifelse(cn_obs > cn_base,
-                       cn_logfc - br_cutoff,
-                       cn_logfc + br_cutoff)
-  return(expr_logfc)
+  ifelse(cn_obs == cn_base, NA,
+         ifelse(cn_obs > cn_base,
+                log2(cn_obs / cn_base) - br_cutoff,
+                log2(cn_obs / cn_base) + br_cutoff)
+  )
 }
 
 # === Example Code ===
@@ -143,11 +141,69 @@ plot_buffering_ratio <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1
     geom_raster(aes(fill = BufferingRatio)) +
     geom_vline(xintercept = cn_ticks, color = "darkgrey", alpha = 0.5) +
     geom_hline(yintercept = expr_ticks, color = "darkgrey", alpha = 0.5) +
+    #geom_contour(color = "white") +
     geom_textcontour(color = "white") +
     scale_fill_viridis_c() +
     scale_x_continuous(limits = cnv_lim + cn_base[1], breaks = cn_ticks) +
     scale_y_continuous(limits = expr_lim + expr_base[1], breaks = expr_ticks) +
     theme_light()
+}
+
+plot_buffering_ratio_classes <- function(cnv_lim = c(-1.99, 2), buffered_threshold = br_cutoffs$Buffered) {
+  require(tibble)
+  require(dplyr)
+  require(tidyr)
+  require(ggplot2)
+
+  cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
+  cn_base <- rep(2, length(cn_diff))
+
+  df_logfc <- data.frame(CN_Base = cn_base, CN_Obs = cn_diff + cn_base) %>%
+    mutate(CN_Log2FC = log2(CN_Obs) - log2(CN_Base),
+           Expr_Log2FC = br2logfc_cutoffs(buffered_threshold, CN_Base, CN_Obs))
+
+  buf_poly1 <- df_logfc %>%
+    select(CN_Log2FC, Expr_Log2FC) %>%
+    filter(CN_Log2FC %in% c(-1, max(df_logfc$CN_Log2FC[df_logfc$CN_Log2FC < 0]))) %>%
+    bind_rows(data.frame(
+      CN_Log2FC = c(max(df_logfc$CN_Log2FC[df_logfc$CN_Log2FC < 0]), -1),
+      Expr_Log2FC = c(1, 1)
+    )) %>%
+    mutate(id = 1)
+
+  buf_poly2 <- df_logfc %>%
+    select(CN_Log2FC, Expr_Log2FC) %>%
+    filter(CN_Log2FC %in% c(1, min(df_logfc$CN_Log2FC[df_logfc$CN_Log2FC > 0]))) %>%
+    bind_rows(data.frame(
+      CN_Log2FC = c(1, min(df_logfc$CN_Log2FC[df_logfc$CN_Log2FC > 0])),
+      Expr_Log2FC = c(-1, -1)
+    )) %>%
+    mutate(id = 2)
+
+  # Expr_Log2FC = 0 around abs(CN_Log2FC) = 0.3 for BR = 0.2
+  undefined_cn_range <- c(-0.3, 0.3)
+
+  bind_rows(buf_poly1, buf_poly2) %>%
+    ggplot() +
+    aes(x = CN_Log2FC, y = Expr_Log2FC, group = id) +
+    geom_rect(xmin = -1, xmax = 1, ymin = -1, ymax = 1, fill = color_palettes$BufferingClasses[["Scaling"]]) +
+    geom_polygon(fill = color_palettes$BufferingClasses[["Buffered"]]) +
+    geom_rect(xmin = -1, xmax = 0, ymin = 0.1, ymax = 1, fill = color_palettes$BufferingClasses[["Anti-Scaling"]]) +
+    geom_rect(xmin = 0, xmax = 1, ymin = -1, ymax = -0.1, fill = color_palettes$BufferingClasses[["Anti-Scaling"]]) +
+    geom_rect(xmin = undefined_cn_range[1], xmax = undefined_cn_range[2], ymin = -1, ymax = 1, fill = "white") +
+    geom_hline(yintercept = 0, color = default_color) +
+    geom_vline(xintercept = 0, color = default_color) +
+    #geom_line(color = color_palettes$BufferingClasses[["Buffered"]]) +
+    annotate("text", x = -0.95, y = -0.9, label = "Scaling", hjust = 0, vjust = 0, color = "white") +
+    annotate("text", x = -0.95, y = -0.1, label = "Buffered", hjust = 0, color = "white") +
+    annotate("text", x = -0.95, y = 0.9, label = "Anti-Scaling", hjust = 0,  vjust = 1, color = "white") +
+    annotate("text", x = 0.95, y = 0.9, label = "Scaling", hjust = 1, vjust = 1, color = "white") +
+    annotate("text", x = 0.95, y = 0.1, label = "Buffered", hjust = 1, color = "white") +
+    annotate("text", x = 0.95, y = -0.9, label = "Anti-Scaling", hjust = 1, vjust = 0, color = "white") +
+    scale_x_continuous(limits = c(-1,1), breaks = c(seq(-1, 1, 0.5), undefined_cn_range), minor_breaks = NULL) +
+    scale_y_continuous(limits = c(-1,1), breaks = seq(-1, 1, 0.5), minor_breaks = NULL) +
+    labs(x = "Copy Number Log2FC", y = "Protein Log2FC") +
+    theme_minimal(base_size = base_size)
 }
 
 plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {

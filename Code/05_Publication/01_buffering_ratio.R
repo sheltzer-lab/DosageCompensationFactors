@@ -9,6 +9,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "buffering_ratio.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
@@ -207,11 +208,8 @@ ora_buf_terms <- ora_buf %>%
 
 # === Combine Panels into Figure ===
 #dc_illus <- cowplot::draw_image(here(illustrations_dir, "dc_illustration.svg"))
-#buf_classes <- cowplot::draw_image(here(illustrations_dir, "buffering_classes.svg"))
-
-#illustrations <- cowplot::plot_grid(cowplot::ggdraw() + dc_illus,
-#                                    cowplot::ggdraw() + buf_classes,
-#                                    labels = c("A", "B"))
+buf_classes <- plot_buffering_ratio_classes()
+illustrations <- cowplot::plot_grid(NULL, buf_classes, labels = c("A", "B"), rel_widths = c(0.65, 0.35))
 
 stacked_buf_all <- cowplot::plot_grid(stacked_buf_cn, stacked_buf_cn_chr + ylab(NULL),
                                       ncol = 2, align = "h", axis = "tb",
@@ -233,6 +231,8 @@ figure1_sub3 <- cowplot::plot_grid(br_by_cnv_all, scatter_signif_buffered, ora_b
 figure1 <- cowplot::plot_grid(figure1_sub1, figure1_sub2, figure1_sub3,
                               nrow = 3, rel_heights = c(0.8, 1, 1))
 
-cairo_pdf(here(plots_dir, "figure01_01.pdf"), width = 13, height = 13)
-figure1
+figure1_illustr <- cowplot::plot_grid(illustrations, figure1, nrow = 2, rel_heights = c(0.2, 1))
+
+cairo_pdf(here(plots_dir, "figure01_01.pdf"), width = 13, height = 16)
+figure1_illustr
 dev.off()
