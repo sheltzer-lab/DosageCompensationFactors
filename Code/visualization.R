@@ -470,7 +470,7 @@ simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
     theme_settings
 }
 
-unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FALSE) {
+unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FALSE, color_lab = NULL) {
   theme_settings <- theme(legend.key.size = unit(16, "points"),
                         legend.key.width = unit(24, "points"),
                         legend.title = element_text(size = 12),
@@ -483,6 +483,8 @@ unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FAL
 
   color_col_name <- quo_name(enquo(color_col))
   x_col_name <- quo_name(enquo(x_col))
+
+  if (is.null(color_lab)) color_lab <- color_col_name
 
   max_value <- round(max(df[[color_col_name]]), digits = 1)
 
@@ -498,12 +500,14 @@ unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FAL
     scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9,
                          limits = c(0.5, max_value), oob = scales::squish) +
     cowplot::theme_minimal_grid() +
+    labs(fill = color_lab) +
     theme_settings
 }
 
-roc_auc_heatmap <- function(df, rank_tests) {
+roc_auc_heatmap <- function(df, rank_tests, color_lab = NULL) {
   heatmap_boot_auc <- df %>%
-    unidirectional_heatmap(DosageCompensation.Factor, Condition, DosageCompensation.Factor.ROC.AUC, order_desc = TRUE)
+    unidirectional_heatmap(DosageCompensation.Factor, Condition, DosageCompensation.Factor.ROC.AUC,
+                           order_desc = TRUE, color_lab = color_lab)
 
   signif_bars <- data.frame(Condition = unique(df$Condition), y = c(2, 2, 2, 2)) %>%
     ggplot() +
@@ -872,7 +876,7 @@ nested_shap_heatmap <- function(df, nesting_formula) {
     ggh4x::facet_nested(nesting_formula, switch = "y") +
     scale_fill_gradientn(colors = c(bidirectional_color_pal_viridis[4], "white", bidirectional_color_pal_viridis[2]),
                          space = "Lab", limits = c(-1, 1), oob = scales::squish) +
-    labs(x = "Feature", y = "Model", fill = "SHAP-Value-Feature-Correlation") +
+    labs(x = "Feature", y = "Model", fill = "SHAP-Value Correlation") +
     cowplot::theme_minimal_grid() +
     theme(panel.spacing = unit(0, "lines"),
           strip.background = element_rect(color = "lightgrey"),
