@@ -194,11 +194,11 @@ bind_rows(hallmark_plots_cptac$df_corr, immune_plots_cptac$df_corr, signature_pl
 df_procan %>%
   sorted_beeswarm_plot("cancer_type", Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
-  save_plot("cellline_cancer-type_procan.png", width = 300)
+  save_plot("cancer-type_procan.png", width = 300)
 df_depmap %>%
   sorted_beeswarm_plot("OncotreeSubtype", Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
-  save_plot("cellline_cancer-type_depmap.png", width = 300)
+  save_plot("cancer-type_depmap.png", width = 300)
 df_cptac %>%
   sorted_violin_plot("Model.CancerType", Model.Buffering.Ratio) %>%
   save_plot("cancer-type_cptac.png", width = 300)
@@ -210,22 +210,22 @@ df_cptac %>%
 ### Plot aneuploidy score per cancer type
 df_procan %>%
   sorted_beeswarm_plot("cancer_type", CellLine.AneuploidyScore, cex = 0.5) %>%
-  save_plot("cellline_cancer-type_aneuploidy_procan.png", width = 300)
+  save_plot("cancer-type_aneuploidy_procan.png", width = 300)
 df_depmap %>%
   sorted_beeswarm_plot("OncotreeSubtype", CellLine.AneuploidyScore, cex = 0.5) %>%
-  save_plot("cellline_cancer-type_aneuploidy_depmap.png", width = 300)
+  save_plot("cancer-type_aneuploidy_depmap.png", width = 300)
 
 ## Control for low aneuploidy score when plotting buffering per cancer type
 df_procan %>%
   filter(Aneuploidy == "Low") %>%
   sorted_beeswarm_plot("cancer_type", Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
-  save_plot("cellline_cancer-type_low-aneuploidy_procan.png", width = 300)
+  save_plot("cancer-type_low-aneuploidy_procan.png", width = 300)
 df_depmap %>%
   filter(Aneuploidy == "Low") %>%
   sorted_beeswarm_plot("OncotreeSubtype", Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 0.5) %>%
-  save_plot("cellline_cancer-type_low-aneuploidy_depmap.png", width = 300)
+  save_plot("cancer-type_low-aneuploidy_depmap.png", width = 300)
 
 # Statistical comparisons
 ## Difference between Leukemia and Non-Leukemia cancer cells
@@ -237,13 +237,13 @@ df_procan %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
-  save_plot("cellline_leukemia_procan.png")
+  save_plot("leukemia_procan.png")
 leuk_plot_depmap <- df_depmap %>%
   mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
-  save_plot("cellline_leukemia_depmap.png")
+  save_plot("leukemia_depmap.png")
 
 ### Control for low aneuploidy score
 df_leuk_procan <- df_procan %>%
@@ -256,39 +256,82 @@ df_procan %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
-  save_plot("cellline_leukemia_low-aneuploidy_procan.png")
+  save_plot("leukemia_low-aneuploidy_procan.png")
 leuk_plot_depmap_low <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
   mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
   signif_beeswarm_plot(Leukemia_Lymphoma, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
-  save_plot("cellline_leukemia_low-aneuploidy_depmap.png")
+  save_plot("leukemia_low-aneuploidy_depmap.png")
 
+df_procan %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
+  mutate(Leukemia_Lymphoma = cancer_type %in% leuk_procan) %>%
+  signif_violin_plot(Leukemia_Lymphoma, CellLine.AneuploidyScore, test = wilcox.test) %>%
+  save_plot("leukemia_aneuploidy_low-aneuploidy_procan.png")
+df_depmap %>%
+  filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
+  mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
+  signif_violin_plot(Leukemia_Lymphoma, CellLine.AneuploidyScore, test = wilcox.test) %>%
+  save_plot("leukemia_aneuploidy_low-aneuploidy_depmap.png")
+
+### Control for equal aneuploidy score
+#### ProCan
+df_split_leuk_procan <- split(df_procan, df_procan$cancer_type %in% leuk_procan)
+df_leuk_equal_procan <- equalize_distributions(df_split_leuk_procan[["TRUE"]], df_split_leuk_procan[["FALSE"]],
+                                               CellLine.AneuploidyScore, with_replacement = FALSE, num_buckets = 5)
+
+df_leuk_equal_procan %>%
+  mutate(Leukemia_Lymphoma = cancer_type %in% leuk_procan) %>%
+  signif_beeswarm_plot(Leukemia_Lymphoma, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("leukemia_equal-aneuploidy_procan.png")
+df_leuk_equal_procan %>%
+  mutate(Leukemia_Lymphoma = cancer_type %in% leuk_procan) %>%
+  signif_violin_plot(Leukemia_Lymphoma, CellLine.AneuploidyScore, test = wilcox.test) %>%
+  save_plot("leukemia_aneuploidy_equal-aneuploidy_procan.png")
+
+#### DepMap
+df_split_leuk_depmap <- split(df_depmap, df_depmap$OncotreeSubtype %in% leuk_depmap)
+df_leuk_equal_depmap <- equalize_distributions(df_split_leuk_depmap[["TRUE"]], df_split_leuk_depmap[["FALSE"]],
+                                               CellLine.AneuploidyScore, with_replacement = FALSE, num_buckets = 5)
+
+df_leuk_equal_depmap %>%
+  mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
+  signif_beeswarm_plot(Leukemia_Lymphoma, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("leukemia_equal-aneuploidy_depmap.png")
+df_leuk_equal_depmap %>%
+  mutate(Leukemia_Lymphoma = OncotreeSubtype %in% leuk_depmap) %>%
+  signif_violin_plot(Leukemia_Lymphoma, CellLine.AneuploidyScore, test = wilcox.test) %>%
+  save_plot("leukemia_aneuploidy_equal-aneuploidy_depmap.png")
 
 ## Tumor status
 df_procan %>%
   signif_beeswarm_plot(tissue_status, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_tumor-status_procan.png")
+  save_plot("tumor-status_procan.png")
 df_depmap %>%
   filter(PrimaryOrMetastasis != "NA") %>%
   signif_beeswarm_plot(PrimaryOrMetastasis, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_tumor-status_depmap.png")
+  save_plot("tumor-status_depmap.png")
 
 ## Micro-satellite instability
 msi_comparison <- df_procan %>%
   signif_beeswarm_plot(msi_status, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_msi_procan.png")
+  save_plot("msi_procan.png")
 df_procan %>%
   signif_beeswarm_plot(msi_status, CellLine.AneuploidyScore,
                        test = wilcox.test, cex = 1) %>%
-  save_plot("cellline_msi-aneuploidy_procan.png")
+  save_plot("msi-aneuploidy_procan.png")
 
 ### Control MSI/MSS distribution for low low aneuploidy score
 msi_procan <- df_procan %>% filter(msi_status == "MSI")
@@ -300,12 +343,12 @@ msi_comparison_low <- df_procan %>%
   signif_beeswarm_plot(msi_status, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_msi_low-aneuploidy_procan.png")
+  save_plot("msi_low-aneuploidy_procan.png")
 df_procan %>%
   filter(CellLine.AneuploidyScore <= max_msi_aneuploidy) %>%
   signif_beeswarm_plot(msi_status, CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_msi-aneuploidy_low-aneuploidy_procan.png")
+  save_plot("msi-aneuploidy_low-aneuploidy_procan.png")
 
 
 ### Resample, so that Aneuploidy Score distributions between MSI and MSS are equal
@@ -318,11 +361,11 @@ df_msi_equal %>%
   signif_beeswarm_plot(msi_status, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_msi_equal-aneuploidy_procan.png")
+  save_plot("msi_equal-aneuploidy_procan.png")
 df_msi_equal %>%
   signif_beeswarm_plot(msi_status, CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_msi-aneuploidy_equal-aneuploidy_procan.png")
+  save_plot("msi-aneuploidy_equal-aneuploidy_procan.png")
 
 ## Sex/Gender
 df_procan %>%
@@ -330,42 +373,42 @@ df_procan %>%
   signif_beeswarm_plot(gender, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_gender_procan.png")
+  save_plot("gender_procan.png")
 df_depmap %>%
   filter(Sex != "Unknown") %>%
   signif_beeswarm_plot(Sex, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_gender_depmap.png")
+  save_plot("gender_depmap.png")
 
 ## Whole-genome doubling
 wgd_comparison <- df_procan %>%
   signif_beeswarm_plot(WGD, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_wgd_procan.png")
+  save_plot("wgd_procan.png")
 df_depmap %>%
   signif_beeswarm_plot(WGD, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_wgd_depmap.png")
+  save_plot("wgd_depmap.png")
 df_depmap %>%
   filter(CellLine.WGD == 1 | CellLine.WGD == 2) %>%
   mutate(CellLine.WGD = factor(CellLine.WGD, levels = c(1, 2))) %>%
   signif_beeswarm_plot(CellLine.WGD, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_wgd_levels_depmap.png")
+  save_plot("wgd_levels_depmap.png")
 
 ### Check aneuploidy score
 df_procan %>%
   signif_beeswarm_plot(WGD, CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_wgd-aneuploidy_procan.png")
+  save_plot("wgd-aneuploidy_procan.png")
 df_depmap %>%
   signif_beeswarm_plot(WGD, CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_wgd-aneuploidy_depmap.png")
+  save_plot("wgd-aneuploidy_depmap.png")
 
 ### Control for low aneuploidy score
 max_aneuploidy_nowgd <- round(quantile((df_procan %>% filter(WGD == "Non-WGD"))$CellLine.AneuploidyScore,
@@ -375,45 +418,45 @@ wgd_comparison_low <- df_procan %>%
   signif_beeswarm_plot(WGD, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_wgd_low-aneuploidy_procan.png")
+  save_plot("wgd_low-aneuploidy_procan.png")
 df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_nowgd) %>%
   signif_beeswarm_plot(WGD, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = t.test) %>%
-  save_plot("cellline_wgd_low-aneuploidy_depmap.png")
+  save_plot("wgd_low-aneuploidy_depmap.png")
 
 ## Near-tetraploid cell lines
 df_procan %>%
   signif_beeswarm_plot(`Near-Tetraploid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_tetraploidy_procan.png")
+  save_plot("tetraploidy_procan.png")
 df_depmap %>%
   signif_beeswarm_plot(`Near-Tetraploid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_tetraploidy_depmap.png")
+  save_plot("tetraploidy_depmap.png")
 
 ## High vs. Low Aneuploidy Score
 df_procan %>%
   signif_violin_plot(Aneuploidy, Model.Buffering.Ratio,
                      test = wilcox.test) %>%
-  save_plot("cellline_aneuploidy-class_procan.png")
+  save_plot("aneuploidy-class_procan.png")
 df_depmap %>%
   signif_violin_plot(Aneuploidy, Model.Buffering.Ratio,
                      test = wilcox.test) %>%
-  save_plot("cellline_aneuploidy-class_depmap.png")
+  save_plot("aneuploidy-class_depmap.png")
 
 ### Control for Whole Genome Doubling
 df_procan %>%
   signif_violin_plot(Aneuploidy, Model.Buffering.Ratio, WGD,
                      test = wilcox.test) %>%
-  save_plot("cellline_aneuploidy-class_by-wgd_procan.png")
+  save_plot("aneuploidy-class_by-wgd_procan.png")
 aneuploidy_comparison_wgd <- df_depmap %>%
   signif_violin_plot(Aneuploidy, Model.Buffering.Ratio, WGD,
                      test = wilcox.test) %>%
-  save_plot("cellline_aneuploidy-class_by-wgd_depmap.png")
+  save_plot("aneuploidy-class_by-wgd_depmap.png")
 
 
 ## Mutational Burden
@@ -423,7 +466,7 @@ mutational_burden_comparison <- df_procan %>%
   signif_beeswarm_plot(`Mutational Burden`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore,
                        test = wilcox.test) %>%
-  save_plot("cellline_mutations_comparison_procan.png")
+  save_plot("mutations_comparison_procan.png")
 
 ## Cancer Stages
 df_cptac %>%
@@ -457,24 +500,24 @@ df_cptac %>%
 df_procan %>%
   scatter_plot_reg_corr(age_at_sampling, Model.Buffering.Ratio,
                         point_size = 2, cor_method = "pearson") %>%
-  save_plot("cellline_age_procan.png")
+  save_plot("age_procan.png")
 df_depmap %>%
   scatter_plot_reg_corr(Age, Model.Buffering.Ratio,
                         point_size = 2, cor_method = "pearson") %>%
-  save_plot("cellline_age_depmap.png")
+  save_plot("age_depmap.png")
 
 ## Ploidy
 df_procan %>%
   scatter_plot_reg_corr(ploidy_wes, Model.Buffering.Ratio, point_size = 2) %>%
-  save_plot("cellline_ploidy_procan.png")
+  save_plot("ploidy_procan.png")
 df_depmap %>%
   scatter_plot_reg_corr(CellLine.Ploidy, Model.Buffering.Ratio, point_size = 2) %>%
-  save_plot("cellline_ploidy_depmap.png")
+  save_plot("ploidy_depmap.png")
 
 ## Mutational burden
 mutational_burden_reg_plot <- df_procan %>%
   scatter_plot_reg_corr(mutational_burden, Model.Buffering.Ratio, point_size = 2) %>%
-  save_plot("cellline_mutations_procan.png")
+  save_plot("mutations_procan.png")
 
 df_cptac %>%
   mutate(MutationalBurden.Log10 = log10(TMB)) %>%
@@ -484,14 +527,14 @@ df_cptac %>%
 ## Aneuploidy score
 aneuploidy_reg_plot <- df_procan %>%
   scatter_plot_reg_corr(CellLine.AneuploidyScore, Model.Buffering.Ratio, color_col = WGD, point_size = 2) %>%
-  save_plot("cellline_aneuploidy_procan.png")
+  save_plot("aneuploidy_procan.png")
 df_depmap %>%
   scatter_plot_reg_corr(CellLine.AneuploidyScore, Model.Buffering.Ratio, color_col = WGD, point_size = 2) %>%
-  save_plot("cellline_aneuploidy_depmap.png")
+  save_plot("aneuploidy_depmap.png")
 df_cptac %>%
   scatter_plot_reg_corr(Model.AneuploidyScore.Estimate, Model.Buffering.Ratio, color_col = Model.WGD.Estimate,
                         point_size = 2) %>%
-  save_plot("cellline_aneuploidy_cptac.png")
+  save_plot("aneuploidy_cptac.png")
 
 ## Tumor Purity
 df_cptac %>%
@@ -570,7 +613,7 @@ cairo_pdf(here(plots_dir, "cellline_properties_publish2.pdf"), height = 5, width
 cancer_type_comparison
 dev.off()
 
-cairo_pdf(here(plots_dir, "cellline_properties_publish3.pdf"), height = 6, width = 9)
+cairo_pdf(here(plots_dir, "properties_publish3.pdf"), height = 6, width = 9)
 plot3
 dev.off()
 
