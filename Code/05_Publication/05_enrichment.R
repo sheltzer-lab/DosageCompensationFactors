@@ -169,6 +169,17 @@ panel_proteotox <- ssgsea_cptac_filtered %>%
   guides(colour = guide_colourbar(order = 1),
          shape = guide_legend(order = 2))
 
+## Check if tumor purity influences UPR
+ssgsea_cptac_filtered %>%
+  scatter_plot_reg_corr(HALLMARK_UNFOLDED_PROTEIN_RESPONSE, Model.TumorPurity)
+
+ssgsea_cptac_filtered %>%
+  count(HALLMARK_UNFOLDED_PROTEIN_RESPONSE > 0.2, Model.TumorPurity > 0.7) %>%
+  pivot_wider(names_from = "Model.TumorPurity > 0.7", values_from = "n") %>%
+  tibble::column_to_rownames("HALLMARK_UNFOLDED_PROTEIN_RESPONSE > 0.2") %>%
+  as.matrix() %>%
+  fisher.test()
+
 # === Proliferation ===
 df_prolif <- df_agg %>%
   select(Model.ID, Model.Buffering.MeanNormRank, CellLine.WGD) %>%
