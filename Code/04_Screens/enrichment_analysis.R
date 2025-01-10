@@ -280,10 +280,37 @@ og_common_dc <- expr_buf_procan %>%
 ## EGFR & RRAS (chr arm)
 og_common_dc_chr <- expr_buf_procan %>%
   filter(Gene.Symbol %in% c("EGFR", "RRAS")) %>%
-  mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNA = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss")) %>%
   drop_na(Buffering.ChrArmLevel.Ratio) %>%
-  signif_beeswarm_plot(CNV, Buffering.ChrArmLevel.Ratio, facet_col = Gene.Symbol, color_col = CellLine.AneuploidyScore) %>%
+  signif_beeswarm_plot(CNA, Buffering.ChrArmLevel.Ratio, facet_col = Gene.Symbol, color_col = CellLine.AneuploidyScore) %>%
   save_plot("oncogene_buffering_selected_chr.png", width = 200)
+
+## EGFR Scaling Frequency Chr Arm Gain & Loss
+egfr_classes_chr <- expr_buf_procan %>%
+  filter(Gene.Symbol == "EGFR") %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  drop_na(Buffering.ChrArmLevel.Ratio) %>%
+  mutate(CNA = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss"))
+
+(egfr_classes_chr %>%
+  count(Buffering.ChrArmLevel.Class, CNA) %>%
+  group_by(CNA) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup() %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Class, y = Share, x = CNA) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = color_palettes$BufferingClasses)) %>%
+  save_plot("egfr_buffering_classes_chr.png", width = 200)
+
+egfr_classes_chr %>%
+  mutate(Scaling = Buffering.ChrArmLevel.Class == "Scaling") %>%
+  count(CNA, Scaling) %>%
+  pivot_wider(names_from = "Scaling", values_from = "n") %>%
+  tibble::column_to_rownames("CNA") %>%
+  as.matrix() %>%
+  fisher.test()
 
 # === Gene Set Enrichment Analysis ===
 ## All Hallmark Gene Sets (ssGSEA)
