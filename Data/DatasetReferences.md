@@ -366,10 +366,15 @@ Data Source URL: ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/kno
 
 * **Source:** OncoKB
 * **URL:** https://www.oncokb.org/cancer-genes
-* ***Location:*** `./Data/External/cancerGeneList.tsv`
+* **Location:** `./Data/External/cancerGeneList.tsv`
 
 #### Citation
 
 * https://doi.org/10.1158/2159-8290.CD-23-0467
 * https://doi.org/10.1200/PO.17.00011
 
+### Damaging Mutations (DepMap)
+
+* **Source:** DepMap
+* **URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=DepMap+Public+24Q2&filename=OmicsSomaticMutationsMatrixDamaging.csv
+* **Location:** `./Data/External/OmicsSomaticMutationsMatrixDamaging.csv`
