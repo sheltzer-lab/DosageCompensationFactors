@@ -36,6 +36,11 @@ cellline_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gen
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
+tp53_mut <- read_parquet(here(output_data_dir, "damaging_mutations_depmap.parquet")) %>%
+  filter(Gene.Symbol == "TP53") %>%
+  select(-Gene.Symbol) %>%
+  rename(TP53.Mutated = MutationStatus)
+
 df_model_procan <- read_csv_arrow(here(procan_cn_data_dir, "model_list_20240110.csv")) %>%
   rename(CellLine.Name = "model_name") %>%
   add_count(CellLine.Name) %>%
@@ -489,11 +494,12 @@ df_cptac %>%
   pairwise.wilcox.test(Model.Buffering.Ratio, Histologic_Grade, p.adjust.method = "BH")
 
 ## TP53 Mutation
-df_cptac %>%
-  drop_na(TP53_mutation) %>%
-  mutate(TP53_mutation = factor(TP53_mutation)) %>%
-  signif_violin_plot(TP53_mutation, Model.Buffering.Ratio) %>%
-  save_plot("tp53_mutation_cptac.png")
+bind_rows(df_depmap, df_procan) %>%
+  left_join(y = tp53_mut, by = "Model.ID") %>%
+  bind_rows(df_cptac %>% mutate(TP53.Mutated = as.logical(TP53_mutation))) %>%
+  drop_na(TP53.Mutated) %>%
+  signif_violin_plot(TP53.Mutated, Model.Buffering.Ratio, facet_col = Dataset) %>%
+  save_plot("tp53_mutation_pan-cancer.png")
 
 # Regression analysis
 ## Age
