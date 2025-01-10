@@ -243,6 +243,26 @@ ora_buf %>%
   plot_terms() %>%
   save_plot("frequently_buffered_genes_ora-terms.png", height = 200)
 
+# === Analyze if genes are consistently buffered across datasets ===
+br_cor_gene <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  drop_na(Buffering.GeneLevel.Ratio) %>%
+  summarize(Buffering.GeneLevel.Ratio = mean(Buffering.GeneLevel.Ratio), .by = c(Model.ID, Gene.Symbol, Dataset)) %>%
+  add_count(Model.ID, Gene.Symbol) %>%
+  filter(n == 2) %>%
+  select(Model.ID, Dataset, Gene.Symbol, Buffering.GeneLevel.Ratio) %>%
+  pivot_wider(names_from = "Dataset", values_from = "Buffering.GeneLevel.Ratio",
+              id_cols = c("Model.ID", "Gene.Symbol")) %>%
+  group_by(Gene.Symbol) %>%
+  rstatix::cor_test(DepMap, ProCan, method = "spearman") %>%
+  mutate(p.adj = p.adjust(p))
+
+(br_cor_gene %>%
+  inner_join(y = low_var_buf %>% distinct(Gene.Symbol, Top50), by = "Gene.Symbol") %>%
+  signif_boxplot(Top50, cor) +
+  lims(y = c(0, 1)) +
+  labs(x = "Top50 Frequently Buffered Genes", y = "BR Correlation (DepMap, ProCan)")) %>%
+  save_plot("frequently_buffered_genes_br_correlation.png", width = 100)
+
 # === Random Allelic Expression ===
 rae_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   add_factors(df_factors = dc_factors) %>%
