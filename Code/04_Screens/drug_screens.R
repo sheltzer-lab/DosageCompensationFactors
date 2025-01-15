@@ -287,13 +287,16 @@ moa_corr <- model_buf_agg %>%
   separate_longer_delim(Drug.MOA, delim = ", ") %>%
   drop_na(Drug.MOA) %>%
   mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
-  group_by(Drug.MOA) %>%
+  summarize(Drug.Effect.Median = median(Drug.MFI.Log2FC, na.rm = TRUE),
+            Model.Buffering.MeanNormRank = first(Model.Buffering.MeanNormRank),
+            .by = c("Drug.MOA", "Model.ID")) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
-    Corr.DrugEffect_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
+    Corr.DrugEffect_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.Effect.Median,
                                           method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
-                      method = "pearson")$p.value
+    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.Effect.Median,
+                      method = "pearson")$p.value,
+    .by = "Drug.MOA"
   ) %>%
   mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
 
@@ -317,13 +320,16 @@ target_corr <- model_buf_agg %>%
   separate_longer_delim(Drug.Target, delim = ", ") %>%
   mutate(Drug.Target = str_squish(Drug.Target)) %>%
   drop_na(Drug.Target) %>%
-  group_by(Drug.Target) %>%
+  summarize(Drug.Effect.Median = median(Drug.MFI.Log2FC, na.rm = TRUE),
+            Model.Buffering.MeanNormRank = first(Model.Buffering.MeanNormRank),
+            .by = c("Drug.Target", "Model.ID")) %>%
   summarize(
     # ToDo: Avoid calculating correlation twice
-    Corr.DrugEffect_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
+    Corr.DrugEffect_Buffering = cor.test(Model.Buffering.MeanNormRank, Drug.Effect.Median,
                                           method = "spearman")$estimate[["rho"]],
-    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.MFI.Log2FC,
-                      method = "pearson")$p.value
+    Corr.p = cor.test(Model.Buffering.MeanNormRank, Drug.Effect.Median,
+                      method = "pearson")$p.value,
+    .by = "Drug.Target"
   ) %>%
   mutate(Corr.p.adj = p.adjust(Corr.p, method = "BH"))
 
@@ -333,7 +339,7 @@ target_corr %>%
   mutate(Drug.Target = fct_reorder(Drug.Target, Corr.DrugEffect_Buffering, .desc = TRUE),
          `-log10(p)` = -log10(Corr.p.adj)) %>%
   vertical_bar_chart(Drug.Target, Corr.DrugEffect_Buffering, `-log10(p)`,
-                     value_range = c(0, 0.15), line_intercept = 0, bar_label_shift = 0.005,
+                     value_range = c(0, 0.2), line_intercept = 0, bar_label_shift = 0.005,
                      category_lab = "Drug Target", value_lab = "Correlation Buffering-DrugEffect",
                      color_lab = "-log10(p)") %>%
   save_plot("target_buffering_sensitivity_top.png")
@@ -640,6 +646,9 @@ median_response_plot_aneuploidy <- median_response_aneuploidy %>%
   ylim(c(-0.4, 0.15)) +
   ylab("Median Drug Effect")
 
+median_response_plot_aneuploidy %>%
+  save_plot("median_drug_effect_aneuploidy.png")
+
 ## Drug sensitivity by buffering (filtered by aneuploidy)
 median_response_buf_aneuploidy <- median_response_buf %>%
   inner_join(y = copy_number, by = "Model.ID") %>%
@@ -661,6 +670,9 @@ median_response_plot_buf_aneuploidy <- median_response_buf_aneuploidy %>%
   ylim(c(-0.4, 0.15)) +
   ylab("Median Drug Effect") +
   facet_grid(~Aneuploidy)
+
+median_response_plot_buf_aneuploidy %>%
+  save_plot("median_drug_effect_by-aneuploidy.png")
 
 ## Drug mechanism (Difference) by aneuploidy
 moa_diff_aneuploidy <- copy_number %>%
