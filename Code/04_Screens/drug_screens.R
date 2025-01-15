@@ -540,13 +540,16 @@ cowplot::plot_grid(median_response_plot_buf,
 
 ## Check if drug resistance and high buffering are stochastically independent
 response_counts <- median_response_buf %>%
+  left_join(y = copy_number, by = "Model.ID") %>%
   mutate(Buffering = factor(if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
                              "Buffering", "Other"), levels = c("Buffering", "Other")),
          Resistant = factor(if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
-                             "Resistant", "Other"), levels = c("Resistant", "Other"))) %>%
-  count(Buffering, Resistant) %>%
+                             "Resistant", "Other"), levels = c("Resistant", "Other")),
+         Aneuploidy = factor(if_else(CellLine.AneuploidyScore > median(CellLine.AneuploidyScore, na.rm = TRUE),
+                                     "High Aneuploidy", "Low Aneuploidy"), levels = c("High Aneuploidy", "Low Aneuploidy"))) %>%
+  count(Buffering, Resistant, Aneuploidy) %>%
   drop_na() %>%
-  arrange(Buffering, Resistant)
+  arrange(Buffering, Resistant, Aneuploidy)
 
 buf_res_plot <- response_counts %>%
   group_by(Buffering) %>%
@@ -555,19 +558,138 @@ buf_res_plot <- response_counts %>%
   ggplot() +
   aes(x = Buffering, y = Share, fill = Resistant, label = n) +
   geom_bar(position = "stack", stat = "identity") +
-  scale_y_continuous(labels = scales::percent)
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c(Resistant = highlight_colors[2],
+                               Other = color_palettes$Missing))
 
 buf_res_plot %>%
   save_plot("drug_resistance_buffering_share.png")
 
 buf_res_test <- response_counts %>%
+  summarize(n = sum(n), .by = c("Buffering", "Resistant")) %>%
   pivot_wider(names_from = "Resistant", values_from = "n") %>%
   tibble::column_to_rownames("Buffering") %>%
   as.matrix() %>%
   fisher.test()
 
-buf_res_test %>%
+### Control for aneuploidy
+buf_res_plot_aneuploidy <- response_counts %>%
+  group_by(Buffering, Aneuploidy) %>%
+  mutate(Share = (n / sum(n))) %>%
+  ungroup() %>%
+  ggplot() +
+  aes(x = Buffering, y = Share, fill = Resistant, label = n) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_y_continuous(labels = scales::percent) +
+  facet_grid(~Aneuploidy) +
+  scale_fill_manual(values = c(Resistant = highlight_colors[2],
+                               Other = color_palettes$Missing))
+
+buf_res_plot_aneuploidy %>%
+  save_plot("drug_resistance_buffering_share_aneuploidy.png")
+
+### Test stochastic independence, high aneuploidy
+buf_res_test_high_as <- response_counts %>%
+  filter(Aneuploidy == "High Aneuploidy") %>%
+  summarize(n = sum(n), .by = c("Buffering", "Resistant")) %>%
+  pivot_wider(names_from = "Resistant", values_from = "n") %>%
+  tibble::column_to_rownames("Buffering") %>%
+  as.matrix() %>%
+  fisher.test()
+
+### Test stochastic independence, low aneuploidy
+buf_res_test_low_as <- response_counts %>%
+  filter(Aneuploidy == "Low Aneuploidy") %>%
+  summarize(n = sum(n), .by = c("Buffering", "Resistant")) %>%
+  pivot_wider(names_from = "Resistant", values_from = "n") %>%
+  tibble::column_to_rownames("Buffering") %>%
+  as.matrix() %>%
+  fisher.test()
+
+list("No Control" = buf_res_test,
+     "High Aneuploidy" = buf_res_test_high_as,
+     "Low Aneuploidy" = buf_res_test_low_as) %>%
   write_report(here(reports_base_dir, "drug_resistance_buffering_test.txt"))
+
+# === Control: Compare drug sensitivity and drug mechanisms between high & low aneuploidy groups
+## Drug sensitivity by aneuploidy
+high_as_thresh <- quantile(copy_number$CellLine.AneuploidyScore, probs = 0.8)[[1]]
+low_as_thresh <- quantile(copy_number$CellLine.AneuploidyScore, probs = 0.2)[[1]]
+
+median_response_aneuploidy <- median_response %>%
+  left_join(y = copy_number, by = "Model.ID") %>%
+  drop_na(CellLine.AneuploidyScore) %>%
+  mutate(Aneuploidy = case_when(CellLine.AneuploidyScore > high_as_thresh ~ "High",
+                                CellLine.AneuploidyScore < low_as_thresh ~ "Low",
+                                TRUE ~ NA)) %>%
+  mutate(DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
+                                Drug.Effect.Median < responsive_thresh ~ "Responsive",
+                                TRUE ~ NA))
+
+median_response_plot_aneuploidy <- median_response_aneuploidy %>%
+  mutate(Aneuploidy = replace_na(Aneuploidy, "Other")) %>%
+  ggplot() +
+  aes(x = Aneuploidy, y = Drug.Effect.Median) +
+  geom_boxplot() +
+  geom_signif(comparisons = list(c("High", "Low"),
+                                 c("High", "Other")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = c(0.05, 0.1),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  theme(legend.position = "none") +
+  ylim(c(-0.4, 0.15)) +
+  ylab("Median Drug Effect")
+
+## Drug sensitivity by buffering (filtered by aneuploidy)
+median_response_buf_aneuploidy <- median_response_buf %>%
+  inner_join(y = copy_number, by = "Model.ID") %>%
+  drop_na(CellLine.AneuploidyScore, Buffering) %>%
+  mutate(Aneuploidy = if_else(CellLine.AneuploidyScore >= median(CellLine.AneuploidyScore),
+                              "High Aneuploidy", "Low Aneuploidy"))
+
+median_response_plot_buf_aneuploidy <- median_response_buf_aneuploidy %>%
+  ggplot() +
+  aes(x = Buffering, y = Drug.Effect.Median, color = Buffering) +
+  geom_boxplot() +
+  geom_signif(comparisons = list(c("High", "Low")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = c(0.05, 0.1),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c("High" = color_palettes$BufferingClasses[["Buffered"]],
+                                "Low" = color_palettes$BufferingClasses[["Scaling"]])) +
+  theme(legend.position = "none") +
+  ylim(c(-0.4, 0.15)) +
+  ylab("Median Drug Effect") +
+  facet_grid(~Aneuploidy)
+
+## Drug mechanism (Difference) by aneuploidy
+moa_diff_aneuploidy <- copy_number %>%
+  inner_join(y = drug_screens, by = "Model.ID",
+             relationship = "one-to-many", na_matches = "never") %>%
+  select(-"Drug.Name") %>%
+  left_join(y = drug_meta, by = "Drug.ID") %>%
+  separate_longer_delim(Drug.MOA, delim = ", ") %>%
+  mutate(Drug.MOA = str_squish(Drug.MOA)) %>%
+  split_by_quantiles(CellLine.AneuploidyScore, target_group_col = "Aneuploidy",
+                     quantile_low = "20%", quantile_high = "80%") %>%
+  differential_expression(Drug.MOA, Aneuploidy, Drug.MFI.Log2FC,
+                          groups = c("Low", "High"), log2fc_thresh = 0.2)
+
+moa_diff_aneuploidy %>%
+  mutate(Label = if_else(!is.na(Significant), str_trunc(Drug.MOA, 20), NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, value_threshold = 0.2) %>%
+  save_plot("aneuploidy_drug_mechanism_volcano.png", width = 300, height = 250)
+
+### Find drug mechanisms unique in bufffering
+aneuploidy_up <- moa_diff_aneuploidy %>% filter(Significant == "Up")
+
+moa_diff %>%
+  filter(Significant == "Up") %>%
+  filter(!(Drug.MOA %in% aneuploidy_up$Drug.MOA))
+
+common_moa_lowbuf %>%
+  filter(!(Drug.MOA %in% aneuploidy_up$Drug.MOA))
+
 
 # === Drug Mechanism Groups ===
 # drug_meta_long <- drug_meta %>%
