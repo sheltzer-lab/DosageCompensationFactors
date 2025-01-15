@@ -683,11 +683,11 @@ moa_diff_aneuploidy %>%
 ### Find drug mechanisms unique in bufffering
 aneuploidy_up <- moa_diff_aneuploidy %>% filter(Significant == "Up")
 
-moa_diff %>%
+unique_buf_moa <- moa_diff %>%
   filter(Significant == "Up") %>%
   filter(!(Drug.MOA %in% aneuploidy_up$Drug.MOA))
 
-common_moa_lowbuf %>%
+unique_buf_moa_common <- common_moa_lowbuf %>%
   filter(!(Drug.MOA %in% aneuploidy_up$Drug.MOA))
 
 
