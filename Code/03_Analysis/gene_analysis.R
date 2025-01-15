@@ -254,10 +254,14 @@ br_cor_gene <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
               id_cols = c("Model.ID", "Gene.Symbol")) %>%
   group_by(Gene.Symbol) %>%
   rstatix::cor_test(DepMap, ProCan, method = "spearman") %>%
-  mutate(p.adj = p.adjust(p))
+  mutate(p.adj = p.adjust(p)) %>%
+  inner_join(y = low_var_buf %>% distinct(Gene.Symbol, Top50), by = "Gene.Symbol")
+
+br_cor_gene %>%
+  write_parquet(here(output_data_dir, "br_correlation_gene.parquet")) %>%
+  write.xlsx(here(tables_base_dir, "br_correlation_gene.xlsx"))
 
 (br_cor_gene %>%
-  inner_join(y = low_var_buf %>% distinct(Gene.Symbol, Top50), by = "Gene.Symbol") %>%
   signif_boxplot(Top50, cor) +
   lims(y = c(0, 1)) +
   labs(x = "Top50 Frequently Buffered Genes", y = "BR Correlation (DepMap, ProCan)")) %>%
