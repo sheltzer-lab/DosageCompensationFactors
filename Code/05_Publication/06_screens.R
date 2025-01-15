@@ -220,9 +220,10 @@ moa_heatmap_diff <- common_drug_mechanisms %>%
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-0.6, 0.6), breaks = c(-0.6, -0.3, 0, 0.3, 0.6), oob = scales::squish) +
   scale_color_gradientn(colors = bidirectional_color_pal2, space = "Lab",
-                       limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
+                        limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
   scale_x_discrete(position = "top") +
   geom_tile() +
+  geom_tile(color = "white") +
   geom_text(color = "black") +
   labs(x = NULL, y = NULL,
        color = "Correlation (Drug Effect, Sample BR)", fill = "Drug Effect Log2FC (High - Low Buffering)") +
@@ -244,6 +245,7 @@ moa_heatmap_corr <- common_drug_mechanisms %>%
   scale_fill_gradientn(colors = bidirectional_color_pal2, space = "Lab",
                        limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
   geom_tile() +
+  geom_tile(color = "white") +
   geom_text(color = "black") +
   labs(x = "Drug Mechanism", y = NULL) +
   theme_void() +
@@ -251,7 +253,7 @@ moa_heatmap_corr <- common_drug_mechanisms %>%
 
 panel_drug_mechanism <- cowplot::plot_grid(moa_heatmap_diff, moa_heatmap_corr,
                                            nrow = 1, ncol = 2, align = "h", axis = "lr",
-                                           rel_widths = c(1, 0.1))
+                                           rel_widths = c(1, 0.17))
 
 # === Drug Target Panel
 target_heatmap_diff <- common_drug_targets %>%
