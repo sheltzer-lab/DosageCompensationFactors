@@ -35,6 +35,8 @@ dir.create(temp_dir, recursive = TRUE)
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+metadata_procan <- read_csv_arrow(here(external_data_dir, "CopyNumber", "ProCan", "model_list_20240110.csv")) %>%
+  rename(CellLine.SangerModelId = "model_id")
 
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
@@ -642,3 +644,66 @@ enrichment_2d_as_procan_depmap <- fgsea_results_as %>%
 
 enrichment_2d_as_procan_depmap %>%
   save_plot("gsea_2d_hallmark_aneuploidy_procan_depmap.png", height = 250, width = 300)
+
+# === Control: Remove cells with suspension growth methods ===
+# Rationale: Integrins detected in ORA, Blood cancers have low BR, Blood cancers are grown in suspension
+
+## DiffExp
+diff_exp_procan_adherent <- model_buf_procan %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = expr_buf_procan, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+  inner_join(y = metadata_procan, by = "CellLine.SangerModelId") %>%
+  filter(growth_properties == "Adherent") %>%
+  select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
+                          groups = c("Low", "High")) %>%
+  write_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherrent.parquet"))
+
+volcano_plot_procan_adherent <- diff_exp_procan_adherent %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) & !is.na(CancerDriverMode), Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) %>%
+  save_plot("volcano_plot_procan_adherrent.png")
+
+## ORA
+genes_up_procan_adherent <- diff_exp_procan_adherent %>%
+  filter(Significant == "Up") %>%
+  mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = TRUE)) %>%
+  arrange(Gene.Symbol)
+
+genes_down_procan_adherent <- diff_exp_procan_adherent %>%
+  filter(Significant == "Down") %>%
+  mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = FALSE)) %>%
+  arrange(Gene.Symbol)
+
+ora_up_adherent <- genes_up_procan_adherent %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis() %>%
+  semi_join(x = .$result, y = ora_up$result, by = "term_id") # Filter for terms that were discovered without control
+
+ora_down_adherent <- genes_down_procan_adherent %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis() %>%
+  semi_join(x = .$result, y = ora_down$result, by = "term_id") # Filter for terms that were discovered without control
+
+list(result = ora_up_adherent) %>%
+  plot_terms() %>%
+  save_plot("overrepresentation_terms_up_adherent.png", height = 300)
+
+list(result = ora_down_adherent) %>%
+  plot_terms() %>%
+  save_plot("overrepresentation_terms_down_adherent.png", height = 300)
+
+## Common genes
+genes_up_common_adherent <- intersect(genes_up_common, genes_up_procan_adherent$Gene.Symbol)
+genes_down_common_adherent <- intersect(genes_down_common, genes_down_procan_adherent$Gene.Symbol)
+
+genes_up_common_adherent %>%
+  overrepresentation_analysis() %>%
+  plot_terms() %>%
+  save_plot("overrepresentation_terms_up_common_adherent.png", height = 300)
+
+genes_down_common_adherent %>%
+  overrepresentation_analysis() %>%
+  plot_terms() %>%
+  save_plot("overrepresentation_terms_down_common_adherent.png", height = 300)
