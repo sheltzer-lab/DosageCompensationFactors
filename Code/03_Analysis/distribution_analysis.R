@@ -295,3 +295,68 @@ stacked_buf_chr_avg_br %>%
   scale_x_discrete(limits = c("DepMap", "ProCan")) +
   labs(fill = "Buffering Class (ChrAvg)")) %>%
   save_plot("buffering_class_chromosome_average_pan-cancer.png", width = 200)
+
+# === Control: Buffering distribution controlled by WGD
+## Buffering classes - Gene CN
+df_share_gene_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss"),
+         WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  select(Buffering.GeneLevel.Class, Dataset, CNV, WGD) %>%
+  drop_na() %>%
+  count(Buffering.GeneLevel.Class, Dataset, CNV, WGD) %>%
+  group_by(Dataset, CNV, WGD) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_cn_wgd <- df_share_gene_wgd %>%
+  ggplot() +
+  aes(fill = Buffering.GeneLevel.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_grid(vars(WGD), vars(CNV)) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
+
+stacked_buf_cn_wgd %>%
+  save_plot("buffering_class_gene_wgd.png", width = 200)
+
+## Buffering classes - Chr Arm
+df_share_chr_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Chr Arm Gain", "Chr Arm Loss"),
+         WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  select(Buffering.ChrArmLevel.Class, Dataset, CNV, WGD) %>%
+  drop_na() %>%
+  count(Buffering.ChrArmLevel.Class, Dataset, CNV, WGD) %>%
+  group_by(Dataset, CNV, WGD) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+stacked_buf_chr_wgd <- df_share_chr_wgd %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_grid(vars(WGD), vars(CNV)) +
+  scale_fill_manual(values = color_palettes$BufferingClasses)
+
+stacked_buf_chr_wgd %>%
+  save_plot("buffering_class_chromosome_wgd.png", width = 200)
+
+## BR distribution
+br_dist_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gene CN Gain", "Gene CN Loss"),
+         WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  select(Buffering.GeneLevel.Ratio, Dataset, CNV, WGD) %>%
+  drop_na() %>%
+  ggplot() +
+  aes(y = Buffering.GeneLevel.Ratio, x = CNV) +
+  geom_boxplot(outliers = FALSE) +
+  stat_summary(aes(y = -1), fun.data = show.n, geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("Gene CN Gain", "Gene CN Loss")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = 1,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  facet_grid(vars(WGD), vars(Dataset))
+
+br_dist_wgd %>%
+  save_plot("br_distribution_wgd.png")
