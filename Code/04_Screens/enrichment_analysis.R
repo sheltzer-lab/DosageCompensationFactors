@@ -657,7 +657,7 @@ diff_exp_procan_adherent <- model_buf_procan %>%
   select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
                           groups = c("Low", "High")) %>%
-  write_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherrent.parquet"))
+  write_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
 
 volcano_plot_procan_adherent <- diff_exp_procan_adherent %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%

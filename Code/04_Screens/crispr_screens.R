@@ -29,6 +29,12 @@ cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 crispr_screens <- read_parquet(here(output_data_dir, "crispr_screens.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
+metadata_depmap <- read_csv_arrow(here(external_data_dir, "CopyNumber", "DepMap", "Model.csv")) %>%
+  rename(CellLine.DepMapModelId = "ModelID")
+tp53_mut <- read_parquet(here(output_data_dir, "damaging_mutations_depmap.parquet")) %>%
+  filter(Gene.Symbol == "TP53") %>%
+  select(-Gene.Symbol) %>%
+  rename(TP53.Mutated = MutationStatus)
 
 # === Combine Datasets ===
 df_crispr_buf <- crispr_screens %>%
@@ -230,6 +236,34 @@ essential_scaling_only %>%
   plot_terms() %>%
   save_plot("ora_terms_essential_scaling_only.png", height = 300)
 
-
 # ToDo: Calculate correlation of effect score with cell line ranking (per gene)
 
+# === Control: Control for suspension/adhesion growth method and TP53 status
+df_crispr_model_buf_adherent <- model_buf_agg %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = crispr_screens, by = "Model.ID") %>%
+  inner_join(y = metadata_depmap, by = "CellLine.DepMapModelId") %>%
+  filter(GrowthPattern == "Adherent") %>%
+  select(Model.ID, Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10) %>%
+  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_adherent.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap_adherent.xlsx"), colNames = TRUE)
+
+df_crispr_model_buf_control <- model_buf_agg %>%
+  split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group") %>%
+  inner_join(y = crispr_screens, by = "Model.ID") %>%
+  inner_join(y = metadata_depmap, by = "CellLine.DepMapModelId") %>%
+  inner_join(y = tp53_mut, by = "Model.ID") %>%
+  filter(GrowthPattern == "Adherent" & !TP53.Mutated) %>%
+  select(Model.ID, Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore) %>%
+  differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
+                          groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10) %>%
+  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_control.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap_control.xlsx"), colNames = TRUE)
+
+bind_rows(essential_scaling_only, essential_buf_only) %>%
+  semi_join(y = df_crispr_model_buf_adherent, by = c("Gene.Symbol", "Significant"))
+
+essential_scaling_only_adherent <- df_crispr_model_buf_adherent %>%
+  semi_join(y = essential_scaling_only, by = c("Gene.Symbol", "Significant"))
