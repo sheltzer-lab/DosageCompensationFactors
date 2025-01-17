@@ -262,8 +262,5 @@ df_crispr_model_buf_control <- model_buf_agg %>%
   write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_control.parquet")) %T>%
   write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap_control.xlsx"), colNames = TRUE)
 
-bind_rows(essential_scaling_only, essential_buf_only) %>%
-  semi_join(y = df_crispr_model_buf_adherent, by = c("Gene.Symbol", "Significant"))
-
 essential_scaling_only_adherent <- df_crispr_model_buf_adherent %>%
   semi_join(y = essential_scaling_only, by = c("Gene.Symbol", "Significant"))
