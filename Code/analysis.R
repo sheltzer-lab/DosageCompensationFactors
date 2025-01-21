@@ -286,14 +286,15 @@ analyze_low_br_variance <- function (df_expr_buf, p_thresh = p_threshold) {
               Gene.BR.Test.Mu = br_cutoffs$Buffered,
               Gene.BR.Test.p = safe_test_func(Buffering.GeneLevel.Ratio),
               .groups = "drop") %>%
-    mutate(Gene.BR.Test.p.adjusted = p.adjust(Gene.BR.Test.p, method = "BH"))
+    mutate(Gene.BR.Test.p.adjusted = p.adjust(Gene.BR.Test.p, method = "BH")) %>%
+    mutate(Gene.Buffered.Share.Median = median(Gene.Buffered.Share, na.rm = TRUE), .by = "Dataset")
 
   # Filter genes by number of samples, share of buffered samples, mean buffering ratio, and mean BR significance
   # Rank by SD of BR
   buf_rank <- mean_var_buf %>%
     filter(Samples > 20) %>%
-    filter(Gene.Buffered.Share > 1 / 3 & Gene.BR.Mean > br_cutoffs$Buffered) %>%
-    filter(Gene.BR.SD < 2 & Gene.BR.Test.p.adjusted < p_thresh) %>%
+    filter(Gene.Buffered.Share > 1 / 3 & Gene.Buffered.Share > Gene.Buffered.Share.Median) %>%
+    filter(Gene.BR.Mean > br_cutoffs$Buffered & Gene.BR.SD < 2 & Gene.BR.Test.p.adjusted < p_thresh) %>%
     add_count(Gene.Symbol) %>%
     filter(n >= length(unique(df_expr_buf$Dataset))) %>%
     mean_norm_rank(Gene.BR.SD, Dataset, Gene.Symbol) %>%
