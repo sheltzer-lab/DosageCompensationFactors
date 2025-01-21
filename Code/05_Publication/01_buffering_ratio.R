@@ -3,6 +3,7 @@ library(arrow)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -12,9 +13,11 @@ source(here("Code", "analysis.R"))
 source(here("Code", "buffering_ratio.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
+tables_dir <- here(tables_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
 
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 # === Load Datasets ===
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
@@ -236,3 +239,64 @@ figure1_illustr <- cowplot::plot_grid(illustrations, figure1, nrow = 2, rel_heig
 cairo_pdf(here(plots_dir, "figure01_01.pdf"), width = 13, height = 16)
 figure1_illustr
 dev.off()
+
+
+# === Tables ===
+
+## Buffering Classes & Ratios
+fields_buf <- c(
+  "Dataset",
+  "Model.ID",
+  "CellLine.DepMapModelId",
+  "CellLine.SangerModelId",
+  "CellLine.Name",
+  "Model.Type",
+  "Gene.Symbol",
+  "Gene.Chromosome",
+  "Gene.ChromosomeArm",
+  "Gene.ChromosomeBand",
+  "Gene.CopyNumber.Baseline",
+  "Gene.CopyNumber",
+  "ChromosomeArm.CopyNumber.Baseline",
+  "ChromosomeArm.CopyNumber",
+  "ChromosomeArm.CNA",
+  "Protein.Uniprot.Accession",
+  "Protein.Expression.Baseline.Unweighted",
+  "Protein.Expression.Baseline",
+  "Protein.Expression.Normalized",
+  "Protein.Expression.Average",
+  "Log2FC",
+  "Log2FC.Average",
+  "Buffering.GeneLevel.Ratio",
+  "Buffering.GeneLevel.Ratio.Confidence",
+  "Buffering.GeneLevel.Class",
+  "Buffering.ChrArmLevel.Ratio",
+  "Buffering.ChrArmLevel.Ratio.Confidence",
+  "Buffering.ChrArmLevel.Class",
+  "Buffering.ChrArmLevel.Average.Class",
+  "Buffering.ChrArmLevel.Log2FC.Class"
+)
+
+expr_buf_p0211_publish <- expr_buf_p0211 %>%
+  mutate(Gene.Chromosome = as.integer(Gene.Chromosome),
+         Dataset = "P0211",
+         Model.Type = "Cell Line (Engineered)"
+  )
+
+expr_buf_chunduri_publish <- expr_buf_chunduri %>%
+  mutate(Gene.Chromosome = as.integer(Gene.Chromosome),
+         Dataset = "Chunduri et al., 2021",
+         Model.Type = "Cell Line (Engineered)"
+  )
+
+sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
+  mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
+  bind_rows(expr_buf_p0211_publish, expr_buf_chunduri_publish) %>%
+  select(all_of(fields_buf)) %>%
+  write_parquet(here(tables_dir, "supplementary_table1.parquet"), version = "2.4")
+
+## Frequently Buffering Genes
+wb <- createWorkbook()
+sheet_low_buf <- addWorksheet(wb, "Frequently Buffered Genes")
+writeDataTable(wb = wb, sheet = sheet_low_buf, x = low_var_buf)
+saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"))

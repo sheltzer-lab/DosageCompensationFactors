@@ -6,6 +6,7 @@ library(forcats)
 library(ggplot2)
 library(ggpubr)
 library(viridisLite)
+library(openxlsx)
 library(mskcc.oncotree)
 
 here::i_am("DosageCompensationFactors.Rproj")
@@ -18,9 +19,11 @@ procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
 screens_data_dir <- here(external_data_dir, "Screens")
 plots_dir <- here(plots_base_dir, "Publication")
+tables_dir <- here(tables_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
 
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 tumor_types <- get_tumor_types()
 
@@ -52,28 +55,6 @@ df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 intersect(unique(df_model_depmap$OncotreeCode), unique(df_model_cptac$Model.CancerType))
 intersect(unique(tumor_types$oncotree_code), unique(df_model_cptac$Model.CancerType))
 
-df_depmap <- model_buf_depmap %>%
-  inner_join(y = df_model_depmap, by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
-
-df_procan <- model_buf_procan %>%
-  inner_join(y = df_model_depmap, by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
-
-df_cptac <- model_buf_cptac %>%
-  inner_join(y = df_model_cptac, by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
-  rename(OncotreeCode = Model.CancerType) %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
-  mutate(Model.Ploidy = if_else(is.na(WGS_ploidy), WES_ploidy, WGS_ploidy))
-
-df_agg <- model_buf_agg %>%
-  inner_join(y = df_model_depmap, by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never")
-
 get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target_level = 3) {
   require(mskcc.oncotree)
 
@@ -90,6 +71,32 @@ get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target
   if (current$level <= target_level) return(current$oncotree_code)
   else get_oncotree_parent(df_tumor_types, current$parent, target_level)
 }
+
+df_depmap <- model_buf_depmap %>%
+  inner_join(y = df_model_depmap, by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
+
+df_procan <- model_buf_procan %>%
+  inner_join(y = df_model_depmap, by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
+
+df_cptac <- model_buf_cptac %>%
+  inner_join(y = df_model_cptac, by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  rename(OncotreeCode = Model.CancerType) %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(Model.Ploidy = if_else(is.na(WGS_ploidy), WES_ploidy, WGS_ploidy),
+         OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
+
+df_agg <- model_buf_agg %>%
+  inner_join(y = df_model_depmap, by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
 
 # === Cell Lines Panel ===
 waterfall_procan <- model_buf_procan %>%
@@ -145,7 +152,6 @@ panel_celllines_agg <- cowplot::plot_grid(panel_celllines, panel_agg,
 
 # === Cancer Types Panel ===
 df_cancer_heatmap <- bind_rows(df_depmap, df_procan, df_cptac) %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
   group_by(Dataset, OncotreeCode) %>%
   summarize(Mean.BR = mean(Model.Buffering.Ratio, na.rm = TRUE),
             Mean.AS = mean(CellLine.AneuploidyScore, na.rm = TRUE),
@@ -197,25 +203,21 @@ panel_types <- cowplot::plot_grid(cancer_heatmap_br, cancer_heatmap_as,
 # == Lymphoma Leukemia Panel ===
 leukemia_codes <- c("MNM", "LNM")
 
-df_leuk <- df_depmap %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
-  filter(OncotreeCode %in% leukemia_codes)
+df_leuk <- df_depmap %>% filter(OncotreeCode %in% leukemia_codes)
 
 min_aneuploidy <- min(df_depmap$CellLine.AneuploidyScore)
 max_aneuploidy <- max(df_depmap$CellLine.AneuploidyScore)
 max_aneuploidy_leuk <- round(quantile(df_leuk$CellLine.AneuploidyScore, probs = 0.9))
 
 leuk_plot <- df_depmap %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)),
-         `Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
+  mutate(`Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test, count_y = 0)
 
 leuk_plot_low <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)),
-         `Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
+  mutate(`Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test, count_y = 0)
@@ -332,3 +334,31 @@ figure2 <- cowplot::plot_grid(panel_celllines_agg, panel_types, figure2_sub1,
 cairo_pdf(here(plots_dir, "figure02.pdf"), width = 12, height = 13)
 figure2
 dev.off()
+
+# === Tables ===
+fields <- c(
+  "Dataset",
+  "Model.ID",
+  "CellLine.DepMapModelId",
+  "CellLine.SangerModelId",
+  "CellLine.Name",
+  "OncotreeCode",
+  "Model.Buffering.Ratio",
+  "Model.Buffering.Ratio.ZScore",
+  "Observations",
+  "SD",
+  "Rank",
+  "Model.Buffering.MeanNormRank",
+  "Model.Buffering.StandardizedMean"
+)
+
+wb <- createWorkbook()
+sheet_depmap <- addWorksheet(wb, "DepMap")
+sheet_procan <- addWorksheet(wb, "ProCan")
+sheet_cptac <- addWorksheet(wb, "CPTAC")
+sheet_agg  <- addWorksheet(wb, "Cell Lines (Aggregated)")
+writeDataTable(wb = wb, sheet = sheet_depmap, x = df_depmap %>% select(any_of(fields)))
+writeDataTable(wb = wb, sheet = sheet_procan, x = df_procan %>% select(any_of(fields)))
+writeDataTable(wb = wb, sheet = sheet_cptac, x = df_cptac %>% select(any_of(fields)))
+writeDataTable(wb = wb, sheet = sheet_agg, x = df_agg %>% select(any_of(fields)))
+saveWorkbook(wb, here(tables_dir, "supplementary_table3.xlsx"))
