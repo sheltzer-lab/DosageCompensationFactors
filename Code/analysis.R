@@ -266,8 +266,11 @@ differential_expression <- function(df, id_col, group_col, expr_col,
                                    TRUE ~ NA))
 }
 
-analyze_low_br_variance <- function (df_expr_buf) {
+analyze_low_br_variance <- function (df_expr_buf, p_thresh = p_threshold) {
+  require(purrr)
   source(here("Code", "buffering_ratio.R"))
+
+  safe_test_func <- possibly(\(x) wilcox.test(x, mu = br_cutoffs$Buffered, alternative = "greater")$p.value, otherwise = NA)
 
   # Per gene summarize Mean, SD, and share of samples buffered across dataset
   mean_var_buf <- df_expr_buf %>%
@@ -279,12 +282,18 @@ analyze_low_br_variance <- function (df_expr_buf) {
               Gene.Buffered.Count = sum(Buffering.GeneLevel.Class == "Buffered"),
               Samples = sum(!is.na(Buffering.GeneLevel.Class)),
               Gene.Buffered.Share = Gene.Buffered.Count / Samples,
-              .groups = "drop")
+              Gene.BR.Test = "one-sided one-sample Wilcoxon signed-rank test",
+              Gene.BR.Test.Mu = br_cutoffs$Buffered,
+              Gene.BR.Test.p = safe_test_func(Buffering.GeneLevel.Ratio),
+              .groups = "drop") %>%
+    mutate(Gene.BR.Test.p.adjusted = p.adjust(Gene.BR.Test.p, method = "BH"))
 
-  # Filter genes by number of samples, share of buffered samples, and mean buffering ratio and rank by SD of BR
+  # Filter genes by number of samples, share of buffered samples, mean buffering ratio, and mean BR significance
+  # Rank by SD of BR
   buf_rank <- mean_var_buf %>%
     filter(Samples > 20) %>%
-    filter(Gene.Buffered.Share > 1 / 3 & Gene.BR.Mean > br_cutoffs$Buffered & Gene.BR.SD < 2) %>%
+    filter(Gene.Buffered.Share > 1 / 3 & Gene.BR.Mean > br_cutoffs$Buffered) %>%
+    filter(Gene.BR.SD < 2 & Gene.BR.Test.p.adjusted < p_thresh) %>%
     add_count(Gene.Symbol) %>%
     filter(n >= length(unique(df_expr_buf$Dataset))) %>%
     mean_norm_rank(Gene.BR.SD, Dataset, Gene.Symbol) %>%
