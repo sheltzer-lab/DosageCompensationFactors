@@ -18,15 +18,15 @@ output_data_dir <- output_data_base_dir
 dir.create(plots_dir, recursive = TRUE)
 
 # === Univariate Ranks Panel ===
-rank_gain <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain.parquet"))
-rank_loss <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss.parquet"))
+rank_gain_all <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain.parquet"))
+rank_loss_all <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss.parquet"))
 rank_loss_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_WGD.parquet"))
 rank_loss_no_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_loss_NoWGD.parquet"))
 rank_gain_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain_WGD.parquet"))
 rank_gain_no_wgd <- read_parquet(here(output_data_dir, "dosage_compensation_factors_univariate_aggregated_gain_NoWGD.parquet"))
 
-rank_univariate <- bind_rows(rank_gain %>% mutate(Condition = "Gain"),
-                             rank_loss %>% mutate(Condition = "Loss"))
+rank_univariate <- bind_rows(rank_gain_all %>% mutate(Condition = "Gain"),
+                             rank_loss_all %>% mutate(Condition = "Loss"))
 rank_loss <- bind_rows(rank_loss_wgd %>% mutate(Condition = "WGD"),
                        rank_loss_no_wgd %>% mutate(Condition = "Non-WGD"))
 rank_gain <- bind_rows(rank_gain_wgd %>% mutate(Condition = "WGD"),
@@ -113,3 +113,31 @@ figure3 <- cowplot::plot_grid(panel_rank, panel_bootstrap,
 cairo_pdf(here(plots_dir, "figure03.pdf"), width = 11, height = 11)
 figure3
 dev.off()
+
+# === Tables ===
+bootstrap_summary <- read_parquet(here(output_data_dir, 'bootstrap_univariate.parquet')) %>%
+  summarize(ROC.AUC.Median = median(DosageCompensation.Factor.ROC.AUC, na.rm = TRUE),
+            Observations.Median = median(DosageCompensation.Factor.Observations, na.rm = TRUE),
+            Bootstrap.Samples = n(),
+            .by = c("DosageCompensation.Factor", "Dataset", "Level", "Event"))
+
+wb <- createWorkbook()
+sheet_rank_gain <- addWorksheet(wb, "Gain")
+sheet_rank_loss <- addWorksheet(wb, "Loss")
+sheet_rank_gain_wgd <- addWorksheet(wb, "Gain, WGD")
+sheet_rank_loss_wgd <- addWorksheet(wb, "Loss, WGD")
+sheet_rank_gain_nonwgd <- addWorksheet(wb, "Gain, Non-WGD")
+sheet_rank_loss_nonwgd <- addWorksheet(wb, "Loss, Non-WGD")
+sheet_bootstrap_summary <- addWorksheet(wb, "Bootstrapped (Summary)")
+writeDataTable(wb = wb, sheet = sheet_rank_gain, x = rank_gain_all)
+writeDataTable(wb = wb, sheet = sheet_rank_loss, x = rank_loss_all)
+writeDataTable(wb = wb, sheet = sheet_rank_gain_wgd, x = rank_gain_wgd)
+writeDataTable(wb = wb, sheet = sheet_rank_loss_wgd, x = rank_loss_wgd)
+writeDataTable(wb = wb, sheet = sheet_rank_gain_nonwgd, x = rank_gain_no_wgd)
+writeDataTable(wb = wb, sheet = sheet_rank_loss_nonwgd, x = rank_loss_no_wgd)
+writeDataTable(wb = wb, sheet = sheet_bootstrap_summary, x = bootstrap_summary)
+saveWorkbook(wb, here(tables_dir, "supplementary_table4.xlsx"), overwrite = TRUE)
+
+sup_table5 <- write_parquet(bootstrap_auc, here(tables_dir, "supplementary_table5.parquet"), version = "2.4")
+
+# TODO: Add field descriptions

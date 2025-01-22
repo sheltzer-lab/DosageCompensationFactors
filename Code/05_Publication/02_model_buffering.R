@@ -361,4 +361,7 @@ writeDataTable(wb = wb, sheet = sheet_depmap, x = df_depmap %>% select(any_of(fi
 writeDataTable(wb = wb, sheet = sheet_procan, x = df_procan %>% select(any_of(fields)))
 writeDataTable(wb = wb, sheet = sheet_cptac, x = df_cptac %>% select(any_of(fields)))
 writeDataTable(wb = wb, sheet = sheet_agg, x = df_agg %>% select(any_of(fields)))
-saveWorkbook(wb, here(tables_dir, "supplementary_table3.xlsx"))
+saveWorkbook(wb, here(tables_dir, "supplementary_table3.xlsx"), overwrite = TRUE)
+
+# TODO: add eAS for cptac
+# TODO: Add field descriptions

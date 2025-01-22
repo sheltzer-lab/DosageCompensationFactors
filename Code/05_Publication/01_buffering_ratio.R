@@ -299,4 +299,7 @@ sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
 wb <- createWorkbook()
 sheet_low_buf <- addWorksheet(wb, "Frequently Buffered Genes")
 writeDataTable(wb = wb, sheet = sheet_low_buf, x = low_var_buf)
-saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"))
+saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"), overwrite = TRUE)
+
+# TODO: Add ORA, add LowVarBuf by gain/loss, add frequently anti-scaling
+# TODO: Add field descriptions

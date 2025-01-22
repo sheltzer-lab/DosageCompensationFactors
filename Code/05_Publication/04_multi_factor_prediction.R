@@ -19,7 +19,9 @@ models_base_dir <- here("Output", "Models")
 dir.create(plots_dir, recursive = TRUE)
 
 # Load SHAP Results
+model_results <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
+oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))
 
 # === Multivariate Model Performance Panel ===
 get_rocs <- function(df_models) {
@@ -139,3 +141,22 @@ figure4 <- cowplot::plot_grid(panel_roc, shap_raw_plots, shap_heatmap_datasets,
 cairo_pdf(here(plots_dir, "figure04.pdf"), width = 12, height = 17)
 figure4
 dev.off()
+
+# === Tables ===
+shap_corr <- shap_results %>%
+  distinct(DosageCompensation.Factor, Model.Dataset, Model.Condition, Model.Variant,
+           SHAP.Factor.Corr, SHAP.Factor.Corr.p, SHAP.Factor.Corr.p.adj, SHAP.Median.Absolute)
+
+wb <- createWorkbook()
+sheet_model_results <- addWorksheet(wb, "Model Performance")
+sheet_oos <- addWorksheet(wb, "Out-of-Sample Prediction")
+sheet_shap <- addWorksheet(wb, "SHAP-Correlation")
+writeDataTable(wb = wb, sheet = sheet_model_results, x = model_results)
+writeDataTable(wb = wb, sheet = sheet_oos, x = oos_summary)
+writeDataTable(wb = wb, sheet = sheet_shap, x = shap_corr)
+saveWorkbook(wb, here(tables_dir, "supplementary_table6.xlsx"), overwrite = TRUE)
+
+sup_table7 <- write_parquet(shap_results, here(tables_dir, "supplementary_table7.parquet"), version = "2.4")
+
+# TODO: Dataset.Dataset is a strange field name (Eval.Dataset?)
+# TODO: Add field descriptions
