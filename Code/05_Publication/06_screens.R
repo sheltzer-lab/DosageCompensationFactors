@@ -4,6 +4,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(magrittr)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -13,8 +14,10 @@ source(here("Code", "analysis.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
+tables_dir <- here(tables_base_dir, "Publication")
 
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
@@ -22,8 +25,8 @@ df_crispr_model_buf <- read_parquet(here(output_data_dir, "model_buffering_gene_
 df_crispr_buf <- read_parquet(here(output_data_dir, "buffering_gene_dependency_depmap.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet")) %>% select(-CellLine.Name)
-common_drug_targets <- read_parquet(here(output_data_dir, "drug_targets_common.parquet"))
-common_drug_mechanisms <- read_parquet(here(output_data_dir, "drug_mechanisms_common.parquet"))
+drug_targets <- read_parquet(here(output_data_dir, "drug_effect_buffering_target.parquet"))
+drug_mechanisms <- read_parquet(here(output_data_dir, "drug_effect_buffering_mechanism.parquet"))
 
 # === Dependency-Buffering Correlation Panel
 color_mapping_driver <- scale_color_manual(values = discrete_color_pal1b, na.value = color_palettes$Missing)
@@ -212,11 +215,12 @@ panel_drug_response_horiz <- cowplot::plot_grid(median_response_plot_buf +
                                                 nrow = 2, rel_heights = c(0.8, 1))
 
 # === Drug Mechanism Panel
-moa_heatmap_diff <- common_drug_mechanisms %>%
-  mutate(Label = map_signif(Corr.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+moa_heatmap_diff <- drug_mechanisms %>%
+  filter(CommonEffect & !is.na(EffectiveIn)) %>%
+  mutate(Label = map_signif(DrugEffect.Buffering.Corr.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
   ggplot() +
   aes(y = Drug.MOA, x = "Drug Effect Log2FC (High - Low Buffering)", label = Label,
-      fill = Log2FC, color = Corr.DrugEffect_Buffering) +
+      fill = DrugEffect.Buffering.Group.Log2FC, color = DrugEffect.Buffering.Corr) +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-0.6, 0.6), breaks = c(-0.6, -0.3, 0, 0.3, 0.6), oob = scales::squish) +
   scale_color_gradientn(colors = bidirectional_color_pal2, space = "Lab",
@@ -238,10 +242,11 @@ moa_heatmap_diff <- common_drug_mechanisms %>%
         legend.title = element_text(hjust = 0.5),
         legend.margin = margin(0,0,5, -200))
 
-moa_heatmap_corr <- common_drug_mechanisms %>%
-  mutate(Label = map_signif(Test.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+moa_heatmap_corr <- drug_mechanisms %>%
+  filter(CommonEffect & !is.na(EffectiveIn)) %>%
+  mutate(Label = map_signif(DrugEffect.Buffering.Group.Log2FC.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
   ggplot() +
-  aes(y = Drug.MOA, x = "Correlation (Drug Effect ~ Sample BR)", fill = Corr.DrugEffect_Buffering, label = Label) +
+  aes(y = Drug.MOA, x = "Correlation (Drug Effect ~ Sample BR)", fill = DrugEffect.Buffering.Corr, label = Label) +
   scale_fill_gradientn(colors = bidirectional_color_pal2, space = "Lab",
                        limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
   geom_tile() +
@@ -256,11 +261,12 @@ panel_drug_mechanism <- cowplot::plot_grid(moa_heatmap_diff, moa_heatmap_corr,
                                            rel_widths = c(1, 0.17))
 
 # === Drug Target Panel
-target_heatmap_diff <- common_drug_targets %>%
-  mutate(Label = map_signif(Corr.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+target_heatmap_diff <- drug_targets %>%
+  filter(CommonEffect & !is.na(EffectiveIn)) %>%
+  mutate(Label = map_signif(DrugEffect.Buffering.Corr.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
   ggplot() +
   aes(x = Drug.Target, y = "Drug Effect Log2FC (High - Low Buffering)", label = Label,
-      fill = Log2FC, color = Corr.DrugEffect_Buffering) +
+      fill = DrugEffect.Buffering.Group.Log2FC, color = DrugEffect.Buffering.Corr) +
   scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab",
                        limits = c(-0.6, 0.6), breaks = c(-0.6, -0.3, 0, 0.3, 0.6), oob = scales::squish) +
   scale_color_gradientn(colors = bidirectional_color_pal2, space = "Lab",
@@ -280,10 +286,11 @@ target_heatmap_diff <- common_drug_targets %>%
         legend.title.position = "top",
         legend.title = element_text(hjust = 0))
 
-target_heatmap_corr <- common_drug_targets %>%
-  mutate(Label = map_signif(Test.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
+target_heatmap_corr <- drug_targets %>%
+  filter(CommonEffect & !is.na(EffectiveIn)) %>%
+  mutate(Label = map_signif(DrugEffect.Buffering.Group.Log2FC.p.adj, thresholds = c(0.05, 0.01, 0.001))) %>%
   ggplot() +
-  aes(x = Drug.Target, y = "Correlation (Drug Effect ~ Model BR)", fill = Corr.DrugEffect_Buffering, label = Label) +
+  aes(x = Drug.Target, y = "Correlation (Drug Effect ~ Model BR)", fill = DrugEffect.Buffering.Corr, label = Label) +
   scale_fill_gradientn(colors = bidirectional_color_pal2, space = "Lab",
                        limits = c(-0.2, 0.2), breaks = c(-0.2, -0.1, 0, 0.1, 0.2), oob = scales::squish) +
   geom_tile() +
@@ -320,3 +327,25 @@ figure6 <- cowplot::plot_grid(figure6_sub2, figure6_sub3,
 cairo_pdf(here(plots_dir, "figure06.pdf"), width = 12, height = 10)
 figure6
 dev.off()
+
+# === Tables ===
+crispr_model_export <- df_crispr_model_buf %>%
+  mutate(ExclusiveEssentiality = case_when(
+    Significant == "Up" & Mean_GroupA < 0.5 & Mean_GroupB > 0.5 ~ "High Buffering",
+    Significant == "Down" & Mean_GroupA > 0.5 & Mean_GroupB < 0.5 ~ "Low Buffering",
+    TRUE ~ NA
+  )) %>%
+  mutate(Dataset = "DepMap", GroupA = "Low Buffering", GroupB = "High Buffering")
+
+wb <- createWorkbook()
+sheet_crispr <- addWorksheet(wb, "CRISPR-KO")
+sheet_drug_effect <- addWorksheet(wb, "Median Drug Effect")
+sheet_moa <- addWorksheet(wb, "Drug Mechanisms")
+sheet_target <- addWorksheet(wb, "Drug Targets")
+sheet_drugs <- addWorksheet(wb, "Drugs")
+writeDataTable(wb = wb, sheet = sheet_crispr, x = crispr_model_export)
+writeDataTable(wb = wb, sheet = sheet_drug_effect, x = median_response_buf)
+saveWorkbook(wb, here(tables_dir, "supplementary_table9.xlsx"), overwrite = TRUE)
+# TODO: Add controls
+
+# TODO: Add sheets for drugs (depmap, procan, mnr), mechanisms, and targets
