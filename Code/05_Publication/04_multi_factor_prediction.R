@@ -4,6 +4,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(ggpubr)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -14,9 +15,11 @@ source(here("Code", "analysis.R"))
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
 models_base_dir <- here("Output", "Models")
-
+tables_dir <- here(tables_base_dir, "Publication")
 
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
+
 
 # Load SHAP Results
 model_results <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))

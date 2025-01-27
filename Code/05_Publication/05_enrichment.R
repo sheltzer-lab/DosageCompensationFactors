@@ -4,6 +4,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(STRINGdb)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -15,8 +16,10 @@ plots_dir <- here(plots_base_dir, "Publication")
 temp_dir <- temp_base_dir
 output_data_dir <- output_data_base_dir
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")
+tables_dir <- here(tables_base_dir, "Publication")
 
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
@@ -27,6 +30,7 @@ metadata_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 
 diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
 diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
+diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
 
 ssgsea_cptac <- read_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
 gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parquet"))
@@ -229,3 +233,24 @@ figure5_02 <- cowplot::plot_grid(panel_2d_enrichment, fig5_02_sub1,
 cairo_pdf(here(plots_dir, "figure05_02.pdf"), width = 12, height = 8)
 figure5_02
 dev.off()
+
+# === Tables ===
+diff_exp_all <- bind_rows(diff_exp_depmap %>% mutate(Dataset = "DepMap"),
+                          diff_exp_procan %>% mutate(Dataset = "ProCan"),
+                          diff_exp_cptac %>% mutate(Dataset = "CPTAC")) %>%
+  select(-CancerDriverMode, -Occurrences, -Label) %>%
+  mutate(GroupA = "Low Buffering", GroupB = "High Buffering")
+
+ssgsea_cptac_export <- ssgsea_cptac %>%
+  left_join(y = metadata_cptac %>% select(starts_with("Model.")), by = "Model.ID") %>%
+  mutate(Dataset = "CPTAC")
+
+wb <- createWorkbook()
+sheet_diffexp <- addWorksheet(wb, "Differential Expression")
+sheet_gsea <- addWorksheet(wb, "GSEA")
+sheet_ssgsea <- addWorksheet(wb, "ssGSEA")
+writeDataTable(wb = wb, sheet = sheet_diffexp, x = diff_exp_all)
+writeDataTable(wb = wb, sheet = sheet_gsea, x = gsea_all)
+writeDataTable(wb = wb, sheet = sheet_ssgsea, x = ssgsea_cptac_export)
+saveWorkbook(wb, here(tables_dir, "supplementary_table8.xlsx"), overwrite = TRUE)
+# TODO: Add control datasets
