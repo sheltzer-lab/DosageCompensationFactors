@@ -337,15 +337,22 @@ crispr_model_export <- df_crispr_model_buf %>%
   )) %>%
   mutate(Dataset = "DepMap", GroupA = "Low Buffering", GroupB = "High Buffering")
 
+drugs_export <- bind_rows(
+  read_parquet(here(output_data_dir, "sensitivity_correlation_depmap_gene_filtered.parquet")) %>% mutate(Dataset = "DepMap"),
+  read_parquet(here(output_data_dir, "sensitivity_correlation_procan_gene_filtered.parquet")) %>% mutate(Dataset = "ProCan"),
+  read_parquet(here(output_data_dir, "sensitivity_correlation_mean-norm-rank.parquet")) %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)")
+)
+
 wb <- createWorkbook()
 sheet_crispr <- addWorksheet(wb, "CRISPR-KO")
 sheet_drug_effect <- addWorksheet(wb, "Median Drug Effect")
+sheet_drugs <- addWorksheet(wb, "Drugs")
 sheet_moa <- addWorksheet(wb, "Drug Mechanisms")
 sheet_target <- addWorksheet(wb, "Drug Targets")
-sheet_drugs <- addWorksheet(wb, "Drugs")
 writeDataTable(wb = wb, sheet = sheet_crispr, x = crispr_model_export)
 writeDataTable(wb = wb, sheet = sheet_drug_effect, x = median_response_buf)
+writeDataTable(wb = wb, sheet = sheet_drugs, x = drugs_export)
+writeDataTable(wb = wb, sheet = sheet_moa, x = drug_mechanisms %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
+writeDataTable(wb = wb, sheet = sheet_target, x = drug_targets %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
 saveWorkbook(wb, here(tables_dir, "supplementary_table9.xlsx"), overwrite = TRUE)
 # TODO: Add controls
-
-# TODO: Add sheets for drugs (depmap, procan, mnr), mechanisms, and targets
