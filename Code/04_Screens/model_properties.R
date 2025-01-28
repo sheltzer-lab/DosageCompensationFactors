@@ -6,6 +6,7 @@ library(stringr)
 library(magrittr)
 library(survival)
 library(survminer)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -22,12 +23,14 @@ reports_dir <- reports_base_dir
 hallmarks_dir <- here(plots_dir, "CPTAC_Hallmarks")
 immunity_dir <- here(plots_dir, "CPTAC_Immunity")
 signature_dir <- here(plots_dir, "CPTAC_Signature")
+tables_dir <- here(tables_base_dir)
 
 dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(hallmarks_dir, recursive = TRUE)
 dir.create(immunity_dir, recursive = TRUE)
 dir.create(signature_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
@@ -500,6 +503,33 @@ bind_rows(df_depmap, df_procan) %>%
   drop_na(TP53.Mutated) %>%
   signif_violin_plot(TP53.Mutated, Model.Buffering.Ratio, facet_col = Dataset) %>%
   save_plot("tp53_mutation_pan-cancer.png")
+
+p53_frequency <- bind_rows(df_depmap, df_procan) %>%
+  left_join(y = tp53_mut, by = "Model.ID") %>%
+  bind_rows(df_cptac %>% mutate(TP53.Mutated = as.logical(TP53_mutation))) %>%
+  drop_na(TP53.Mutated) %>%
+  distinct(Model.ID, Model.Buffering.Ratio, TP53.Mutated, Dataset) %>%
+  #split_by_quantiles(Model.Buffering.Ratio) %>%
+  mutate(Buffering.High = Model.Buffering.Ratio > quantile(Model.Buffering.Ratio, probs = 0.5)[[1]],
+         .by = Dataset) %>%
+  count(Dataset, Buffering.High, TP53.Mutated)
+
+p53_frequency_test <- p53_frequency %>%
+  group_by(Dataset) %>%
+  group_modify(~ {
+    .x %>%
+      df2contingency(Buffering.High, TP53.Mutated) %>%
+      mutex_score() %>%
+      as.data.frame()
+  }) %>%
+  ungroup()
+
+wb <- createWorkbook()
+sheet_freq <- addWorksheet(wb, "Damaging TP53 Mutations")
+sheet_test <- addWorksheet(wb, "Fisher's Exact Test")
+writeDataTable(wb = wb, sheet = sheet_freq, x = p53_frequency)
+writeDataTable(wb = wb, sheet = sheet_test, x = p53_frequency_test)
+saveWorkbook(wb, here(tables_dir, "p53_mutations_buffering.xlsx"), overwrite = TRUE)
 
 # Regression analysis
 ## Age
