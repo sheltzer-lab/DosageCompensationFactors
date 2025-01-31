@@ -383,15 +383,22 @@ high_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 
 low_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.2)[[1]]
 resistant_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.8)[[1]]
 responsive_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.2)[[1]]
+high_as_thresh <- quantile(copy_number$CellLine.AneuploidyScore, probs = 0.8)[[1]]
+low_as_thresh <- quantile(copy_number$CellLine.AneuploidyScore, probs = 0.2)[[1]]
 
 median_response_buf <- median_response %>%
-  left_join(model_buf_agg, by = "Model.ID") %>%
+  left_join(y = model_buf_agg, by = "Model.ID") %>%
+  left_join(y = copy_number, by = "Model.ID") %>%
   mutate(Buffering = case_when(Model.Buffering.MeanNormRank > high_buf_thresh ~ "High",
                             Model.Buffering.MeanNormRank < low_buf_thresh ~ "Low",
-                            TRUE ~ NA)) %>%
-  mutate(DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
+                            TRUE ~ NA),
+         DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
                             Drug.Effect.Median < responsive_thresh ~ "Responsive",
-                            TRUE ~ NA))
+                            TRUE ~ NA),
+         Aneuploidy = case_when(CellLine.AneuploidyScore > high_as_thresh ~ "High",
+                                CellLine.AneuploidyScore < low_as_thresh ~ "Low",
+                                TRUE ~ NA)) %>%
+  write_parquet(here(output_data_dir, "median_drug_effect.parquet"))
 
 median_response_buf %>%
   scatter_plot_reg_corr(Model.Buffering.MeanNormRank, Drug.Effect.Median) %>%
@@ -434,7 +441,6 @@ cowplot::plot_grid(median_response_plot_buf,
 
 ## Check if drug resistance and high buffering are stochastically independent
 response_counts <- median_response_buf %>%
-  left_join(y = copy_number, by = "Model.ID") %>%
   mutate(Buffering = factor(if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
                              "Buffering", "Other"), levels = c("Buffering", "Other")),
          Resistant = factor(if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
@@ -507,20 +513,8 @@ list("No Control" = buf_res_test,
 
 # === Control: Compare drug sensitivity and drug mechanisms between high & low aneuploidy groups
 ## Drug sensitivity by aneuploidy
-high_as_thresh <- quantile(copy_number$CellLine.AneuploidyScore, probs = 0.8)[[1]]
-low_as_thresh <- quantile(copy_number$CellLine.AneuploidyScore, probs = 0.2)[[1]]
-
-median_response_aneuploidy <- median_response %>%
-  left_join(y = copy_number, by = "Model.ID") %>%
+median_response_plot_aneuploidy <- median_response_buf %>%
   drop_na(CellLine.AneuploidyScore) %>%
-  mutate(Aneuploidy = case_when(CellLine.AneuploidyScore > high_as_thresh ~ "High",
-                                CellLine.AneuploidyScore < low_as_thresh ~ "Low",
-                                TRUE ~ NA)) %>%
-  mutate(DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
-                                Drug.Effect.Median < responsive_thresh ~ "Responsive",
-                                TRUE ~ NA))
-
-median_response_plot_aneuploidy <- median_response_aneuploidy %>%
   mutate(Aneuploidy = replace_na(Aneuploidy, "Other")) %>%
   ggplot() +
   aes(x = Aneuploidy, y = Drug.Effect.Median) +
@@ -538,13 +532,10 @@ median_response_plot_aneuploidy %>%
   save_plot("median_drug_effect_aneuploidy.png")
 
 ## Drug sensitivity by buffering (filtered by aneuploidy)
-median_response_buf_aneuploidy <- median_response_buf %>%
-  inner_join(y = copy_number, by = "Model.ID") %>%
+median_response_plot_buf_aneuploidy <- median_response_buf %>%
   drop_na(CellLine.AneuploidyScore, Buffering) %>%
   mutate(Aneuploidy = if_else(CellLine.AneuploidyScore >= median(CellLine.AneuploidyScore),
-                              "High Aneuploidy", "Low Aneuploidy"))
-
-median_response_plot_buf_aneuploidy <- median_response_buf_aneuploidy %>%
+                              "High Aneuploidy", "Low Aneuploidy")) %>%
   ggplot() +
   aes(x = Buffering, y = Drug.Effect.Median, color = Buffering) +
   geom_boxplot() +
@@ -573,7 +564,8 @@ moa_diff_aneuploidy <- copy_number %>%
   split_by_quantiles(CellLine.AneuploidyScore, target_group_col = "Aneuploidy",
                      quantile_low = "20%", quantile_high = "80%") %>%
   differential_expression(Drug.MOA, Aneuploidy, Drug.MFI.Log2FC,
-                          groups = c("Low", "High"), log2fc_thresh = 0.2)
+                          groups = c("Low", "High"), log2fc_thresh = 0.2) %>%
+  write_parquet(here(output_data_dir, "drug_effect_buffering_mechanism_control.parquet"))
 
 moa_diff_aneuploidy %>%
   mutate(Label = if_else(!is.na(Significant), str_trunc(Drug.MOA, 20), NA)) %>%

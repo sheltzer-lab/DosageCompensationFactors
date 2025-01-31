@@ -22,11 +22,14 @@ dir.create(tables_dir, recursive = TRUE)
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
 df_crispr_model_buf <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap.parquet"))
+df_crispr_model_buf_control <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_adherent.parquet"))
 df_crispr_buf <- read_parquet(here(output_data_dir, "buffering_gene_dependency_depmap.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet")) %>% select(-CellLine.Name)
 drug_targets <- read_parquet(here(output_data_dir, "drug_effect_buffering_target.parquet"))
 drug_mechanisms <- read_parquet(here(output_data_dir, "drug_effect_buffering_mechanism.parquet"))
+drug_mechanisms_control <- read_parquet(here(output_data_dir, "drug_effect_buffering_mechanism_control.parquet"))
+median_response_buf <- read_parquet(here(output_data_dir, "median_drug_effect.parquet"))
 
 # === Dependency-Buffering Correlation Panel
 color_mapping_driver <- scale_color_manual(values = discrete_color_pal1b, na.value = color_palettes$Missing)
@@ -150,28 +153,6 @@ ora_down <- df_crispr_model_buf %>%
                      custom_color = color_palettes$DiffExp["Down"])
 
 # === Drug Response Panel
-median_response <- drug_screens %>%
-  semi_join(model_buf_agg, by = "Model.ID") %>%
-  group_by(Model.ID) %>%
-  summarize(Drug.Effect.Median = median(Drug.MFI.Log2FC, na.rm = TRUE),
-            Drug.Effect.Observations = sum(!is.na(Drug.MFI.Log2FC)),
-            .groups = "drop") %>%
-  filter(Drug.Effect.Observations > 1000)
-
-high_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.8)[[1]]
-low_buf_thresh <- quantile(model_buf_agg$Model.Buffering.MeanNormRank, probs = 0.2)[[1]]
-resistant_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.8)[[1]]
-responsive_thresh <- quantile(median_response$Drug.Effect.Median, probs = 0.2)[[1]]
-
-median_response_buf <- median_response %>%
-  left_join(model_buf_agg, by = "Model.ID") %>%
-  mutate(Buffering = case_when(Model.Buffering.MeanNormRank > high_buf_thresh ~ "High",
-                            Model.Buffering.MeanNormRank < low_buf_thresh ~ "Low",
-                            TRUE ~ NA)) %>%
-  mutate(DrugStatus = case_when(Drug.Effect.Median > resistant_thresh ~ "Resistant",
-                            Drug.Effect.Median < responsive_thresh ~ "Responsive",
-                            TRUE ~ NA))
-
 median_response_plot_buf <- median_response_buf %>%
   drop_na(Buffering) %>%
   ggplot() +
@@ -329,13 +310,24 @@ figure6
 dev.off()
 
 # === Tables ===
-crispr_model_export <- df_crispr_model_buf %>%
+crispr_model_all <- df_crispr_model_buf %>%
   mutate(ExclusiveEssentiality = case_when(
     Significant == "Up" & Mean_GroupA < 0.5 & Mean_GroupB > 0.5 ~ "High Buffering",
     Significant == "Down" & Mean_GroupA > 0.5 & Mean_GroupB < 0.5 ~ "Low Buffering",
     TRUE ~ NA
   )) %>%
-  mutate(Dataset = "DepMap", GroupA = "Low Buffering", GroupB = "High Buffering")
+  mutate(Dataset = "DepMap") %>%
+  bind_rows(df_crispr_model_buf_control %>% mutate(Dataset = "DepMap (adherent control)")) %>%
+  mutate(GroupA = "Low Buffering", GroupB = "High Buffering") %>%
+  arrange(Significant, ExclusiveEssentiality)
+
+crispr_model_common <- crispr_model_all %>%
+  drop_na(Significant) %>%
+  filter(!is.na(ExclusiveEssentiality) | Dataset == "DepMap (adherent control)") %>%
+  add_count(Gene.Symbol, Significant) %>%
+  filter(n == 2) %>%
+  select(-n) %>%
+  arrange(Significant, Gene.Symbol)
 
 drugs_export <- bind_rows(
   read_parquet(here(output_data_dir, "sensitivity_correlation_depmap_gene_filtered.parquet")) %>% mutate(Dataset = "DepMap"),
@@ -343,16 +335,22 @@ drugs_export <- bind_rows(
   read_parquet(here(output_data_dir, "sensitivity_correlation_mean-norm-rank.parquet")) %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)")
 )
 
+drug_mechanisms_control <- drug_mechanisms_control %>%
+  mutate(GroupA = "Low Aneuploidy", GroupB = "High Aneuploidy")
+
 wb <- createWorkbook()
 sheet_crispr <- addWorksheet(wb, "CRISPR-KO")
+sheet_crispr_common <- addWorksheet(wb, "CRISPR-KO (common)")
 sheet_drug_effect <- addWorksheet(wb, "Median Drug Effect")
 sheet_drugs <- addWorksheet(wb, "Drugs")
 sheet_moa <- addWorksheet(wb, "Drug Mechanisms")
+sheet_moa_control <- addWorksheet(wb, "Drug Mechanisms (control)")
 sheet_target <- addWorksheet(wb, "Drug Targets")
-writeDataTable(wb = wb, sheet = sheet_crispr, x = crispr_model_export)
+writeDataTable(wb = wb, sheet = sheet_crispr, x = crispr_model_all)
+writeDataTable(wb = wb, sheet = sheet_crispr_common, x = crispr_model_common)
 writeDataTable(wb = wb, sheet = sheet_drug_effect, x = median_response_buf)
 writeDataTable(wb = wb, sheet = sheet_drugs, x = drugs_export)
 writeDataTable(wb = wb, sheet = sheet_moa, x = drug_mechanisms %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
+writeDataTable(wb = wb, sheet = sheet_moa_control, x = drug_mechanisms_control)
 writeDataTable(wb = wb, sheet = sheet_target, x = drug_targets %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
 saveWorkbook(wb, here(tables_dir, "supplementary_table9.xlsx"), overwrite = TRUE)
-# TODO: Add controls
