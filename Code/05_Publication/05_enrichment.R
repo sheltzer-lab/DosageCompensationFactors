@@ -31,6 +31,7 @@ metadata_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
 diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
 diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
 diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
+diff_exp_control <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
 
 ssgsea_cptac <- read_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
 gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parquet"))
@@ -237,9 +238,18 @@ dev.off()
 # === Tables ===
 diff_exp_all <- bind_rows(diff_exp_depmap %>% mutate(Dataset = "DepMap"),
                           diff_exp_procan %>% mutate(Dataset = "ProCan"),
+                          diff_exp_control %>% mutate(Dataset = "ProCan (adherent control)"),
                           diff_exp_cptac %>% mutate(Dataset = "CPTAC")) %>%
   select(-CancerDriverMode, -Occurrences, -Label) %>%
   mutate(GroupA = "Low Buffering", GroupB = "High Buffering")
+
+diff_exp_common <- diff_exp_all %>%
+  drop_na(Significant) %>%
+  filter(Dataset != "CPTAC") %>%
+  add_count(Gene.Symbol, Significant) %>%
+  filter(n == 3) %>%
+  arrange(Gene.Symbol) %>%
+  select(-n)
 
 ssgsea_cptac_export <- ssgsea_cptac %>%
   left_join(y = metadata_cptac %>% select(starts_with("Model.")), by = "Model.ID") %>%
@@ -247,10 +257,18 @@ ssgsea_cptac_export <- ssgsea_cptac %>%
 
 wb <- createWorkbook()
 sheet_diffexp <- addWorksheet(wb, "Differential Expression")
+sheet_diffexp_common <- addWorksheet(wb, "DiffExp (common genes)")
 sheet_gsea <- addWorksheet(wb, "GSEA")
 sheet_ssgsea <- addWorksheet(wb, "ssGSEA")
 writeDataTable(wb = wb, sheet = sheet_diffexp, x = diff_exp_all)
+writeDataTable(wb = wb, sheet = sheet_diffexp_common, x = diff_exp_common)
 writeDataTable(wb = wb, sheet = sheet_gsea, x = gsea_all)
 writeDataTable(wb = wb, sheet = sheet_ssgsea, x = ssgsea_cptac_export)
 saveWorkbook(wb, here(tables_dir, "supplementary_table8.xlsx"), overwrite = TRUE)
-# TODO: Add control datasets
+
+# === Supplemental Figures ===
+string_common <- diff_exp_common %>%
+  summarize(Log2FC.Mean = mean(Log2FC), .by = c("Gene.Symbol", "Significant")) %>%
+  #filter(Significant == "Up") %>%
+  create_string_network(Gene.Symbol, Log2FC.Mean, string_db, min_score = 900)
+
