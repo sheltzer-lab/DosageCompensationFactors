@@ -37,14 +37,21 @@ expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac
 # === Analyze Dosage Compensation on Cell Line level ===
 # TODO: Calculate confidence score based on SD, Observations & Gene-Level Confidence
 analyze_model_buffering <- function(df, buffering_ratio_col, model_col = Model.ID,
-                                    aneuploidy_col = CellLine.AneuploidyScore) {
+                                    aneuploidy_col = CellLine.AneuploidyScore,
+                                    cn_col = Gene.CopyNumber, cn_base_col = Gene.CopyNumber.Baseline) {
   model_buf_avg <- df %>%
-    select({ { model_col } }, { { buffering_ratio_col } }, { { aneuploidy_col } }) %>%
+    group_by({ { model_col } }) %>%
+    mutate(CN_Gain = if_else({ { cn_col } } > { { cn_base_col } }, 1, 0),
+           CN_Loss = if_else({ { cn_col } } < { { cn_base_col } }, 1, 0)) %>%
+    select({ { model_col } }, { { buffering_ratio_col } }, { { aneuploidy_col } }, CN_Gain, CN_Loss) %>%
     group_by({ { model_col } }) %>%
     summarize(Model.Buffering.Ratio = mean({ { buffering_ratio_col } }, na.rm = TRUE),
               Observations = sum(!is.na({ { buffering_ratio_col } })),
               SD = sd({ { buffering_ratio_col } }, na.rm = TRUE),
-              AneuploidyScore = first({ { aneuploidy_col } })) %>%
+              AneuploidyScore = first({ { aneuploidy_col } }),
+              Gene.CopyNumber.Gain.Count = sum(CN_Gain, na.rm = TRUE),
+              Gene.CopyNumber.Loss.Count = sum(CN_Loss, na.rm = TRUE),
+              Gene.CopyNumber.GainLossRatio = Gene.CopyNumber.Gain.Count / (Gene.CopyNumber.Loss.Count + Gene.CopyNumber.Gain.Count)) %>%
     filter(Observations > 50) %>%
     mutate(Model.Buffering.Ratio.ZScore = z_score(Model.Buffering.Ratio),
            Rank = as.integer(rank(Model.Buffering.Ratio.ZScore)),
@@ -57,7 +64,8 @@ analyze_model_buffering <- function(df, buffering_ratio_col, model_col = Model.I
 filter_samples <- function(df_expr_buf, aneuploidy_col = CellLine.AneuploidyScore, ploidy_col = CellLine.Ploidy) {
   df_expr_buf %>%
     filter({ { aneuploidy_col } } > 0 | round({ { ploidy_col } }) != 2) %>%  # Remove non-aneuploid cell lines
-    filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
+    filter(abs(log2(Gene.CopyNumber / Gene.CopyNumber.Baseline)) > 0.3) %>% # Remove low copy number ratio observations
+    # filter_cn_diff(remove_between = c(-0.01, 0.02)) %>% # Remove noise from discontinuity points of buffering ratio
     # filter(Buffering.GeneLevel.Class != "Anti-Scaling") %>%
     filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>% # Remove BR estimates with low confidence
     drop_na(Buffering.GeneLevel.Ratio)
@@ -70,16 +78,17 @@ add_cellline_names <- function (df, df_cl = df_celllines) {
 }
 
 ## Filter datasets
+selected_columns <- c("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession", "Gene.CopyNumber",
+                      "Gene.CopyNumber.Baseline", "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore", "Dataset")
+
 expr_buf_procan_filtered <- expr_buf_procan %>%
   filter_samples() %>%
-  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
-         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore", "Dataset") %>%
+  select(all_of(selected_columns)) %>%
   drop_na()
 
 expr_buf_depmap_filtered <- expr_buf_depmap %>%
   filter_samples() %>%
-  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
-         "Buffering.GeneLevel.Ratio", "CellLine.AneuploidyScore", "Dataset") %>%
+  select(all_of(selected_columns)) %>%
   drop_na()
 
 expr_buf_cptac_filtered <- expr_buf_cptac %>%
@@ -87,14 +96,14 @@ expr_buf_cptac_filtered <- expr_buf_cptac %>%
   mutate(Dummy.AneuploidyScore = 0,
          Dummy.Ploidy = 0) %>%
   filter_samples(aneuploidy_col = Dummy.AneuploidyScore, ploidy_col = Dummy.Ploidy) %>%
-  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession",
+  select("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession", "Gene.CopyNumber", "Gene.CopyNumber.Baseline",
          "Buffering.GeneLevel.Ratio", "Dummy.AneuploidyScore", "Dataset") %>%
   drop_na()
 
 ## Join cell line datasets
 expr_buf_joined <- expr_buf_procan_filtered %>%
   rename(ProCan = Buffering.GeneLevel.Ratio) %>%
-  select(-CellLine.AneuploidyScore) %>%
+  select(-CellLine.AneuploidyScore, -Gene.CopyNumber, -Gene.CopyNumber.Baseline) %>%
   inner_join(y = expr_buf_depmap_filtered %>% rename(DepMap = Buffering.GeneLevel.Ratio),
              by = c("Model.ID", "Gene.Symbol", "Protein.Uniprot.Accession"),
              relationship = "one-to-one", na_matches = "never")

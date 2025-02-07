@@ -135,7 +135,7 @@ candidate_genes <- c("EGFR", "ITGAV", "CDK4", "CDK6", "ELMO2", "BRAT1",
 expr_buf_procan %>%
   filter(Gene.Symbol == "EGFR") %>%
   filter(ChromosomeArm.CopyNumber < ChromosomeArm.CopyNumber.Baseline) %>%
-  inner_join(y = df_growth, by = "CellLine.Name",
+  inner_join(y = df_growth, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
   scatter_plot_reg_corr(Buffering.ChrArmLevel.Ratio, CellLine.GrowthRatio,
@@ -144,7 +144,7 @@ expr_buf_procan %>%
 expr_buf_procan %>%
   filter(Gene.Symbol == "ITGAV") %>%
   filter(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline) %>%
-  inner_join(y = df_growth, by = "CellLine.Name",
+  inner_join(y = df_growth, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
   scatter_plot_reg_corr(Buffering.ChrArmLevel.Ratio, CellLine.GrowthRatio,
@@ -155,10 +155,10 @@ expr_buf_procan %>%
   filter(Gene.ChromosomeArm == Gene.ChromosomeArm[Gene.Symbol == "EGFR"]) %>%
   filter(Gene.Symbol != "EGFR") %>%
   filter(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline) %>%
-  group_by(CellLine.Name, CellLine.WGD) %>%
+  group_by(Model.ID, CellLine.WGD) %>%
   summarize(MeanBR = mean(Buffering.ChrArmLevel.Ratio, na.rm = TRUE)) %>%
   ungroup() %>%
-  inner_join(y = df_growth, by = "CellLine.Name",
+  inner_join(y = df_growth, by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
   scatter_plot_reg_corr(MeanBR, CellLine.GrowthRatio,
@@ -169,7 +169,7 @@ prolif_gene_corr <- bind_rows(expr_buf_procan, expr_buf_depmap) %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
   mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline,
                        "Gain", "Loss")) %>%
-  inner_join(y = df_growth, by = "CellLine.Name",
+  inner_join(y = df_growth, by = "Model.ID",
              relationship = "many-to-one", na_matches = "never") %>%
   group_by(Dataset, Gene.Symbol, CNV) %>%
   mutate(n = min(c(sum(!is.na(Buffering.GeneLevel.Ratio)),
@@ -195,9 +195,9 @@ prolif_chr_corr <- bind_rows(expr_buf_procan, expr_buf_depmap) %>%
   mutate(CNA = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline,
                        "Gain", "Loss")) %>%
   # filter(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline) %>%
-  inner_join(y = df_growth, by = "CellLine.Name",
+  inner_join(y = df_growth, by = "Model.ID",
              relationship = "many-to-one", na_matches = "never") %>%
-  group_by(Dataset, Gene.Chromosome, CellLine.Name) %>%
+  group_by(Dataset, Gene.Chromosome, Model.ID) %>%
   mutate(MeanBR = mean(Buffering.ChrArmLevel.Ratio, na.rm = TRUE),
          CellLine.GrowthRatio = first(CellLine.GrowthRatio)) %>%
   ungroup() %>%
