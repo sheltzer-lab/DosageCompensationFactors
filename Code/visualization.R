@@ -226,7 +226,7 @@ scatter_plot_reg_corr <- function(df, x_col, y_col, color_col = NULL, cor_method
                                   cor_symbol = utf8_rho, label_coords = NULL, point_size = 1,
                                   x_lab = NULL, y_lab = NULL, title_prefix = NULL) {
   df_ <- df %>%
-    rename(x = { { x_col } }, y = { { y_col } })
+    mutate(x = { { x_col } }, y = { { y_col } })
 
   cor_result <- df_ %>%
     rstatix::cor_test(x, y, method = cor_method)

@@ -22,11 +22,12 @@ dir.create(plots_dir, recursive = TRUE)
 dir.create(output_data_dir, recursive = TRUE)
 dir.create(reports_dir, recursive = TRUE)
 
-df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet"))
+df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
+  select(Model.ID, CellLine.Replicates, CellLine.GrowthRatio, CellLine.SeedingDensity)
 df_growth_chronos <- read_parquet(here(output_data_dir, "cellline_growth_chronos.parquet")) %>%
   add_count(CellLine.Name) %>%
   filter(n == 1) %>%
-  select(-n)
+  select(Model.ID, CellLine.GrowthRatio)
 cellline_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 cellline_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
@@ -35,17 +36,14 @@ cellline_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggre
 # Load copy number dataset to obtain metadata
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet"))
 
-# ToDo: Use Cell Line ID instead of cell line name
-
 merge_datasets <- function(cellline_dc_dataset, copy_number_dataset, prolif_dataset) {
   cellline_cn_metadata <- copy_number_dataset %>%
-    distinct(CellLine.Name, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
+    distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
 
   df_prolif <- cellline_dc_dataset %>%
-    # TODO: Join by Model.ID
-    inner_join(y = prolif_dataset, by = "CellLine.Name",
+    inner_join(y = prolif_dataset, by = "Model.ID",
                relationship = "one-to-one", na_matches = "never") %>%
-    inner_join(y = cellline_cn_metadata, by = "CellLine.Name",
+    inner_join(y = cellline_cn_metadata, by = "Model.ID",
                relationship = "one-to-one", na_matches = "never") %>%
     mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
 
@@ -87,8 +85,16 @@ create_plots <- function (df_prolif, color_col = NULL, dataset_name = NULL, cond
 
   growth_change <- df_median$High / df_median$Low
 
+  # Control: Correlation of aneuploidy score with growth ratio
+  as_plot <- df_prolif %>%
+    scatter_plot_reg_corr(CellLine.AneuploidyScore, CellLine.GrowthRatio,
+                          point_size = 2, color_col = { { color_col } },
+                          title_prefix = title) %>%
+    save_plot(paste0("aneuploidy_proliferation_", filename_suffix, ".png"))
+
   return(list(scatter_plot = prolif_plot, corr = dc_prolif_corr,
-              violin_plot = dc_growth_violin, growth_change = growth_change))
+              violin_plot = dc_growth_violin, growth_change = growth_change,
+              aneuploidy_plot = as_plot))
 }
 
 proliferation_analysis <- function (cellline_dc_dataset, copy_number_dataset, prolif_dataset, dataset_name = NULL) {
