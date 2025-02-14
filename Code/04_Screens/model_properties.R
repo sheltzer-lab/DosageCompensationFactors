@@ -140,7 +140,7 @@ save_signif_continuous_plots <- function (plots, dir = plots_dir, p_thresh = p_t
 data_density_procan <- df_procan %>%
   data_density()
 
-data_density_depmap <- df_procan %>%
+data_density_depmap <- df_depmap %>%
   data_density()
 
 data_density_cptac <- df_cptac %>%
@@ -154,8 +154,9 @@ cols_procan <- c("tissue_status", "cancer_type", "msi_status",
                  "smoking_status", "gender", "ethnicity",
                  "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
 
-cols_depmap <- c("PrimaryOrMetastasis", "OncotreeSubtype", "Sex",
-                 "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
+cols_depmap <- c("PrimaryOrMetastasis", "OncotreeLineage", "OncotreePrimaryDisease", "OncotreeSubtype", "Sex",
+                 "PatientMolecularSubtype", "PatientTreatmentStatus", "PatientTreatmentDetails",
+                  "GrowthPattern", "AgeCategory", "WGD", "Near-Tetraploid", "Aneuploidy Quantiles", "PatientRace")
 
 violin_plots_procan <- df_procan %>%
   plot_categorical_properties(cols_procan)
@@ -495,6 +496,54 @@ df_cptac %>%
 df_cptac %>%
   drop_na(Histologic_Grade) %$%
   pairwise.wilcox.test(Model.Buffering.Ratio, Histologic_Grade, p.adjust.method = "BH")
+
+## Age Category
+df_depmap %>%
+  filter(AgeCategory %in% c("Pediatric", "Adult")) %>%
+  signif_beeswarm_plot(AgeCategory, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("age-category_depmap.png")
+### Aneuploidy Controlled (max AS)
+df_depmap %>%
+  filter(AgeCategory %in% c("Pediatric", "Adult")) %>%
+  filter(CellLine.AneuploidyScore <= max(df_depmap[df_depmap$AgeCategory == "Pediatric",]$CellLine.AneuploidyScore)) %>%
+  signif_beeswarm_plot(AgeCategory, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("age-category_low-aneuploidy_depmap.png")
+
+## Growth Pattern
+### DepMap
+df_depmap %>%
+  filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
+  signif_beeswarm_plot(GrowthPattern, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("growth-pattern_depmap.png")
+### DepMap, Aneuploidy Controlled (max AS)
+df_depmap %>%
+  filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
+  filter(CellLine.AneuploidyScore <= max(df_depmap[df_depmap$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)) %>%
+  signif_beeswarm_plot(GrowthPattern, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("growth-pattern_low-aneuploidy_depmap.png")
+### Procan
+df_procan %>%
+  filter(growth_properties %in% c("Adherent", "Suspension")) %>%
+  signif_beeswarm_plot(growth_properties, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("growth-pattern_procan.png")
+### Procan, Aneuploidy Controlled (max AS)
+df_procan %>%
+  filter(growth_properties %in% c("Adherent", "Suspension")) %>%
+  filter(CellLine.AneuploidyScore <= max(df_procan[df_procan$growth_properties == "Suspension",]$CellLine.AneuploidyScore)) %>%
+  signif_beeswarm_plot(growth_properties, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("growth-pattern_low-aneuploidy_procan.png")
 
 ## TP53 Mutation
 bind_rows(df_depmap, df_procan) %>%
