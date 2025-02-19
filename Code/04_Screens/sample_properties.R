@@ -150,7 +150,7 @@ cancers_depmap <- df_depmap %>%
   distinct(OncotreeLineage, OncotreePrimaryDisease, OncotreeSubtype, OncotreeCode)
 
 # Plot distributions for categorical variables
-cols_procan <- c("tissue_status", "cancer_type", "msi_status",
+cols_procan <- c("tissue_status", "cancer_type", "msi_status", "sample_treatment",
                  "smoking_status", "gender", "ethnicity",
                  "WGD", "Near-Tetraploid", "Aneuploidy Quantiles")
 
