@@ -183,7 +183,7 @@ calculate_pca <- function(df, sample_col, sample_group_col, value_group_col, val
 }
 
 # Resample the target distribution in a stratified way using a reference distribution,
-# so that both distributions approximately the same
+# so that both distributions are approximately the same
 equalize_distributions <- function(df_reference, df_target, value_col,
                                    with_replacement = TRUE, num_buckets = 10) {
   set.seed(42)

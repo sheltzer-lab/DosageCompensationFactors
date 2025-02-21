@@ -215,14 +215,14 @@ leuk_plot <- df_depmap %>%
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test, count_y = 0)
 
-leuk_plot_low <- df_depmap %>%
+leuk_plot_low_as <- df_depmap %>%
   filter(CellLine.AneuploidyScore <= max_aneuploidy_leuk) %>%
   mutate(`Myeloid / Lymphoid` = if_else(OncotreeCode %in% leukemia_codes, "Myeloid /\nLymphoid", "Other")) %>%
   signif_beeswarm_plot(`Myeloid / Lymphoid`, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test, count_y = 0)
 
-leuk_poster <- leuk_plot +
+leuk_plot <- leuk_plot +
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
         legend.position = "top",
         legend.title = element_text(hjust = 0.5),
@@ -234,7 +234,7 @@ leuk_poster <- leuk_plot +
                          limits = c(min_aneuploidy, max_aneuploidy),
                          breaks = c(min_aneuploidy, max_aneuploidy))
 
-leuk_poster_low <- leuk_plot_low +
+leuk_plot_low_as <- leuk_plot_low_as +
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
         legend.position = "top",
         legend.title = element_text(hjust = 0.5),
@@ -247,9 +247,40 @@ leuk_poster_low <- leuk_plot_low +
                          breaks = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy),
                          labels = c(min_aneuploidy, max_aneuploidy_leuk[["90%"]], max_aneuploidy))
 
-panel_leuk <- cowplot::plot_grid(leuk_poster,
-                                 leuk_poster_low,
+panel_leuk <- cowplot::plot_grid(leuk_plot,
+                                 leuk_plot_low_as,
                                  nrow = 1, ncol = 2)
+
+# === Growth Pattern Panel ===
+df_low_as <- df_depmap %>%
+  filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
+  filter(CellLine.AneuploidyScore <= min(
+    max(df_depmap[df_depmap$GrowthPattern == "Adherent",]$CellLine.AneuploidyScore),
+    max(df_depmap[df_depmap$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)
+  )) %>%
+  mutate(Condition = "Low Aneuploidy")
+df_split_growth <- split(df_depmap, df_depmap$GrowthPattern)
+df_equal_as <- df_split_growth$Suspension %>%
+  equalize_distributions(df_split_growth$Adherent, CellLine.AneuploidyScore,
+                         with_replacement = FALSE, num_buckets = 6) %>%
+  mutate(Condition = "Equal Aneuploidy")
+
+panel_growth <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_low_as, df_equal_as) %>%
+  mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
+  filter(GrowthPattern != "Unknown") %>%
+  ggplot() +
+  aes(x = GrowthPattern, y = Model.Buffering.Ratio) +
+  geom_boxplot(outliers = FALSE, size = 1, alpha = 0) +
+  stat_summary(aes(y = 0.2), fun.data = \(x) show.n(x, prefix = "n="),
+               geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("Adherent", "Suspension")),
+              map_signif_level = print_signif, y_position = 1, size = 1,
+              tip_length = 0, extend_line = -0.05, color = "black") +
+  labs(x = "Growth Pattern", y = "Sample Buffering Ratio") +
+  facet_grid(~Condition, scales = "free_x", space = "free_x")
+
+## Validate that aneuploidy score distributions are equal
+wilcox.test(CellLine.AneuploidyScore ~ GrowthPattern, data = df_equal_as)
 
 # === WGD & Aneuploidy Score ===
 df_procan_wgd <- df_procan %>%
@@ -324,14 +355,15 @@ panel_wgd <- cowplot::insert_yaxis_grob(wgd_panel_pre, br_density_panel, positio
 cowplot::ggdraw(panel_wgd)
 
 # === Combine Panels into Figure ===
-figure2_sub1 <- cowplot::plot_grid(panel_wgd, panel_leuk,
-                                   nrow = 1, ncol = 2, labels = c("D", "E"))
+figure2_sub1 <- cowplot::plot_grid(panel_wgd, panel_growth,
+                                   nrow = 1, ncol = 2, rel_widths = c(0.7, 1),
+                                   labels = c("D", "E"))
 
 figure2 <- cowplot::plot_grid(panel_celllines_agg, panel_types, figure2_sub1,
                               labels = c("", "C", ""),
-                              nrow = 3, ncol = 1, rel_heights = c(0.9, 0.35, 1))
+                              nrow = 3, ncol = 1, rel_heights = c(1, 0.4, 1))
 
-cairo_pdf(here(plots_dir, "figure02.pdf"), width = 12, height = 13)
+cairo_pdf(here(plots_dir, "figure02.pdf"), width = 12, height = 12)
 figure2
 dev.off()
 

@@ -529,6 +529,15 @@ df_depmap %>%
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
   save_plot("growth-pattern_low-aneuploidy_depmap.png")
+### DepMap, Aneuploidy Controlled (equal AS)
+df_split_growth_depmap <- split(df_depmap, df_depmap$GrowthPattern)
+df_split_growth_depmap$Suspension %>%
+  equalize_distributions(df_split_growth_depmap$Adherent, CellLine.AneuploidyScore,
+                         with_replacement = FALSE, num_buckets = 5) %>%
+  signif_beeswarm_plot(GrowthPattern, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("growth-pattern_equal-aneuploidy_depmap.png")
 ### Procan
 df_procan %>%
   filter(growth_properties %in% c("Adherent", "Suspension")) %>%
@@ -544,6 +553,15 @@ df_procan %>%
                        color_col = CellLine.AneuploidyScore, cex = 1,
                        test = wilcox.test) %>%
   save_plot("growth-pattern_low-aneuploidy_procan.png")
+### ProCan, Aneuploidy Controlled (equal AS)
+df_split_growth_procan <- split(df_procan, df_procan$growth_properties)
+df_split_growth_procan$Suspension %>%
+  equalize_distributions(df_split_growth_procan$Adherent, CellLine.AneuploidyScore,
+                         with_replacement = FALSE, num_buckets = 5) %>%
+  signif_beeswarm_plot(growth_properties, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, cex = 1,
+                       test = wilcox.test) %>%
+  save_plot("growth-pattern_equal-aneuploidy_procan.png")
 
 ## TP53 Mutation
 bind_rows(df_depmap, df_procan) %>%
