@@ -187,17 +187,34 @@ ssgsea_cptac_filtered %>%
 
 # === Proliferation ===
 df_prolif <- df_agg %>%
-  select(Model.ID, Model.Buffering.MeanNormRank, CellLine.WGD) %>%
+  select(Model.ID, Model.Buffering.MeanNormRank, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy) %>%
   inner_join(y = df_growth, by = "Model.ID") %>%
-  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"))
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD"),
+         Model.Buffering.Adjusted = Model.Buffering.MeanNormRank / (1+CellLine.AneuploidyScore/max(CellLine.AneuploidyScore)),
+         Aneuploidy = factor(if_else(CellLine.AneuploidyScore > median(CellLine.AneuploidyScore),
+                                     "High Aneuploidy", "Low Aneuploidy"), levels = c("Low Aneuploidy", "High Aneuploidy")))
 
 cor_prolif <- cor.test(df_prolif$Model.Buffering.MeanNormRank,
                        df_prolif$CellLine.GrowthRatio, method = "spearman")
 
-panel_prolif_base <- df_prolif %>%
+cor_prolif_adj <- cor.test(df_prolif$Model.Buffering.Adjusted,
+                           df_prolif$CellLine.GrowthRatio, method = "spearman")
+
+cor_prolif_as <- cor.test(df_prolif$CellLine.AneuploidyScore,
+                          df_prolif$CellLine.GrowthRatio, method = "spearman")
+
+df_prolif %>%
+  group_by(WGD) %>%
+  rstatix::cor_test(Model.Buffering.MeanNormRank, CellLine.GrowthRatio, method = "spearman")
+
+df_prolif %>%
+  group_by(WGD) %>%
+  rstatix::cor_test(CellLine.AneuploidyScore, CellLine.GrowthRatio, method = "spearman")
+
+panel_prolif_buf <- df_prolif %>%
   ggplot() +
   aes(x = Model.Buffering.MeanNormRank, y = CellLine.GrowthRatio, color = WGD) +
-  geom_point(size = 2) +
+  geom_point(aes(shape = Aneuploidy), size = 3) +
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0, y = 14, hjust = 0, size = 5,
            label = paste0(print_corr(cor_prolif$estimate), ", ", print_signif(cor_prolif$p.value))) +
@@ -209,7 +226,32 @@ panel_prolif_base <- df_prolif %>%
         legend.justification = c("left", "top"),
         legend.title = element_blank(),
         legend.text = element_text(size = base_size),
+        legend.background = element_rect(fill = alpha('white', 2/3)),
+        legend.direction = "horizontal",
+        legend.spacing.y = unit(-10, "pt"))
+
+panel_prolif_as <- df_prolif %>%
+  ggplot() +
+  aes(x = CellLine.AneuploidyScore, y = CellLine.GrowthRatio, color = WGD) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm, color = "dimgrey") +
+  annotate("text", x = 0, y = 14, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_prolif_as$estimate), ", ", print_signif(cor_prolif_as$p.value))) +
+  # stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE, p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
+  scale_color_manual(values = color_palettes$WGD) +
+  labs(x = "Aneuploidy Score", y = "Growth Ratio (Day4/Day1)") +
+  theme(legend.position = c("left", "top"),
+        legend.position.inside = c(0.01, 0.90),
+        legend.justification = c("left", "top"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = base_size),
         legend.background = element_rect(fill = alpha('white', 2/3)))
+
+## Multiple Linear Regression with variable standardization
+reg_as_br <- lm(CellLine.GrowthRatio ~ scale(Model.Buffering.MeanNormRank) +
+  scale(CellLine.AneuploidyScore) + scale(CellLine.WGD),
+                data = df_prolif)
+summary(reg_as_br)
 
 # === Combine Panels into Figure ===
 figure5_01 <- cowplot::plot_grid(panel_volcano, ora_down, ora_up,
@@ -223,7 +265,7 @@ dev.off()
 
 # D & E reserved for STRING clusters
 
-fig5_02_sub1 <- cowplot::plot_grid(panel_proteotox, panel_prolif_base,
+fig5_02_sub1 <- cowplot::plot_grid(panel_proteotox, panel_prolif_buf,
                                    nrow = 2, ncol = 1, labels = c("G", "H"))
 
 figure5_02 <- cowplot::plot_grid(panel_2d_enrichment, fig5_02_sub1,
