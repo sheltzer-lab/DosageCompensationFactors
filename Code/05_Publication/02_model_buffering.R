@@ -152,9 +152,11 @@ panel_celllines_agg <- cowplot::plot_grid(panel_celllines, panel_agg,
 
 # === Cancer Types Panel ===
 df_cancer_heatmap <- bind_rows(df_depmap, df_procan, df_cptac) %>%
+  mutate(Suspension = GrowthPattern == "Suspension") %>%
   group_by(Dataset, OncotreeCode) %>%
   summarize(Mean.BR = mean(Model.Buffering.Ratio, na.rm = TRUE),
             Mean.AS = mean(CellLine.AneuploidyScore, na.rm = TRUE),
+            Mean.Suspension = mean(Suspension, na.rm = TRUE),
             .groups = "drop") %>%
   mutate(OncotreeCode = fct_reorder(OncotreeCode, Mean.BR)) %>%
   drop_na(OncotreeCode) %>%
@@ -183,13 +185,16 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
         legend.title = element_text(hjust = 0))
 
 cancer_heatmap_as <- df_cancer_heatmap %>%
-  group_by(OncotreeCode) %>%
+  drop_na() %>%
   summarize(Mean.AS = mean(Mean.AS, na.rm = TRUE),
-            Dataset = "Mean Aneuploidy") %>%
+            Suspension = as.numeric(max(Mean.Suspension) >= 0.2),
+            Dataset = "Mean Aneuploidy", .by = "OncotreeCode") %>%
   ggplot() +
   aes(x = OncotreeCode, y = Dataset, fill = Mean.AS) +
   geom_tile() +
+  geom_point(aes(alpha = Suspension), color = "white", size = 3, shape = 18) +
   scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
+  scale_alpha_continuous(range = c(0, 1)) +
   theme_void() +
   labs(x = NULL, y = NULL) +
   theme(axis.text.y = element_blank(),
