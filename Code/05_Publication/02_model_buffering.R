@@ -79,10 +79,13 @@ df_depmap <- model_buf_depmap %>%
   mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
 
 df_procan <- model_buf_procan %>%
-  inner_join(y = df_model_depmap, by = "Model.ID",
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = df_model_procan %>% select(Model.ID, growth_properties), by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
-  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
+  mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2))) %>%
+  rename(GrowthPattern = growth_properties)
 
 df_cptac <- model_buf_cptac %>%
   inner_join(y = df_model_cptac, by = "Model.ID",
@@ -165,17 +168,25 @@ df_cancer_heatmap <- bind_rows(df_depmap, df_procan, df_cptac) %>%
   mutate(Dataset = factor(Dataset, levels = rev(dataset_order)))
 
 cancer_heatmap_br <- df_cancer_heatmap %>%
+  mutate(Suspension = case_when(Mean.Suspension >= 0.5 ~ "High",
+                                Mean.Suspension >= 0.1 ~ "Low",
+                                TRUE ~ "None")) %>%
   ggplot() +
   aes(x = OncotreeCode, y = Dataset, fill = Mean.BR) +
   geom_tile(aes(color = Mean.AS), alpha = 0) +
   geom_tile() +
+  geom_point(aes(shape = Suspension), color = "white", size = 3) + # Shape 18
   scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
   scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$BufferingRatio, end = 0.8, begin = 0.1) +
+  scale_shape_manual(values = c(High = 18, Low = 5, None = NA), labels = c("\u226550%", "\u226510%", "<10%")) +
+  #scale_alpha_continuous(range = c(0, 1)) +
   scale_x_discrete(position = "top") +
   theme_void() +
-  labs(x = NULL, fill = "Mean\nBuffering Ratio", color = "Mean\nAneuploidy") +
+  labs(x = NULL, fill = "Mean\nBuffering Ratio", color = "Mean\nAneuploidy", shape = "Suspension\nCulture") +
   guides(fill = guide_colourbar(order = 1),
-         colour = guide_colourbar(order = 2)) +
+         colour = guide_colourbar(order = 2),
+         shape = guide_legend(order = 3, override.aes = list(color = "black"))
+  ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0.5),
         axis.text.y = element_text(hjust = 1, vjust = 0.5),
         legend.key.size = unit(16, "points"),
@@ -187,14 +198,11 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
 cancer_heatmap_as <- df_cancer_heatmap %>%
   drop_na() %>%
   summarize(Mean.AS = mean(Mean.AS, na.rm = TRUE),
-            Suspension = as.numeric(max(Mean.Suspension) >= 0.2),
             Dataset = "Mean Aneuploidy", .by = "OncotreeCode") %>%
   ggplot() +
   aes(x = OncotreeCode, y = Dataset, fill = Mean.AS) +
   geom_tile() +
-  geom_point(aes(alpha = Suspension), color = "white", size = 3, shape = 18) +
   scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
-  scale_alpha_continuous(range = c(0, 1)) +
   theme_void() +
   labs(x = NULL, y = NULL) +
   theme(axis.text.y = element_blank(),
@@ -274,13 +282,16 @@ panel_growth <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_l
   mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
   filter(GrowthPattern != "Unknown") %>%
   ggplot() +
-  aes(x = GrowthPattern, y = Model.Buffering.Ratio) +
+  aes(x = GrowthPattern, y = Model.Buffering.Ratio, color = GrowthPattern) +
   geom_boxplot(outliers = FALSE, size = 1, alpha = 0) +
   stat_summary(aes(y = 0.2), fun.data = \(x) show.n(x, prefix = "n="),
                geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("Adherent", "Suspension")),
               map_signif_level = print_signif, y_position = 1, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c(Adherent = discrete_color_pal2_bright[3],
+                                Suspension = discrete_color_pal2_bright[2],
+                                Mixed = default_color), guide = NULL) +
   labs(x = "Growth Pattern", y = "Sample Buffering Ratio") +
   facet_grid(~Condition, scales = "free_x", space = "free_x")
 

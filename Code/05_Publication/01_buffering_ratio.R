@@ -216,13 +216,13 @@ illustrations <- cowplot::plot_grid(NULL, buf_classes, labels = c("A", "B"), rel
 
 stacked_buf_all <- cowplot::plot_grid(stacked_buf_cn, stacked_buf_cn_chr + ylab(NULL),
                                       ncol = 2, align = "h", axis = "tb",
-                                      labels = c("D", "E"), rel_widths = c(1, 0.7))
+                                      labels = c("E", "F"), rel_widths = c(1, 0.7))
 
 figure1_sub1 <- cowplot::plot_grid(dc_class_line, stacked_buf_all,
                                    rel_widths = c(0.5, 1), labels = c("C", ""), ncol = 2)
 
 figure1_sub2 <- cowplot::plot_grid(prot_exp_dc_class, dc_dataset_dist,
-                                   rel_widths = c(1, 1), labels = c("F", "G"), ncol = 2)
+                                   rel_widths = c(1, 1), labels = c("D", "G"), ncol = 2)
 
 br_by_cnv_all <- cowplot::plot_grid(br_by_cnv, br_by_cna + ylab(NULL),
                                     rel_widths = c(1, 0.9), labels = c("H", "I"), ncol = 2,

@@ -47,6 +47,8 @@ rank_loss_heatmap <- rank_loss %>%
   ungroup() %>%
   filter(MaxMNR > 0.5) %>%
   unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
+  scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, oob = scales::squish, limits = c(0.5, 1),
+                       breaks = seq(0.5, 1, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9", "1.0")) +
   ggtitle("Loss") +
   labs(fill = "MNR(ROC AUC)") +
   theme(legend.position = "right", legend.direction = "vertical", axis.text.x = element_text(angle = 0, hjust = 0.5))

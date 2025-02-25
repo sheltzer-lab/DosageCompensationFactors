@@ -200,6 +200,8 @@ plot_buffering_ratio_classes <- function(cnv_lim = c(-1.99, 2), buffered_thresho
     annotate("text", x = 0.95, y = 0.9, label = "Scaling", hjust = 1, vjust = 1, color = "white", size = base_size/3) +
     annotate("text", x = 0.95, y = 0.1, label = "Buffered", hjust = 1, color = "white", size = base_size/3) +
     annotate("text", x = 0.95, y = -0.9, label = "Anti-Scaling", hjust = 1, vjust = 0, color = "white", size = base_size/3) +
+    annotate("label", x = 0, y = 0, label = paste0("BR > ", buffered_threshold),
+             hjust = 0.5, vjust = 0.5, color = color_palettes$BufferingClasses[["Buffered"]], size = base_size/3) +
     scale_x_continuous(limits = c(-1,1), breaks = c(seq(-1, 1, 0.5), undefined_cn_range), minor_breaks = NULL) +
     scale_y_continuous(limits = c(-1,1), breaks = seq(-1, 1, 0.5), minor_breaks = NULL) +
     labs(x = "Copy Number Log2FC", y = "Protein Log2FC") +

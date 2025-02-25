@@ -48,7 +48,7 @@ discrete_color_pal1 <- c("#E6B000", "#E6882C", "#2C7FE6", "#465566", "#6B644B")
 discrete_color_pal1b <- c("#D9572B", "#D99100", "#2B74D9", "#3D4E66", "#66583D")
 discrete_color_pal2 <- c("#33C653", "#C6A433", "#3349C6", "#C63345")
 discrete_color_pal2_bright <- c("#47E669", "#E6C047", "#475EE6", "#E6475A")
-discrete_color_pal2_dark <- c("#C8A51A", "#8F3635", "#2E3390", "#39724B")
+discrete_color_pal2_dark <- c("#39724B", "#C8A51A", "#2E3390", "#8F3635")
 discrete_color_pal3 <- c("#593659", "#803380", "#BF4DBF", "#CC7ACC")
 discrete_color_pal4 <- c("#D9AB21", "#99823D", "#59513A", "#33322E")
 
@@ -80,7 +80,8 @@ color_palettes <- list(
 
 base_size <- 15
 default_theme <- theme_light(base_size = base_size) +
-  theme(strip.background = element_rect(fill = default_color))
+  theme(strip.background = element_rect(fill = default_color),
+        panel.spacing = unit(5, "points"))
 theme_set(default_theme)
 
 # === Dosage Compensation Factors ===
