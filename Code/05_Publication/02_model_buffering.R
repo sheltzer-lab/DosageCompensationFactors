@@ -2,6 +2,7 @@ library(here)
 library(arrow)
 library(dplyr)
 library(tidyr)
+library(stringr)
 library(forcats)
 library(ggplot2)
 library(ggpubr)
@@ -50,7 +51,9 @@ df_model_depmap <- read_csv_arrow(here(depmap_cn_data_dir, "Model.csv")) %>%
   inner_join(y = df_celllines, by = "CellLine.DepMapModelId") %>%
   select(-CellLine.Name)
 
-df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
+df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet')) %>%
+  # Oncotree uses different cancer type abbrieviations than CPTAC
+  mutate(Model.CancerType = str_replace_all(Model.CancerType, c(HNSCC = "HNSC", LSCC = "LUSC", PDAC = "PAAD")))
 
 intersect(unique(df_model_depmap$OncotreeCode), unique(df_model_cptac$Model.CancerType))
 intersect(unique(tumor_types$oncotree_code), unique(df_model_cptac$Model.CancerType))
