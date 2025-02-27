@@ -181,7 +181,7 @@ cancer_heatmap_br <- df_cancer_heatmap %>%
   geom_point(aes(shape = Suspension), color = "white", size = 3) + # Shape 18
   scale_color_viridis_c(na.value = color_palettes$Missing, option = color_palettes$AneuploidyScore, end = 0.8) +
   scale_fill_viridis_c(na.value = color_palettes$Missing, option = color_palettes$BufferingRatio, end = 0.8, begin = 0.1) +
-  scale_shape_manual(values = c(High = 18, Low = 5, None = NA), labels = c("\u226550%", "\u226510%", "<10%")) +
+  scale_shape_manual(values = c(High = 18, Low = 5, None = NA), labels = c("\u226550%", "\u226510%", "")) +
   #scale_alpha_continuous(range = c(0, 1)) +
   scale_x_discrete(position = "top") +
   theme_void() +
@@ -287,7 +287,7 @@ panel_growth <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_l
   ggplot() +
   aes(x = GrowthPattern, y = Model.Buffering.Ratio, color = GrowthPattern) +
   geom_boxplot(outliers = FALSE, size = 1, alpha = 0) +
-  stat_summary(aes(y = 0.2), fun.data = \(x) show.n(x, prefix = "n="),
+  stat_summary(aes(y = 0.2), fun.data = show.n,
                geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("Adherent", "Suspension")),
               map_signif_level = print_signif, y_position = 1, size = 1,
