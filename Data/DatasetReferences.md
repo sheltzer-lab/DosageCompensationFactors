@@ -276,6 +276,10 @@ Hornbeck PV, Zhang B, Murray B, Kornhauser JM, Latham V, Skrzypek E PhosphoSiteP
 
 ### Drug Screens
 
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=PRISM%20Repurposing%20Public%2023Q2&filename=Repurposing_Public_23Q2_Extended_Primary_Data_Matrix.csv
+
+**Location:** `./Data/External/Screens/PRISM_Repurposing_Public_23Q2.csv`
+
 From PRISM Repurposing Public 23Q2
 Repurposing_Public_23Q2_Extended_Primary_Data_Matrix.csv
 
@@ -284,6 +288,10 @@ The final LFC values in Repurposing_Public_23Q2_LFC_collapsed.csv table are cast
 Source: Broad Institute
 
 ---
+
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=PRISM%20Repurposing%20Public%2023Q2&filename=Repurposing_Public_23Q2_Extended_Primary_Compound_List.csv
+
+**Location:** `./Data/External/Screens/Repurposing_Public_23Q2_Extended_Primary_Compound_List.csv`
 
 From PRISM Repurposing Public 23Q2
 
@@ -303,6 +311,10 @@ Source: Broad Institute
 
 ### CRISPR-KO Screens
 
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=DepMap%20Public%2023Q2&filename=CRISPRGeneEffect.csv
+
+**Location:** `./Data/External/Screens/CRISPRGeneEffect.csv`
+
 From DepMap Public 23Q2
 CRISPRGeneEffect.csv
 
@@ -312,13 +324,26 @@ Source: Broad Institute
 
 ---
 
-From DepMap Public 23Q2
+**URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=DepMap%20Public%2023Q2&filename=CRISPRGeneDependency.csv
 
+**Location:** `./Data/External/Screens/CRISPRGeneDependency.csv`
+
+From DepMap Public 23Q2
 CRISPRGeneDependency.csv
 
 Post-Chronos Gene dependency probability estimates for all models in the integrated gene effect. - Columns: Gene - Rows: ModelID
 
 Source: Broad Institute
+
+#### Citations
+
+Robin M. Meyers, Jordan G. Bryan, James M. McFarland, Barbara A. Weir, ... David E. Root, William C. Hahn, Aviad Tsherniak. Computational correction of copy number effect improves specificity of CRISPR-Cas9 essentiality screens in cancer cells. Nature Genetics 2017 October 49:1779-1784. doi:10.1038/ng.3984
+
+Dempster, J. M., Rossen, J., Kazachkova, M., Pan, J., Kugener, G., Root, D. E., & Tsherniak, A. (2019). Extracting Biological Insights from the Project Achilles Genome-Scale CRISPR Screens in Cancer Cell Lines. BioRxiv, 720243.
+
+Dempster, J. M., Boyle, I., Vazquez, F., Root, D., Boehm, J. S., Hahn, W. C., Tsherniak, A., & McFarland, J. M. (2021). Chronos: a CRISPR cell population dynamics model. BioRxiv, 432728.
+
+Pacini, C., Dempster, J. M., Boyle, I., Goncalves, E., Najgebauer, H., Karakoc, E., van der Meer, D., Barthorpe, A., Lightfoot, H., Jaaks, P., McFarland, J. M., Garnett, M. J., Tsherniak, A., & Iorio, F. (2021) Integrated cross-study datasets of genetic dependencies in cancer. Nature Commmunications, 12-1661.
 
 ### GDSC Cell Line Growth Rates 
 
@@ -345,6 +370,13 @@ Source: Broad Institute
 
 #### Citation
 
+Robin M. Meyers, Jordan G. Bryan, James M. McFarland, Barbara A. Weir, ... David E. Root, William C. Hahn, Aviad Tsherniak. Computational correction of copy number effect improves specificity of CRISPR-Cas9 essentiality screens in cancer cells. Nature Genetics 2017 October 49:1779-1784. doi:10.1038/ng.3984
+
+Dempster, J. M., Rossen, J., Kazachkova, M., Pan, J., Kugener, G., Root, D. E., & Tsherniak, A. (2019). Extracting Biological Insights from the Project Achilles Genome-Scale CRISPR Screens in Cancer Cell Lines. BioRxiv, 720243.
+
+Dempster, J. M., Boyle, I., Vazquez, F., Root, D., Boehm, J. S., Hahn, W. C., Tsherniak, A., & McFarland, J. M. (2021). Chronos: a CRISPR cell population dynamics model. BioRxiv, 432728.
+
+Pacini, C., Dempster, J. M., Boyle, I., Goncalves, E., Najgebauer, H., Karakoc, E., van der Meer, D., Barthorpe, A., Lightfoot, H., Jaaks, P., McFarland, J. M., Garnett, M. J., Tsherniak, A., & Iorio, F. (2021) Integrated cross-study datasets of genetic dependencies in cancer. Nature Commmunications, 12-1661.
 
 ## Other
 
