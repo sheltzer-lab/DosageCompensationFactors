@@ -418,19 +418,31 @@ scree_plot <- function(pca) {
     ylab("Explained Variance")
 }
 
-bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
+bidirectional_heatmap <- function(df, value_col, sample_col, group_col, text_col = NULL,
                                   cluster_rows = FALSE, cluster_cols = FALSE,
                                   show_rownames = TRUE, show_colnames = TRUE,
                                   transpose = FALSE, palette_length = 100, color_pal = bidirectional_color_pal) {
   mat <- df %>%
     group_by({ { sample_col } }, { { group_col } }) %>%
     summarize(Value = mean({ { value_col } }, na.rm = TRUE), .groups = "drop") %>%
+    arrange({ { sample_col } }, { { group_col } }) %>%
     pivot_wider(names_from = { { sample_col } }, values_from = Value, id_cols = { { group_col } }) %>%
-    arrange({ { group_col } }) %>%
     tibble::column_to_rownames(var = quo_name(enquo(group_col)))
+
+  # Add text labels
+  text_mat <- matrix(data = "", nrow = nrow(mat), ncol = ncol(mat))
+  if (!quo_is_null(enquo(text_col))) {
+    text_mat <- df %>%
+      select({ { sample_col } }, { { group_col } }, { { text_col } }) %>%
+      distinct() %>%
+      arrange({ { sample_col } }, { { group_col } }) %>%
+      pivot_wider(names_from = { { sample_col } }, values_from = { { text_col } }, id_cols = { { group_col } }) %>%
+      tibble::column_to_rownames(var = quo_name(enquo(group_col)))
+  }
 
   if (transpose) {
     mat <- t(mat)
+    text_mat <- t(text_mat)
   }
 
   # https://stackoverflow.com/questions/31677923/set-0-point-for-pheatmap-in-r
@@ -444,7 +456,7 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col,
   pheatmap(mat, na_col = "black",
            show_colnames = show_colnames, show_rownames = show_rownames,
            cluster_cols = cluster_cols, cluster_rows = cluster_rows,
-           breaks = breaks, color = color)
+           display_numbers = text_mat, breaks = breaks, color = color)
 }
 
 simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
