@@ -79,5 +79,5 @@ logfc_heatmap_avg <- expr_buf_p0211 %>%
                         text_col = Label, cluster_rows = TRUE, cluster_cols = TRUE,
                         show_rownames = TRUE, show_colnames = TRUE)
 
-# TODO: Export table
-
+# === Tables ===
+# Remark: Buffering tables exported in 01_buffering_ratio.R

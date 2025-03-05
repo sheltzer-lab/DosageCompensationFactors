@@ -250,6 +250,7 @@ fields_buf <- c(
   "CellLine.DepMapModelId",
   "CellLine.SangerModelId",
   "CellLine.Name",
+  "CellLine.Replicate",
   "Model.Type",
   "Gene.Symbol",
   "Gene.Chromosome",
@@ -292,6 +293,7 @@ expr_buf_chunduri_publish <- expr_buf_chunduri %>%
 sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
   bind_rows(expr_buf_p0211_publish, expr_buf_chunduri_publish) %>%
+  mutate(CellLine.Replicate = as.integer(CellLine.Replicate)) %>%
   select(all_of(fields_buf)) %>%
   write_parquet(here(tables_dir, "supplementary_table1.parquet"), version = "2.4")
 
