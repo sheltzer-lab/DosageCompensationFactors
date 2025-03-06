@@ -110,7 +110,8 @@ plot_continuous_properties <- function (df, cols_continuous) {
   df_corr <- NULL
   for (col_ in cols_continuous) {
     plots[[col_]]  <- df %>%
-      scatter_plot_reg_corr({ { col_ } }, Model.Buffering.Ratio, point_size = 2)
+      scatter_plot_reg_corr(get(col_), Model.Buffering.Ratio,
+                            x_lab = col_, point_size = 2)
 
     df_corr <- df %>%
       rename(x = col_, y = "Model.Buffering.Ratio") %>%
@@ -564,17 +565,31 @@ df_split_growth_procan$Suspension %>%
   save_plot("growth-pattern_equal-aneuploidy_procan.png")
 
 ## TP53 Mutation
-bind_rows(df_depmap, df_procan) %>%
+df_p53 <- bind_rows(df_depmap, df_procan) %>%
   left_join(y = tp53_mut, by = "Model.ID") %>%
   bind_rows(df_cptac %>% mutate(TP53.Mutated = as.logical(TP53_mutation))) %>%
   drop_na(TP53.Mutated) %>%
-  signif_violin_plot(TP53.Mutated, Model.Buffering.Ratio, facet_col = Dataset) %>%
-  save_plot("tp53_mutation_pan-cancer.png")
+  mutate(Aneuploidy.Estimate = if_else(!is.na(CellLine.AneuploidyScore),
+                                       CellLine.AneuploidyScore, Model.AneuploidyScore.Estimate))
 
-p53_frequency <- bind_rows(df_depmap, df_procan) %>%
-  left_join(y = tp53_mut, by = "Model.ID") %>%
-  bind_rows(df_cptac %>% mutate(TP53.Mutated = as.logical(TP53_mutation))) %>%
-  drop_na(TP53.Mutated) %>%
+df_p53 %>%
+  signif_beeswarm_plot(TP53.Mutated, Model.Buffering.Ratio,
+                       facet_col = Dataset, color_col = Aneuploidy.Estimate) %>%
+  save_plot("tp53_mutation_pan-cancer.png", width = 200)
+
+### Aneuploidy Controlled (equal AS)
+df_split_p53 <- split(df_p53, df_p53$TP53.Mutated)
+df_equal_as_p53 <- df_split_p53$`FALSE` %>%
+  equalize_distributions(df_split_p53$`TRUE`, Aneuploidy.Estimate,
+                         with_replacement = FALSE, num_buckets = 6)
+
+df_equal_as_p53 %>%
+  signif_beeswarm_plot(TP53.Mutated, Model.Buffering.Ratio,
+                       facet_col = Dataset, color_col = Aneuploidy.Estimate) %>%
+  save_plot("tp53_mutation_pan-cancer_equal-aneuploidy.png", width = 200)
+
+### p53 mutation frequency, high vs. low buffering
+p53_frequency <- df_p53 %>%
   distinct(Model.ID, Model.Buffering.Ratio, TP53.Mutated, Dataset) %>%
   #split_by_quantiles(Model.Buffering.Ratio) %>%
   mutate(Buffering.High = Model.Buffering.Ratio > quantile(Model.Buffering.Ratio, probs = 0.5)[[1]],

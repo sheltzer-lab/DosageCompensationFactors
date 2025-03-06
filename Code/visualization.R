@@ -675,14 +675,15 @@ signif_boxplot <- function(df, x, y, facet_col = NULL,
 
 signif_violin_plot <- function(df, x, y, facet_col = NULL,
                                test = wilcox.test, test.args = NULL,
-                               signif_label = print_signif, title = NULL) {
+                               signif_label = print_signif, title = NULL,
+                               count_y = NULL, count_size = base_size / 4) {
 
   prep <- df %>%
     prep_signif({ { x } }, { { facet_col } })
 
   plot <- prep$df %>%
     ggplot() +
-    aes(x = { { x } }, y = { { y } }, label = paste0("n = ", n)) +
+    aes(x = { { x } }, y = { { y } }) +
     geom_violin(trim = FALSE, draw_quantiles = c(0.25, 0.5, 0.75),
                 color = "#4080DB") +
     geom_signif(
@@ -691,7 +692,9 @@ signif_violin_plot <- function(df, x, y, facet_col = NULL,
       tip_length = 0, extend_line = -0.05,
       test = test, test.args = test.args
     ) +
-    geom_text(aes(y = min({ { y } }) - 0.2 * abs(max({ { y } }) - min({ { y } })))) +
+    { if (is.null(count_y)) stat_summary(aes(y = min({ { y } }) - 0.2 * abs(max({ { y } }) - min({ { y } }))),
+      fun.data = show.n, geom = "text", color = default_color, size = count_size)
+      else stat_summary(aes(y = count_y), fun.data = show.n, geom = "text", color = default_color, size = count_size) } +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     {if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket)} +
     xlab(as_name(enquo(x))) +
@@ -727,7 +730,8 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
       tip_length = 0, extend_line = -0.05,
       test = test, test.args = test.args
     ) +
-    { if (is.null(count_y)) stat_summary(fun.data = show.n, geom = "text", color = default_color, size = count_size)
+    { if (is.null(count_y)) stat_summary(aes(y = min({ { y } }) - 0.2 * abs(max({ { y } }) - min({ { y } }))),
+      fun.data = show.n, geom = "text", color = default_color, size = count_size)
       else stat_summary(aes(y = count_y), fun.data = show.n, geom = "text", color = default_color, size = count_size) } +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     scale_colour_viridis_c(option = "D", direction = 1) +
