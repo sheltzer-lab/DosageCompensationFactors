@@ -57,7 +57,8 @@ chr_heatmap <- expr_p0211 %>%
             .by = c(Gene.Symbol, Sample.Name, Sample.ID, CellLine.Name, Gene.Chromosome, Gene.StartPosition)) %>%
   mutate(Chromosome = fct_reorder(paste("Chr", Gene.Chromosome), Gene.Chromosome)) %>%
   bidirectional_heatmap(Log2FC, Sample.Name, Chromosome,
-                        transpose = TRUE, cluster_rows = TRUE)
+                        transpose = TRUE, cluster_rows = TRUE,
+                        title = "Average Protein Log2FC per Chromosome", treeheight_row = 25)
 
 ## Log2FC by replicate
 logfc_heatmap <- expr_buf_p0211 %>%
@@ -65,7 +66,8 @@ logfc_heatmap <- expr_buf_p0211 %>%
   filter(Gene.Chromosome == 13) %>%
   bidirectional_heatmap(Log2FC, Gene.Symbol, Sample.Name,
                         cluster_rows = TRUE, cluster_cols = TRUE,
-                        show_rownames = TRUE, show_colnames = TRUE)
+                        show_rownames = TRUE, show_colnames = TRUE,
+                        title = "Protein Log2FC", treeheight_col = 25, treeheight_row = 25)
 
 ## ChrArm Buffering Ratio by replicate
 br_heatmap <- expr_buf_p0211 %>%
@@ -74,7 +76,8 @@ br_heatmap <- expr_buf_p0211 %>%
   mutate(Label = str_replace_all(Buffering.ChrArmLevel.Class, c("Anti-Scaling" = "-", "Buffered" = "*", "Scaling" = ""))) %>%
   bidirectional_heatmap(Buffering.ChrArmLevel.Ratio, Gene.Symbol, Sample.Name,
                         text_col = Label, cluster_rows = TRUE, cluster_cols = TRUE,
-                        show_rownames = TRUE, show_colnames = TRUE)
+                        show_rownames = TRUE, show_colnames = TRUE,
+                        title = "Buffering Ratio", treeheight_col = 25, treeheight_row = 25)
 
 ## Average Log2FC by Cell Line
 logfc_heatmap_avg <- expr_buf_p0211 %>%
@@ -83,7 +86,8 @@ logfc_heatmap_avg <- expr_buf_p0211 %>%
   mutate(Label = str_replace_all(Buffering.ChrArmLevel.Average.Class, c("Anti-Scaling" = "-", "Buffered" = "*", "Scaling" = ""))) %>%
   bidirectional_heatmap(Log2FC.Average, Gene.Symbol, CellLine.Name,
                         text_col = Label, cluster_rows = FALSE, cluster_cols = TRUE,
-                        show_rownames = TRUE, show_colnames = TRUE)
+                        show_rownames = TRUE, show_colnames = TRUE,
+                        title = "Average Protein Log2FC", treeheight_col = 25, treeheight_row = 25)
 
 figure_s7_sub1 <- cowplot::plot_grid(chr_heatmap$gtable, pca_norm_p0211,
                                      rel_widths = c(1, 0.5),
@@ -92,10 +96,10 @@ figure_s7_sub1 <- cowplot::plot_grid(chr_heatmap$gtable, pca_norm_p0211,
 figure_s7 <- cowplot::plot_grid(figure_s7_sub1, logfc_heatmap$gtable,
                                 br_heatmap$gtable, logfc_heatmap_avg$gtable,
                                 nrow = 4, ncol = 1,
-                                rel_heights = c(1.3, 1, 1, 0.7),
+                                rel_heights = c(1.55, 1, 1, 0.75),
                                 labels = c("", "C", "D", "E"))
 
-cairo_pdf(here(plots_dir, "figure_s7.pdf"), width = 12, height = 12)
+cairo_pdf(here(plots_dir, "figure_s7.pdf"), width = 12, height = 11)
 figure_s7
 dev.off()
 

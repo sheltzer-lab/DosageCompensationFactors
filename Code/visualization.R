@@ -421,7 +421,8 @@ scree_plot <- function(pca) {
 bidirectional_heatmap <- function(df, value_col, sample_col, group_col, text_col = NULL,
                                   cluster_rows = FALSE, cluster_cols = FALSE,
                                   show_rownames = TRUE, show_colnames = TRUE,
-                                  transpose = FALSE, palette_length = 100, color_pal = bidirectional_color_pal) {
+                                  transpose = FALSE, palette_length = 100,
+                                  color_pal = bidirectional_color_pal, title = "", ...) {
   mat <- df %>%
     group_by({ { sample_col } }, { { group_col } }) %>%
     summarize(Value = mean({ { value_col } }, na.rm = TRUE), .groups = "drop") %>%
@@ -446,8 +447,9 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col, text_col
   }
 
   # https://stackoverflow.com/questions/31677923/set-0-point-for-pheatmap-in-r
+  # https://stackoverflow.com/questions/36852101/r-legend-title-or-units-when-using-pheatmap
   color <- colorRampPalette(color_pal, space = "Lab")(palette_length)
-  # use floor and ceiling to deal with even/odd length pallettelengths
+  # use floor and ceiling to deal with even/odd length pallette lengths
   breaks <- c(seq(min(mat, 0 - 10e-10, na.rm = T), 0,
                   length.out = ceiling(palette_length / 2) + 1),
               seq(max(mat, 0 + 10e-10, na.rm = T) / palette_length, max(mat, na.rm = T),
@@ -456,7 +458,7 @@ bidirectional_heatmap <- function(df, value_col, sample_col, group_col, text_col
   pheatmap(mat, na_col = "black",
            show_colnames = show_colnames, show_rownames = show_rownames,
            cluster_cols = cluster_cols, cluster_rows = cluster_rows,
-           display_numbers = text_mat, breaks = breaks, color = color)
+           display_numbers = text_mat, breaks = breaks, main = title, color = color, ...)
 }
 
 simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
