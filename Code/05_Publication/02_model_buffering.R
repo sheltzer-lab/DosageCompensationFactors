@@ -9,6 +9,8 @@ library(ggpubr)
 library(viridisLite)
 library(openxlsx)
 library(mskcc.oncotree)
+library(survival)
+library(survminer)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -39,6 +41,11 @@ expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac
 
 copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
   distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
+
+tp53_mut <- read_parquet(here(output_data_dir, "damaging_mutations_depmap.parquet")) %>%
+  filter(Gene.Symbol == "TP53") %>%
+  select(-Gene.Symbol) %>%
+  rename(TP53.Mutated = MutationStatus)
 
 df_model_procan <- read_csv_arrow(here(procan_cn_data_dir, "model_list_20240110.csv")) %>%
   rename(CellLine.SangerModelId = "model_id") %>%
@@ -416,3 +423,157 @@ saveWorkbook(wb, here(tables_dir, "supplementary_table3.xlsx"), overwrite = TRUE
 
 # TODO: add eAS for cptac
 # TODO: Add field descriptions
+
+# === Supplemental Figures ===
+## Kaplan-Meyer Plots
+df_cptac_split <- df_cptac %>%
+  split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Buffering")
+
+surv_os <- survfit(Surv(OS_days, OS_event) ~ Buffering, data = df_cptac_split) %>%
+  ggsurvplot(data = df_cptac_split)
+surv_pfs <- survfit(Surv(PFS_days, PFS_event) ~ Buffering, data = df_cptac_split) %>%
+  ggsurvplot(data = df_cptac_split)
+
+## Age
+cor_age <- cor.test(df_agg$Model.Buffering.MeanNormRank,
+                       df_agg$Age, method = "spearman")
+
+panel_age_cor <- df_agg %>%
+  ggplot() +
+  aes(y = Model.Buffering.MeanNormRank, x = Age) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = lm, color = highlight_color) +
+  annotate("text", x = 0, y = 1.1, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_age$estimate), ", ", print_signif(cor_age$p.value))) +
+  labs(y = "Sample BR MNR", x = "Age")
+
+panel_age_cat <- df_agg %>%
+  filter(AgeCategory %in% c("Pediatric", "Adult")) %>%
+  signif_beeswarm_plot(AgeCategory, Model.Buffering.MeanNormRank,
+                       color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
+                       color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
+  labs(x = "Age Group", y = "Sample BR MNR", color = "Aneuploidy Score") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        legend.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.title.position = "top",
+        legend.margin = margin(0,0,0,0, unit = 'cm'))
+
+## TP53
+df_p53 <- bind_rows(df_depmap, df_procan) %>%
+  left_join(y = tp53_mut, by = "Model.ID") %>%
+  bind_rows(df_cptac %>% mutate(TP53.Mutated = as.logical(TP53_mutation))) %>%
+  drop_na(TP53.Mutated) %>%
+  mutate(Aneuploidy.Estimate = if_else(!is.na(CellLine.AneuploidyScore),
+                                       CellLine.AneuploidyScore, Model.AneuploidyScore.Estimate),
+         Dataset = factor(Dataset, levels = dataset_order))
+
+panel_p53 <- df_p53 %>%
+  signif_beeswarm_plot(TP53.Mutated, Model.Buffering.Ratio,
+                       facet_col = Dataset, color_col = Aneuploidy.Estimate,
+                       viridis_color_pal = color_palettes$AneuploidyScore, cex = 1, color_lims = c(0, 0.8)) +
+  labs(x = "Damaging TP53 Mutation", y = "Sample Buffering Ratio", color = "(Estimated) Aneuploidy Score") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        legend.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.title.position = "top",
+        legend.margin = margin(0,0,0,0, unit = 'cm'))
+
+## Ploidy
+cor_ploidy <- cor.test(df_procan$Model.Buffering.Ratio,
+                       df_procan$CellLine.Ploidy, method = "spearman")
+
+panel_ploidy <- df_procan %>%
+  ggplot() +
+  aes(y = Model.Buffering.Ratio, x = CellLine.Ploidy) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = loess, color = highlight_color) +
+  annotate("text", x = 0, y = 2, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_ploidy$estimate), ", ", print_signif(cor_ploidy$p.value))) +
+  labs(y = "Sample Buffering Ratio", x = "Cell Line Ploidy")
+
+## Aneuploidy Score (all)
+panel_as_all <- bind_rows(df_depmap, df_procan, df_cptac) %>%
+  mutate(Aneuploidy.Estimate = if_else(!is.na(CellLine.AneuploidyScore),
+                                       CellLine.AneuploidyScore, Model.AneuploidyScore.Estimate),
+         Dataset = factor(Dataset, levels = dataset_order)) %>%
+  distinct(Dataset, Model.ID, Model.Buffering.Ratio, CellLine.WGD, Aneuploidy.Estimate) %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  ggplot() +
+  aes(x = Aneuploidy.Estimate, y = Model.Buffering.Ratio, color = WGD) +
+  geom_point(size = 2) +
+  stat_smooth(method = lm, color = "dimgrey") +
+  #annotate("text", x = 0, y = 1.8, hjust = 0, size = 5, label = paste0(print_corr(cor_as_test$estimate), ", ", print_signif(cor_as_test$p.value))) +
+  stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE,
+           p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
+  scale_color_manual(values = color_palettes$WGD) +
+  labs(x = "(Estimated) Aneuploidy Score", y = "Sample Buffering Ratio") +
+  theme(legend.position = c("left", "top"),
+        legend.position.inside = c(0.01, 0.85),
+        legend.justification = c("left", "top"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = base_size)) +
+  facet_grid(~Dataset, scales = "free_x")
+
+## Growth Pattern (ProCan)
+df_low_as_procan <- df_procan %>%
+  filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
+  filter(CellLine.AneuploidyScore <= min(
+    max(df_procan[df_procan$GrowthPattern == "Adherent",]$CellLine.AneuploidyScore),
+    max(df_procan[df_procan$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)
+  )) %>%
+  mutate(Condition = "Low Aneuploidy")
+df_split_growth_procan <- split(df_procan, df_procan$GrowthPattern)
+df_equal_as_procan <- df_split_growth_procan$Suspension %>%
+  equalize_distributions(df_split_growth_procan$Adherent, CellLine.AneuploidyScore,
+                         with_replacement = FALSE, num_buckets = 6) %>%
+  mutate(Condition = "Equal Aneuploidy")
+
+panel_growth_procan <- bind_rows(df_procan %>% mutate(Condition = "Uncontrolled"), df_low_as_procan, df_equal_as_procan) %>%
+  mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
+  filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
+  ggplot() +
+  aes(x = GrowthPattern, y = Model.Buffering.Ratio, color = GrowthPattern) +
+  geom_boxplot(outliers = FALSE, size = 1, alpha = 0) +
+  stat_summary(aes(y = 0.2), fun.data = show.n,
+               geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("Adherent", "Suspension")),
+              map_signif_level = print_signif, y_position = 1, size = 1,
+              tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c(Adherent = discrete_color_pal2_bright[3],
+                                Suspension = discrete_color_pal2_bright[2]),
+                                guide = NULL) +
+  labs(x = "Growth Pattern", y = "Sample Buffering Ratio") +
+  facet_grid(~Condition, scales = "free_x", space = "free_x")
+
+## Aneuploidy Score per growth pattern
+panel_growth_as <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_low_as, df_equal_as) %>%
+  mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
+  filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
+  ggplot() +
+  aes(x = GrowthPattern, y = CellLine.AneuploidyScore, color = GrowthPattern) +
+  geom_boxplot(outliers = FALSE, size = 1, alpha = 0) +
+  stat_summary(aes(y = 0), fun.data = show.n,
+               geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("Adherent", "Suspension")),
+              map_signif_level = print_signif, y_position = 30, size = 1,
+              tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c(Adherent = discrete_color_pal2_bright[3],
+                                Suspension = discrete_color_pal2_bright[2]),
+                                guide = NULL) +
+  labs(x = "Growth Pattern", y = "Aneuploidy Score") +
+  facet_grid(~Condition)
+
+## Combine figures
+figure_s2_sub1 <- cowplot::plot_grid(panel_as_all, panel_ploidy,
+                                     ncol = 2, rel_widths = c(1, 0.4), labels = c("A", "B"))
+figure_s2_sub2 <- cowplot::plot_grid(panel_age_cor, panel_age_cat, panel_p53,
+                                     ncol = 3, rel_widths = c(0.8, 0.5, 1), labels = c("C", "D", "E"))
+figure_s2_sub3 <- cowplot::plot_grid(panel_growth_as, panel_growth_procan,
+                                     ncol = 2, rel_widths = c(1, 1), labels = c("F", "G"))
+
+figure_s2 <- cowplot::plot_grid(figure_s2_sub1, figure_s2_sub2, figure_s2_sub3, nrow = 3)
+
+cairo_pdf(here(plots_dir, "figure_s2.pdf"), width = 12, height = 12)
+figure_s2
+dev.off()
