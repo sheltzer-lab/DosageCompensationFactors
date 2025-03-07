@@ -2,6 +2,7 @@
 library(here)
 library(arrow)
 library(dplyr)
+library(stringr)
 library(tidyr)
 library(ggplot2)
 
@@ -31,11 +32,15 @@ copy_number_p0211 <- read_parquet(here(output_data_dir, 'copy_number_p0211.parqu
 ## PCA plots
 pca_pre_p0211 <- expr_p0211 %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Log2) %>%
-  plot_pca()
+  plot_pca()  +
+  labs(color = "Cell Line") +
+  theme(legend.position = "none")
 
 pca_norm_p0211 <- expr_p0211 %>%
   calculate_pca(Sample.Name, CellLine.Name, ProteinGroup.UniprotIDs, Protein.Expression.Normalized) %>%
-  plot_pca()
+  plot_pca() +
+  labs(color = "Cell Line") +
+  theme(legend.position = "none")
 
 ## Protein Log2FC per chromosome
 p0211_expr_baseline <- expr_p0211 %>%
@@ -50,7 +55,8 @@ chr_heatmap <- expr_p0211 %>%
             unmatched = "error", na_matches = "never", relationship = "many-to-one") %>%
   summarize(Log2FC = Protein.Expression.Normalized - Protein.Expression.Baseline,
             .by = c(Gene.Symbol, Sample.Name, Sample.ID, CellLine.Name, Gene.Chromosome, Gene.StartPosition)) %>%
-  bidirectional_heatmap(Log2FC, Sample.Name, Gene.Chromosome,
+  mutate(Chromosome = fct_reorder(paste("Chr", Gene.Chromosome), Gene.Chromosome)) %>%
+  bidirectional_heatmap(Log2FC, Sample.Name, Chromosome,
                         transpose = TRUE, cluster_rows = TRUE)
 
 ## Log2FC by replicate
@@ -76,8 +82,22 @@ logfc_heatmap_avg <- expr_buf_p0211 %>%
   filter(Gene.Chromosome == 13) %>%
   mutate(Label = str_replace_all(Buffering.ChrArmLevel.Average.Class, c("Anti-Scaling" = "-", "Buffered" = "*", "Scaling" = ""))) %>%
   bidirectional_heatmap(Log2FC.Average, Gene.Symbol, CellLine.Name,
-                        text_col = Label, cluster_rows = TRUE, cluster_cols = TRUE,
+                        text_col = Label, cluster_rows = FALSE, cluster_cols = TRUE,
                         show_rownames = TRUE, show_colnames = TRUE)
+
+figure_s7_sub1 <- cowplot::plot_grid(chr_heatmap$gtable, pca_norm_p0211,
+                                     rel_widths = c(1, 0.5),
+                                     nrow = 1, ncol = 2, labels = c("A", "B"))
+
+figure_s7 <- cowplot::plot_grid(figure_s7_sub1, logfc_heatmap$gtable,
+                                br_heatmap$gtable, logfc_heatmap_avg$gtable,
+                                nrow = 4, ncol = 1,
+                                rel_heights = c(1.3, 1, 1, 0.7),
+                                labels = c("", "C", "D", "E"))
+
+cairo_pdf(here(plots_dir, "figure_s7.pdf"), width = 12, height = 12)
+figure_s7
+dev.off()
 
 # === Tables ===
 # Remark: Buffering tables exported in 01_buffering_ratio.R
