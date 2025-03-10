@@ -372,17 +372,17 @@ vertical_box_plot <- function(df, value_col, id_col, group_col) {
     geom_boxplot()
 }
 
-jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha = 0.5, jitter_width = 0.15) {
+jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha = 0.5, jitter_width = 0.15, size = 2) {
   df %>%
     ggplot() +
     aes(x = { { group_col } }, y = { { value_col } }) +
     geom_boxplot(outlier.shape = NA, color = "black") +
     {
       if (quo_is_null(enquo(color_col))) {
-        geom_quasirandom(fill = "darkgrey", color = "white",
+        geom_quasirandom(fill = default_color, color = "white", size = size,
                          shape = 21, alpha = alpha, width = jitter_width)
       } else {
-        geom_quasirandom(aes(color = { { color_col } }), alpha = alpha, width = jitter_width)
+        geom_quasirandom(aes(color = { { color_col } }), size = size, alpha = alpha, width = jitter_width)
       }
     } +
     coord_flip() +

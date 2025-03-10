@@ -10,6 +10,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "preprocessing.R"))
 source(here("Code", "buffering_ratio.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
@@ -31,6 +32,10 @@ expr_buf_eng <- bind_rows(expr_buf_p0211, expr_buf_chunduri) %>%
          Gene.Chromosome = as.character(Gene.Chromosome))
 
 df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
+
+low_var_buf <- read_parquet(here(output_data_dir, "frequently_buffered_genes.parquet"))
+low_var_buf_gain <- read_parquet(here(output_data_dir, "frequently_buffered_genes_gain.parquet"))
+low_var_buf_loss <- read_parquet(here(output_data_dir, "frequently_buffered_genes_loss.parquet"))
 
 # === DC Class Illustration Panel ===
 dc_class_line <- expr_buf_depmap %>%
@@ -183,9 +188,6 @@ br_by_cnv <- bind_rows(expr_buf_cptac, expr_buf_depmap) %>%
   facet_grid(~Dataset)
 
 # === Low Variance Buffering Panel ===
-low_var_buf <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
-  analyze_low_br_variance()
-
 scatter_signif_buffered <- low_var_buf %>%
   mutate(Label = if_else(Top10, Gene.Symbol, NA)) %>%
   filter(Dataset == "CPTAC") %>%
@@ -302,10 +304,13 @@ sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
 ## Frequently Buffering Genes
 wb <- createWorkbook()
 sheet_low_buf <- addWorksheet(wb, "Frequently Buffered Genes")
+sheet_low_buf_gain <- addWorksheet(wb, "Freq. Buffered Genes (CN Gain)")
+sheet_low_buf_loss <- addWorksheet(wb, "Freq. Buffered Genes (CN Loss)")
 writeDataTable(wb = wb, sheet = sheet_low_buf, x = low_var_buf)
+writeDataTable(wb = wb, sheet = sheet_low_buf_gain, x = low_var_buf_gain)
+writeDataTable(wb = wb, sheet = sheet_low_buf_loss, x = low_var_buf_loss)
 saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"), overwrite = TRUE)
 
-# TODO: Add Gene BR Correlation, LowVarBuf per gain/loss, and df_share (all + WGD control)
 # TODO: Add field descriptions
 
 # === Supplemental Figures ===
@@ -367,8 +372,85 @@ panel_stroma <- mean_br_cptac %>%
   labs(y = "Mean Buffering Ratio", x = "Stroma Score (xCell)")
 
 ## Buffering Ratio, WGD-Controlled
+panel_br_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss"),
+         WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  select(Buffering.GeneLevel.Ratio, Dataset, CNV, WGD) %>%
+  drop_na() %>%
+  ggplot() +
+  aes(y = Buffering.GeneLevel.Ratio, x = CNV) +
+  geom_boxplot(outliers = FALSE) +
+  stat_summary(aes(y = -1), fun.data = show.n, geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("Gain", "Loss")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = 1,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  facet_grid(vars(WGD), vars(Dataset)) +
+  labs(x = "Gene Copy Number", y = "Buffering Ratio")
+
 ## Buffering Classes, WGD-Controlled
+df_share_chr_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNV = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Chr Arm Gain", "Chr Arm Loss"),
+         WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  select(Buffering.ChrArmLevel.Class, Dataset, CNV, WGD) %>%
+  drop_na() %>%
+  count(Buffering.ChrArmLevel.Class, Dataset, CNV, WGD) %>%
+  group_by(Dataset, CNV, WGD) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup()
+
+panel_buf_chr_wgd <- df_share_chr_wgd %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Class, y = Share, x = Dataset) +
+  geom_bar(stat = "identity") +
+  facet_grid(vars(WGD), vars(CNV)) +
+  scale_fill_manual(values = color_palettes$BufferingClasses) +
+  labs(fill = NULL, y = "Fraction")
+
 ## Buffering Classes (all)
+# TODO: Buffering Classes (all)
+
 ## Frequently Buffered Genes (divided by Gain & Loss)
+# TODO: Frequently Buffered (divided by Gain & Loss)
+
 ## Inter-Dataset Correlation
+buf_matched <- match_datasets(expr_buf_procan, expr_buf_depmap)
+corr_gene <- dataset_correlation(buf_matched,
+                                 Dataset, Buffering.GeneLevel.Ratio,
+                                 "GeneCN")
+corr_chr <- dataset_correlation(buf_matched,
+                                Dataset, Buffering.ChrArmLevel.Ratio,
+                                "ChrArm")
+corr_chr_avg <- dataset_correlation(buf_matched,
+                                    Dataset, Buffering.ChrArmLevel.Average.Ratio,
+                                    "ChrArm (avg.)")
+
+panel_corr <- bind_rows(corr_gene, corr_chr) %>%
+  jittered_boxplot(Comparison, Correlation, alpha = 1, jitter_width = 0.25, size = 2) +
+  labs(y = "BR Correlation\n(DepMap ~ ProCan)", x = "Analysis Variant")
+
 ## Inter-Dataset Correlation (frequently buffered genes)
+panel_corr_top50 <- read_parquet(here(output_data_dir, "br_correlation_gene.parquet")) %>%
+  signif_boxplot(Top50, cor) +
+  lims(y = c(0, 1)) +
+  labs(x = "Top50 Frequently Buffered Genes", y = "BR Correlation\n(DepMap ~ ProCan)")
+
+## Combine Figures
+
+
+figure_s1_sub1 <- cowplot::plot_grid(panel_br_wgd, panel_buf_chr_wgd, labels = c("A", "B"))
+figure_s1_sub2 <- cowplot::plot_grid(panel_purity, panel_micro + ylab(NULL) + theme(axis.text.y = element_blank()),
+                                     panel_immune + ylab(NULL) + theme(axis.text.y = element_blank()),
+                                     panel_stroma + ylab(NULL) + theme(axis.text.y = element_blank()),
+                                     rel_widths = c(1, 0.9, 0.85, 0.85), nrow = 1)
+figure_s1_sub3 <- cowplot::plot_grid(panel_corr, panel_corr_top50,
+                                     rel_widths = c(1, 0.7), labels = c("D", "E"))
+
+figure_s1 <- cowplot::plot_grid(figure_s1_sub1, figure_s1_sub2, figure_s1_sub3,
+                                nrow = 3, rel_heights = c(1, 0.75, 0.9), labels = c("", "C", ""))
+
+cairo_pdf(here(plots_dir, "figure_s1.pdf"), width = 12, height = 11)
+figure_s1
+dev.off()

@@ -213,16 +213,19 @@ scatter_signif_buffered_cna %>%
   save_plot("frequently_buffered_genes_by-cna.png", width = 280, height = 160)
 
 low_var_buf %>%
+  write_parquet(here(output_data_dir, "frequently_buffered_genes.parquet")) %>%
   drop_na() %>%
   write.xlsx(here(tables_base_dir, "frequently_buffered_genes.xlsx"),
              colNames = TRUE)
 
 low_var_buf_gain %>%
+  write_parquet(here(output_data_dir, "frequently_buffered_genes_gain.parquet")) %>%
   drop_na() %>%
   write.xlsx(here(tables_base_dir, "frequently_buffered_genes_gain.xlsx"),
              colNames = TRUE)
 
 low_var_buf_loss %>%
+  write_parquet(here(output_data_dir, "frequently_buffered_genes_loss.parquet")) %>%
   drop_na() %>%
   write.xlsx(here(tables_base_dir, "frequently_buffered_genes_loss.xlsx"),
              colNames = TRUE)
