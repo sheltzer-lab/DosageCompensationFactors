@@ -30,6 +30,8 @@ expr_buf_eng <- bind_rows(expr_buf_p0211, expr_buf_chunduri) %>%
   mutate(Dataset = "Engin.",
          Gene.Chromosome = as.character(Gene.Chromosome))
 
+df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet'))
+
 # === DC Class Illustration Panel ===
 dc_class_line <- expr_buf_depmap %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
@@ -305,3 +307,68 @@ saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"), overwrite = TRUE
 
 # TODO: Add Gene BR Correlation, LowVarBuf per gain/loss, and df_share (all + WGD control)
 # TODO: Add field descriptions
+
+# === Supplemental Figures ===
+# TODO: Replace with sample BR?
+mean_br_cptac <- expr_buf_cptac %>%
+  #filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
+  summarize(Mean.BR = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
+            Observations = sum(!is.na(Buffering.GeneLevel.Ratio)),
+            .by = Model.ID) %>%
+  #filter(Observations > 50) %>%
+  left_join(y = df_model_cptac, by = "Model.ID")
+
+## Tumor Purity
+cor_purity <- cor.test(mean_br_cptac$Mean.BR,
+                       mean_br_cptac$Model.TumorPurity, method = "spearman")
+
+panel_purity <- mean_br_cptac %>%
+  ggplot() +
+  aes(y = Mean.BR, x = Model.TumorPurity) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = lm, color = highlight_color) +
+  annotate("text", x = min(mean_br_cptac$Model.TumorPurity), y = 1.5, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_purity$estimate), ", ", print_signif(cor_purity$p.value))) +
+  labs(y = "Mean Buffering Ratio", x = "Tumor Purity")
+
+## Immune Scores
+cor_immune <- cor.test(mean_br_cptac$Mean.BR,
+                       mean_br_cptac$ESTIMATE_ImmuneScore, method = "spearman")
+cor_micro <- cor.test(mean_br_cptac$Mean.BR,
+                      mean_br_cptac$xCell_microenvironment_score, method = "spearman")
+cor_stroma <- cor.test(mean_br_cptac$Mean.BR,
+                       mean_br_cptac$xCell_stroma_score, method = "spearman")
+
+panel_immune <- mean_br_cptac %>%
+  ggplot() +
+  aes(y = Mean.BR, x = ESTIMATE_ImmuneScore) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = lm, color = highlight_color) +
+  annotate("text", x = min(mean_br_cptac$ESTIMATE_ImmuneScore), y = 1.5, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_immune$estimate), ", ", print_signif(cor_immune$p.value))) +
+  labs(y = "Mean Buffering Ratio", x = "Immune Score (ESTIMATE)")
+
+panel_micro <- mean_br_cptac %>%
+  ggplot() +
+  aes(y = Mean.BR, x = xCell_microenvironment_score) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = lm, color = highlight_color) +
+  annotate("text", x = min(mean_br_cptac$xCell_microenvironment_score), y = 1.5, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_micro$estimate), ", ", print_signif(cor_micro$p.value))) +
+  labs(y = "Mean Buffering Ratio", x = "Microenvironment Score (xCell)")
+
+panel_stroma <- mean_br_cptac %>%
+  ggplot() +
+  aes(y = Mean.BR, x = xCell_stroma_score) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = lm, color = highlight_color) +
+  annotate("text", x = min(mean_br_cptac$xCell_stroma_score), y = 1.5, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_stroma$estimate), ", ", print_signif(cor_stroma$p.value))) +
+  labs(y = "Mean Buffering Ratio", x = "Stroma Score (xCell)")
+
+## Buffering Ratio, WGD-Controlled
+## Buffering Classes, WGD-Controlled
+## Buffering Classes (all)
+## Frequently Buffered Genes (divided by Gain & Loss)
+## Inter-Dataset Correlation
+## Inter-Dataset Correlation (frequently buffered genes)
