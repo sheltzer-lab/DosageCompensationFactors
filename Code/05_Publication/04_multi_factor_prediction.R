@@ -121,12 +121,12 @@ shap_loss <- shap_results %>%
 shap_arrows_plot_gain <- shap_gain %>%
   shap_plot_arrows(category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
 shap_arrows_plot_loss <- shap_loss %>%
-  shap_plot_arrows(category_lab = NULL, color_lab = "Factor Value", title = "Gene CN Loss")
+  shap_plot_arrows(category_lab = NULL, color_lab = "Factor\nValue", title = "Gene CN Loss")
 
 shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
                                      labels = c("D", "E"),
-                                     rel_widths = c(0.79, 1))
+                                     rel_widths = c(0.85, 1))
 
 # === SHAP Correlation Heatmap Panel (per Dataset) ===
 shap_heatmap_datasets <- shap_results %>%

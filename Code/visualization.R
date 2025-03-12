@@ -88,7 +88,7 @@ beeswarm_plot <- function(df, x, y, color_col = NULL, cex = 2) {
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
-plot_correlation <- function(df, method = "spearman", adjust = "none") {
+plot_correlation <- function(df, method = "spearman", adjust = "BH") {
   if(nrow(df) == 0) return(NULL)
 
   cor_matrix <- psych::corr.test(df, method = method, adjust = adjust)
@@ -97,6 +97,30 @@ plot_correlation <- function(df, method = "spearman", adjust = "none") {
            type = "upper", order = "hclust",
            tl.col = "black", tl.srt = 45,
            pch.cex = 1, pch.col = "darkgrey")
+}
+
+plot_correlation_matrix <- function(df, method = "spearman", adjust = "BH") {
+  if (nrow(df) == 0) return(NULL)
+  cor_matrix <- psych::corr.test(df, method = method, adjust = adjust)
+
+  cluster <- hclust(as.dist(1 - cor_matrix$r))
+
+  inner_join(x = reshape2::melt(cor_matrix$r[cluster$order, cluster$order], value.name = "cor"),
+             y = reshape2::melt(cor_matrix$p[cluster$order, cluster$order], value.name = "p.adj"),
+             unmatched = "error", relationship = "one-to-one") %>%
+    ggplot() +
+    aes(x = Var1, y = Var2, fill = cor, shape = p.adj < p_threshold) +
+    geom_tile(color = "white") +
+    geom_point(color = default_color) +
+    scale_fill_gradientn(colors = bidirectional_color_pal, space = "Lab", limits = c(-1, 1)) +
+    scale_shape_manual(values = c(`TRUE` = NA, `FALSE` = 4), labels = c(`TRUE` = "", `FALSE` = "p.adj \u2265 0.05")) +
+    labs(x = NULL, y = NULL, fill = "Correlation", shape = NULL) +
+    guides(fill = guide_colorbar(order = 1),
+           shape = guide_legend(order = 2)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "top",
+          legend.direction = "horizontal",
+          legend.margin = margin(0, 0, 0, 0, unit = 'cm'))
 }
 
 
