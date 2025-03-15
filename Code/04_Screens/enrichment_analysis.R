@@ -260,16 +260,7 @@ tsg_dc <- expr_buf_procan %>%
   signif_boxplot(CNV, Buffering.GeneLevel.Ratio) %>%
   save_plot("tumorsupressor_downregulated_buffering.png")
 
-## Common upregulated genes
-og_common_dc <- expr_buf_procan %>%
-  inner_join(y = cancer_genes, by = "Gene.Symbol") %>%
-  filter(CancerDriverMode == "OG") %>%
-  filter(Gene.Symbol %in% genes_up_common) %>%
-  mutate(CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
-  drop_na(Buffering.GeneLevel.Ratio) %>%
-  signif_boxplot(CNV, Buffering.GeneLevel.Ratio, facet_col = Gene.Symbol) %>%
-  save_plot("oncogene_common_upregulated_buffering.png", width = 400)
-
+## Common upregulated oncogenes
 og_common_dc <- expr_buf_procan %>%
   inner_join(y = cancer_genes, by = "Gene.Symbol") %>%
   filter(CancerDriverMode == "OG") %>%

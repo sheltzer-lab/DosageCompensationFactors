@@ -33,6 +33,8 @@ diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan
 diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
 diff_exp_control <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
 
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
+
 ssgsea_cptac <- read_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
 gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parquet"))
 
@@ -310,8 +312,130 @@ writeDataTable(wb = wb, sheet = sheet_ssgsea, x = ssgsea_cptac_export)
 saveWorkbook(wb, here(tables_dir, "supplementary_table8.xlsx"), overwrite = TRUE)
 
 # === Supplemental Figures ===
+## DiffExp Network for commonly deregulated genes
 string_common <- diff_exp_common %>%
   summarize(Log2FC.Mean = mean(Log2FC), .by = c("Gene.Symbol", "Significant")) %>%
   #filter(Significant == "Up") %>%
   create_string_network(Gene.Symbol, Log2FC.Mean, string_db, min_score = 900)
 
+## Volcano Plots (DepMap, CPTAC, Adherent Control)
+top_diff_all <- diff_exp_all %>%
+  filter(Test.p.adj < p_threshold & !is.na(Significant)) %>%
+  filter(Dataset != "ProCan") %>%
+  group_by(Dataset, Significant) %>%
+  slice_max(abs(Log2FC), n = 5) %>%
+  ungroup() %>%
+  distinct(Gene.Symbol, .keep_all = TRUE)
+
+panel_volcano_all <- diff_exp_all %>%
+  filter(Dataset != "ProCan") %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) &
+                           (!is.na(CancerDriverMode) | Gene.Symbol %in% top_diff_all$Gene.Symbol),
+                         Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
+  theme(legend.position = "none") +
+  labs(y = "-log10(p.adj)", x = "Protein Log2FC (High - Low Buffering)") +
+  facet_grid(~Dataset)
+
+## ORA (adherent control)
+genes_up_control <- diff_exp_control %>%
+  filter(Significant == "Up") %>%
+  mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = TRUE)) %>%
+  arrange(Gene.Symbol)
+
+genes_down_control <- diff_exp_control %>%
+  filter(Significant == "Down") %>%
+  mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = FALSE)) %>%
+  arrange(Gene.Symbol)
+
+ora_up_control <- genes_up_control %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis() %>%
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"),
+                     custom_color = color_palettes$DiffExp["Up"])
+
+ora_down_control <- genes_down_control %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis() %>%
+  plot_terms_compact(selected_sources = c("GO:BP", "KEGG", "REAC"),
+                     custom_color = color_palettes$DiffExp["Down"])
+
+## Cancer Driver Buffering
+panel_og_tsg <- expr_buf_procan %>%
+  inner_join(y = diff_exp_procan, by = "Gene.Symbol") %>%
+  filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
+  mutate(GeneGroup = case_when(CancerDriverMode == "TSG" & Significant == "Down" ~ "TSG (down)",
+                               CancerDriverMode == "OG" & Significant == "Up" ~ "OG (up)",
+                               TRUE ~ NA),
+         CNV = if_else(Gene.CopyNumber > Gene.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  drop_na(Buffering.GeneLevel.Ratio, GeneGroup, CNV) %>%
+  ggplot() +
+  aes(x = CNV, y = Buffering.GeneLevel.Ratio) +
+  geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
+  stat_summary(aes(y = -2), fun.data = show.n, geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("Gain", "Loss")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = 2.5,
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  facet_grid(~GeneGroup) +
+  labs(x = "Gene Copy Number", y = "Buffering Ratio")
+
+## Oncogene Buffering (chr arm)
+panel_oncogenes <- expr_buf_procan %>%
+  filter(Gene.Symbol %in% c("EGFR", "RRAS", "CTNNB1", "LMNA")) %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  mutate(CNA = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss")) %>%
+  drop_na(Buffering.ChrArmLevel.Ratio) %>%
+  signif_beeswarm_plot(CNA, Buffering.ChrArmLevel.Ratio,
+                       color_col = CellLine.AneuploidyScore, facet_col = Gene.Symbol,
+                       viridis_color_pal = color_palettes$AneuploidyScore, color_lims = c(0, 0.8), cex = 1,
+                       n.prefix = "n=", test = wilcox.test) +
+  labs(x = "Chromosome Arm", y = "Buffering Ratio", color = "Aneuploidy Score") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        legend.position = "top",
+        legend.title = element_text(hjust = 1, vjust = 0.9),
+        legend.margin = margin(0,0,0,0, unit = 'cm'))
+
+## EGFR Buffering Classes (chr arm)
+egfr_classes_chr <- expr_buf_procan %>%
+  filter(Gene.Symbol == "EGFR") %>%
+  filter(ChromosomeArm.CopyNumber != ChromosomeArm.CopyNumber.Baseline) %>%
+  drop_na(Buffering.ChrArmLevel.Ratio) %>%
+  mutate(CNA = if_else(ChromosomeArm.CopyNumber > ChromosomeArm.CopyNumber.Baseline, "Gain", "Loss"))
+
+panel_egfr <- egfr_classes_chr %>%
+  count(Buffering.ChrArmLevel.Class, CNA) %>%
+  group_by(CNA) %>%
+  mutate(Share = (n / sum(n)) * 100) %>%
+  ungroup() %>%
+  ggplot() +
+  aes(fill = Buffering.ChrArmLevel.Class, y = Share, x = CNA) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = color_palettes$BufferingClasses) +
+  labs(x = "Chromosome Arm", y = "Fraction", fill = NULL) +
+  guides(fill = guide_legend(ncol = 2)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        legend.margin = margin(0,0,0,0, unit = 'cm')) +
+  ggtitle("EGFR") # Alternative: As fill label
+
+### Test if fraction of scaling genes is increased upon gain
+egfr_classes_chr %>%
+  mutate(Scaling = Buffering.ChrArmLevel.Class == "Scaling") %>%
+  count(CNA, Scaling) %>%
+  pivot_wider(names_from = "Scaling", values_from = "n") %>%
+  tibble::column_to_rownames("CNA") %>%
+  as.matrix() %>%
+  fisher.test()
+
+## Combine figures
+figure_s5_sub1 <- cowplot::plot_grid(ora_down_control, ora_up_control)
+figure_s5_sub2 <- cowplot::plot_grid(panel_og_tsg, panel_oncogenes, panel_egfr,
+                                     ncol = 3, rel_widths = c(0.75, 1, 0.7))
+figure_s5 <- cowplot::plot_grid(panel_volcano_all, figure_s5_sub2,
+                                nrow = 2, rel_heights = c(1, 0.9))
+
+cairo_pdf(here(plots_dir, "figure_s5.pdf"), width = 12, height = 9)
+figure_s5
+dev.off()

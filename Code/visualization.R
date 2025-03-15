@@ -734,7 +734,7 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
                                  test = wilcox.test, test.args = NULL, cex = 2,
                                  signif_label = print_signif, title = NULL,
                                  viridis_color_pal = "D", color_lims = c(0, 1),
-                                 count_y = NULL, count_size = base_size / 4) {
+                                 count_y = NULL, count_size = base_size / 4, n.prefix = "n = ") {
 
   prep <- df %>%
     prep_signif({ { x } }, { { facet_col } })
@@ -758,8 +758,8 @@ signif_beeswarm_plot <- function(df, x, y, facet_col = NULL, color_col = NULL,
       test = test, test.args = test.args
     ) +
     { if (is.null(count_y)) stat_summary(aes(y = min({ { y } }) - 0.2 * abs(max({ { y } }) - min({ { y } }))),
-      fun.data = show.n, geom = "text", color = default_color, size = count_size)
-      else stat_summary(aes(y = count_y), fun.data = show.n, geom = "text", color = default_color, size = count_size) } +
+      fun.data = \(x) show.n(x, prefix = n.prefix), geom = "text", color = default_color, size = count_size)
+      else stat_summary(aes(y = count_y), fun.data = \(x) show.n(x, prefix = n.prefix), geom = "text", color = default_color, size = count_size) } +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     scale_colour_viridis_c(option = viridis_color_pal, direction = 1, begin = color_lims[1], end = color_lims[2]) +
     { if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket) } +
