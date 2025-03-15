@@ -182,6 +182,7 @@ panel_br_factor_cor <- br_factor_cor %>%
         legend.key.width = unit(24, "points"),
         legend.position = "top",
         legend.direction = "horizontal",
+        legend.title = element_text(hjust = 1, vjust = 0.9),
         axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.x = element_blank(),
         axis.title.y = element_blank(),

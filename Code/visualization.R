@@ -510,14 +510,14 @@ simple_heatmap <- function(df, x_col, y_col, color_col, label_col,
 
 unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FALSE, color_lab = NULL) {
   theme_settings <- theme(legend.key.size = unit(16, "points"),
-                        legend.key.width = unit(24, "points"),
-                        legend.title = element_text(size = 12),
-                        legend.text = element_text(size = 10),
-                        legend.position = "top",
-                        legend.direction = "horizontal",
-                        axis.text.x = element_text(angle = 45, hjust = 1),
-                        axis.title.x = element_blank(),
-                        axis.title.y = element_blank())
+                          legend.key.width = unit(24, "points"),
+                          legend.title = element_text(size = 12, hjust = 1, vjust = 0.9),
+                          legend.text = element_text(size = 10),
+                          legend.position = "top",
+                          legend.direction = "horizontal",
+                          axis.text.x = element_text(angle = 45, hjust = 1),
+                          axis.title.x = element_blank(),
+                          axis.title.y = element_blank())
 
   color_col_name <- quo_name(enquo(color_col))
   x_col_name <- quo_name(enquo(x_col))
@@ -926,7 +926,7 @@ nested_shap_heatmap <- function(df, nesting_formula) {
           axis.ticks.y = element_blank(),
           legend.key.size = unit(16, "points"),
           legend.key.width = unit(24, "points"),
-          legend.title = element_text(size = 12),
+          legend.title = element_text(size = 12,hjust = 1, vjust = 0.9),
           legend.text = element_text(size = 10),
           legend.position = "top",
           legend.direction = "horizontal",

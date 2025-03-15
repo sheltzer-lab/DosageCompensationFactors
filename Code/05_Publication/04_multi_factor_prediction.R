@@ -5,6 +5,7 @@ library(tidyr)
 library(ggplot2)
 library(ggpubr)
 library(openxlsx)
+library(stringr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -163,3 +164,84 @@ sup_table7 <- write_parquet(shap_results, here(tables_dir, "supplementary_table7
 
 # TODO: Dataset.Dataset is a strange field name (Eval.Dataset?)
 # TODO: Add field descriptions
+
+# === Supplemental Figures ===
+## Model performance heatmap
+model_results <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))
+
+### Get model order (xgbLinear outperforms other models on all pan cancer datasets wrt. mean and max ROC AUC)
+model_order <- model_results %>%
+  filter(!(Model.Level == "Chromosome Arm" & Model.BufferingMethod == "Log2FC" & Model.Samples == "Unaveraged")) %>%
+  filter(Model.Dataset != "Engineered") %>%
+  summarize(maxROCAUC = max(Model.ROC.AUC), .by = Model.BaseModel) %>%
+  arrange(maxROCAUC) %>%
+  pull(Model.BaseModel)
+
+panel_model_perf <- model_results %>%
+  filter(!(Model.Level == "Chromosome Arm" & Model.BufferingMethod == "Log2FC" & Model.Samples == "Unaveraged")) %>%
+  mutate(Model.Dataset = str_replace(Model.Dataset, "Engineered", "Engin."),
+         Model.Dataset = factor(Model.Dataset, levels = dataset_order),
+         Model.BaseModel = factor(Model.BaseModel, levels = model_order),
+         Model.AnalysisVariant = case_when(
+           Model.Level == "Gene" ~ "GeneCN",
+           Model.Level == "Chromosome Arm" & Model.Samples == "Unaveraged" ~ "ChrArm",
+           Model.Level == "Chromosome Arm" & Model.Samples == "Averaged" ~ "ChrArmAvg",
+           TRUE ~ NA,
+         )) %>%
+  ggplot() +
+  aes(x = "", y = Model.BaseModel, fill = Model.ROC.AUC) +
+  geom_raster() +
+  ggh4x::facet_nested(. ~ Model.Dataset + Model.Subset + Model.AnalysisVariant + Model.Condition) +
+  scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, limits = c(0.5, 1), oob = scales::squish,
+                       breaks = seq(0.5, 1, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9", "1.0")) +
+  labs(x = NULL, y = NULL, fill = "ROC AUC") +
+  cowplot::theme_minimal_grid() +
+  theme(panel.spacing = unit(0, "lines"),
+        strip.background = element_rect(color = "lightgrey"),
+        axis.ticks.y = element_blank(),
+        legend.key.width = unit(24, "points"),
+        legend.position = "top",
+        legend.direction = "horizontal",
+        legend.title = element_text(hjust = 1, vjust = 0.9),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+## Out-of-sample prediction
+oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))
+
+panel_oos <- oos_summary %>%
+  filter(Model.Condition == Dataset.Condition,
+         Model.BaseModel == Dataset.BaseModel,    # Datasets should be equal across base models; avoid duplicates
+         Model.Subset == Dataset.Subset,
+         Model.Level == Dataset.Level,
+         Model.Samples == Dataset.Samples,
+         Model.BufferingMethod == Dataset.BufferingMethod,
+         Model.Dataset != "Engineered",
+         Dataset.Dataset != "Engineered",
+         Model.Samples == "Unaveraged",
+         Model.BufferingMethod == "BR",
+         Model.Subset == "All",
+         Model.BaseModel == "xgbLinear") %>%
+  mutate(Model.Level = str_replace(Model.Level, "Gene", "Gene CN"),
+         Model.Dataset = factor(Model.Dataset, levels = dataset_order)) %>%
+  ggplot() +
+  aes(y = Model.Dataset, x = Dataset.Dataset, fill = OOS.ROC.AUC,
+      label = format(round(OOS.ROC.AUC, 2), nsmall = 2, scientific = FALSE)) +
+  geom_tile() +
+  geom_text(color = "white") +
+  scale_fill_viridis_c(option = "magma", direction = 1,
+                       limits = c(0.5, 1), oob = scales::squish) +
+  facet_grid(Model.Level ~ Model.Condition) +
+  labs(fill = "ROC AUC", x = "Evaluation Dataset (training + test)", y = "Model Training Dataset") +
+  theme(legend.position = "none")
+
+## Combine figures
+figure_s4_sub1 <- cowplot::plot_grid(NULL, panel_oos,
+                                     ncol = 2, rel_widths = c(1, 0.65), labels = c("", "B"))
+figure_s4 <- cowplot::plot_grid(panel_model_perf, figure_s4_sub1,
+                                nrow = 2, rel_heights = c(0.65, 1), labels = c("A", ""))
+
+cairo_pdf(here(plots_dir, "figure_s4.pdf"), width = 14, height = 8)
+figure_s4
+dev.off()
