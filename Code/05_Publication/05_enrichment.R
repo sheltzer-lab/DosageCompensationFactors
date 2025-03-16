@@ -37,6 +37,7 @@ expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_proc
 
 ssgsea_cptac <- read_parquet(here(output_data_dir, "ssgsea_unfolded_cptac.parquet"))
 gsea_all <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer.parquet"))
+gsea_all_as <- read_parquet(here(output_data_dir, "gsea_hallmark_pan-cancer_aneuploidy.parquet"))
 
 df_growth <- read_parquet(here(output_data_dir, "cellline_growth.parquet")) %>%
   select(Model.ID, CellLine.GrowthRatio)
@@ -179,8 +180,17 @@ panel_proteotox <- ssgsea_cptac_filtered %>%
          shape = guide_legend(order = 2))
 
 ## Check if tumor purity influences UPR
-ssgsea_cptac_filtered %>%
-  scatter_plot_reg_corr(HALLMARK_UNFOLDED_PROTEIN_RESPONSE, Model.TumorPurity)
+cor_upr_purity <- cor.test(ssgsea_cptac_filtered$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
+                           ssgsea_cptac_filtered$Model.TumorPurity)
+
+panel_upr_purity <- ssgsea_cptac_filtered %>%
+  ggplot() +
+  aes(y = Model.TumorPurity, x = HALLMARK_UNFOLDED_PROTEIN_RESPONSE) +
+  geom_point(size = 2, color = default_color) +
+  stat_smooth(method = lm, color = highlight_color) +
+  annotate("text", x = 0.1, y = 1, hjust = 0, size = 5,
+           label = paste0(print_corr(cor_upr_purity$estimate), ", ", print_signif(cor_upr_purity$p.value))) +
+  labs(y = "Tumor Purity", x = "Unfolded Protein Response")
 
 ssgsea_cptac_filtered %>%
   count(HALLMARK_UNFOLDED_PROTEIN_RESPONSE > 0.2, Model.TumorPurity > 0.7) %>%
@@ -300,6 +310,11 @@ ssgsea_cptac_export <- ssgsea_cptac %>%
   left_join(y = metadata_cptac %>% select(starts_with("Model.")), by = "Model.ID") %>%
   mutate(Dataset = "CPTAC")
 
+gsea_export <- bind_rows(
+  gsea_all %>% mutate(Comparison = "Buffering (High - Low)"),
+  gsea_all_as %>% mutate(Comparison = "Aneuploidy (High - Low)")
+)
+
 wb <- createWorkbook()
 sheet_diffexp <- addWorksheet(wb, "Differential Expression")
 sheet_diffexp_common <- addWorksheet(wb, "DiffExp (common genes)")
@@ -307,7 +322,7 @@ sheet_gsea <- addWorksheet(wb, "GSEA")
 sheet_ssgsea <- addWorksheet(wb, "ssGSEA")
 writeDataTable(wb = wb, sheet = sheet_diffexp, x = diff_exp_all)
 writeDataTable(wb = wb, sheet = sheet_diffexp_common, x = diff_exp_common)
-writeDataTable(wb = wb, sheet = sheet_gsea, x = gsea_all)
+writeDataTable(wb = wb, sheet = sheet_gsea, x = gsea_export)
 writeDataTable(wb = wb, sheet = sheet_ssgsea, x = ssgsea_cptac_export)
 saveWorkbook(wb, here(tables_dir, "supplementary_table8.xlsx"), overwrite = TRUE)
 
@@ -353,13 +368,13 @@ ora_up_control <- genes_up_control %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
   plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"),
-                     custom_color = color_palettes$DiffExp["Up"])
+                     custom_color = color_palettes$DiffExp["Up"], string_trunc = 45)
 
 ora_down_control <- genes_down_control %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
   plot_terms_compact(selected_sources = c("GO:BP", "KEGG", "REAC"),
-                     custom_color = color_palettes$DiffExp["Down"])
+                     custom_color = color_palettes$DiffExp["Down"], string_trunc = 45)
 
 ## Cancer Driver Buffering
 panel_og_tsg <- expr_buf_procan %>%
@@ -373,7 +388,7 @@ panel_og_tsg <- expr_buf_procan %>%
   ggplot() +
   aes(x = CNV, y = Buffering.GeneLevel.Ratio) +
   geom_boxplot(outliers = FALSE, size = 0.8, alpha = 0) +
-  stat_summary(aes(y = -2), fun.data = show.n, geom = "text", color = default_color) +
+  stat_summary(aes(y = -2), fun.data = \(x) show.n(x, prefix = "n="), geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("Gain", "Loss")),
               test = wilcox.test,
               map_signif_level = print_signif, y_position = 2.5,
@@ -429,13 +444,53 @@ egfr_classes_chr %>%
   as.matrix() %>%
   fisher.test()
 
-## Combine figures
-figure_s5_sub1 <- cowplot::plot_grid(ora_down_control, ora_up_control)
-figure_s5_sub2 <- cowplot::plot_grid(panel_og_tsg, panel_oncogenes, panel_egfr,
-                                     ncol = 3, rel_widths = c(0.75, 1, 0.7))
-figure_s5 <- cowplot::plot_grid(panel_volcano_all, figure_s5_sub2,
-                                nrow = 2, rel_heights = c(1, 0.9))
+## All GSEA comparisons
+panel_gsea_all <- bind_rows(gsea_all %>% mutate(Comparison = "Buffering"),
+                            gsea_all_as %>% mutate(Comparison = "Aneuploidy")) %>%
+  ### Estimate difference between Buffering and Aneuploidy enrichment scores
+  mutate(Score = mean(NES[Comparison == "Buffering"]) - mean(NES[Comparison == "Aneuploidy"]), .by = pathway) %>%
+  mutate(Label = map_signif(padj),
+         pathway = str_to_lower(str_replace_all(pathway, c("HALLMARK_" = "", "_" = " "))),
+         pathway = fct_reorder(pathway, Score, .desc = FALSE)) %>%
+  ### Remove pathways that are insignificant everywhere
+  add_count(pathway, Label == "n.s.") %>%
+  filter(n < 6) %>%
+  ### Create plot
+  distinct(pathway, Dataset, Comparison, NES, Label) %>%
+  ggplot() +
+  aes(x = pathway, y = "", fill = NES, label = Label) +
+  geom_raster() +
+  geom_text(color = "black") +
+  ggh4x::facet_nested(Comparison + Dataset ~ ., switch = "y") +
+  scale_fill_gradientn(colors = bidirectional_color_pal,
+                       space = "Lab", limits = c(-3, 3), oob = scales::squish) +
+  labs(x = "Cancer Hallmark Pathway", y = "", fill = "Normalized Enrichment Score") +
+  cowplot::theme_minimal_grid() +
+  theme(panel.spacing = unit(0, "lines"),
+        strip.background = element_rect(color = "lightgrey"),
+        axis.ticks.y = element_blank(),
+        legend.key.width = unit(24, "points"),
+        legend.position = "top",
+        legend.direction = "horizontal",
+        legend.title = element_text(hjust = 1, vjust = 0.9, size = base_size),
+        legend.text = element_text(size = 12),
+        text = element_text(size = 11),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.margin = unit(c(5, 15, 5, 15), "mm"))
 
-cairo_pdf(here(plots_dir, "figure_s5.pdf"), width = 12, height = 9)
+## Combine figures
+figure_s5_sub1 <- cowplot::plot_grid(ora_down_control, ora_up_control, panel_upr_purity,
+                                     ncol = 3, rel_widths = c(1, 1, 1),
+                                     labels = c("B", "C", "D"))
+figure_s5_sub2 <- cowplot::plot_grid(panel_og_tsg, panel_oncogenes, panel_egfr,
+                                     ncol = 3, rel_widths = c(0.6, 1, 0.6),
+                                     labels = c("E", "F", "G"))
+figure_s5 <- cowplot::plot_grid(panel_volcano_all, figure_s5_sub1, figure_s5_sub2, panel_gsea_all,
+                                nrow = 4, rel_heights = c(0.95, 1, 0.9, 1.35),
+                                labels = c("A", "", "", "H"))
+
+cairo_pdf(here(plots_dir, "figure_s5.pdf"), width = 12, height = 18)
 figure_s5
 dev.off()
