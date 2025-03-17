@@ -129,7 +129,7 @@ volcano_dep_diff <- df_crispr_model_buf %>%
                    force = 5, max.overlaps = 20) +
   xlim(c(-max_abs_log2fc, max_abs_log2fc)) +
   labs(color = "Cancer Driver", x = "Dependency Score Log2FC",
-       y = "-log10(p.adj)", shape = "Exclusively Essential")
+       y = "-log10(p.adj)", shape = "Exclusively\nEssential")
 #  theme(legend.position = "top", legend.direction = "horizontal",
 #        legend.box = "vertical", legend.box.just = "left", legend.margin = margin(0,0,0,0, unit = 'cm')) +
 #  guides(colour = guide_legend(title.position = "top", title.hjust = 0),
@@ -157,7 +157,7 @@ median_response_plot_buf <- median_response_buf %>%
   drop_na(Buffering) %>%
   ggplot() +
   aes(x = Buffering, y = Drug.Effect.Median, color = Buffering) +
-  geom_boxplot() +
+  geom_boxplot(size = 0.8) +
   geom_signif(comparisons = list(c("High", "Low")),
               test = wilcox.test,
               map_signif_level = print_signif, y_position = 0.06,
@@ -172,7 +172,7 @@ median_response_plot_control <- median_response_buf %>%
   drop_na(DrugStatus) %>%
   ggplot() +
   aes(x = DrugStatus, y = Drug.Effect.Median) +
-  geom_boxplot() +
+  geom_boxplot(size = 0.8) +
   theme(legend.position = "none") +
   xlab("Drug Control") +
   ylim(c(-0.35, 0.15)) +
@@ -310,14 +310,13 @@ figure6
 dev.off()
 
 # === Tables ===
-crispr_model_all <- df_crispr_model_buf %>%
+crispr_model_all <- bind_rows(df_crispr_model_buf %>% mutate(Dataset = "DepMap"),
+                              df_crispr_model_buf_control %>% mutate(Dataset = "DepMap (adherent control)")) %>%
   mutate(ExclusiveEssentiality = case_when(
     Significant == "Up" & Mean_GroupA < 0.5 & Mean_GroupB > 0.5 ~ "High Buffering",
     Significant == "Down" & Mean_GroupA > 0.5 & Mean_GroupB < 0.5 ~ "Low Buffering",
     TRUE ~ NA
   )) %>%
-  mutate(Dataset = "DepMap") %>%
-  bind_rows(df_crispr_model_buf_control %>% mutate(Dataset = "DepMap (adherent control)")) %>%
   mutate(GroupA = "Low Buffering", GroupB = "High Buffering") %>%
   arrange(Significant, ExclusiveEssentiality)
 
@@ -354,3 +353,126 @@ writeDataTable(wb = wb, sheet = sheet_moa, x = drug_mechanisms %>% mutate(Datase
 writeDataTable(wb = wb, sheet = sheet_moa_control, x = drug_mechanisms_control)
 writeDataTable(wb = wb, sheet = sheet_target, x = drug_targets %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
 saveWorkbook(wb, here(tables_dir, "supplementary_table9.xlsx"), overwrite = TRUE)
+
+# === Supplemental Figures ===
+## Adherent Control
+top_diff_all <- crispr_model_all %>%
+  filter(Test.p.adj < p_threshold & !is.na(Significant)) %>%
+  group_by(Dataset, Significant) %>%
+  slice_max(abs(Log2FC), n = 5) %>%
+  ungroup() %>%
+  distinct(Gene.Symbol, .keep_all = TRUE)
+### CRISPR-KO Volcano Plot
+max_abs_log2fc_control <- df_crispr_model_buf_control %>% pull(Log2FC) %>% abs() %>% max(na.rm = TRUE)
+panel_volcano_crispr_control <- crispr_model_all %>%
+  filter(Dataset == "DepMap (adherent control)") %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(Label = if_else(!is.na(Significant) | Gene.Symbol %in% top_diff_all$Gene.Symbol, Gene.Symbol, NA)) %>%
+  arrange(!is.na(CancerDriverMode)) %>%
+  mutate(`-log10(p)` = -log10(Test.p.adj)) %>%
+  ggplot() +
+  aes(x = Log2FC, y = `-log10(p)`, label = Label, color = CancerDriverMode) +
+  geom_point(aes(alpha = Significant, shape = ExclusiveEssentiality, size = ExclusiveEssentiality)) +
+  color_mapping_driver +
+  scale_shape_manual(values = c(`High Buffering` = 17, `Low Buffering` = 15), na.value = 16) +
+  scale_size_manual(values = c(`High Buffering` = 2, `Low Buffering` = 2), na.value = 1, guide = "none") +
+  scale_alpha_manual(values = c(Up = 1, Down = 1), na.value = 0.5, guide = "none") +
+  geom_hline(yintercept = -log10(p_threshold), linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0.1, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = -0.1, linetype = "dashed", color = "black") +
+  geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
+                   seed = 42, max.iter = 30000, max.time = 1.5,
+                   point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
+                   force = 5, max.overlaps = 20) +
+  xlim(c(-max_abs_log2fc_control, max_abs_log2fc_control)) +
+  labs(color = "Cancer Driver", x = "Dependency Score Log2FC",
+       y = "-log10(p.adj)", shape = "Exclusively\nEssential")
+### ORA
+panel_ora_down_control <- df_crispr_model_buf_control %>%
+  filter(Significant == "Down") %>%
+  arrange(Log2FC) %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis() %>%
+  plot_terms_compact(custom_color = color_palettes$DiffExp["Down"], string_trunc = 75) +
+  ylim(c(0, 3))
+
+## Drug Sensitivity
+### ~~Drug Sensitivity Volcano Plot~~
+### Median Drug Response by Aneuploidy
+panel_drug_response_aneuploidy <- median_response_buf %>%
+  drop_na(CellLine.AneuploidyScore) %>%
+  mutate(Aneuploidy = factor(replace_na(Aneuploidy, "Moderate"), levels = c("High", "Moderate", "Low"))) %>%
+  #mutate(Aneuploidy = if_else(CellLine.AneuploidyScore >= median(CellLine.AneuploidyScore), "High", "Low")) %>%
+  ggplot() +
+  aes(x = Aneuploidy, y = Drug.Effect.Median, color = Aneuploidy) +
+  geom_boxplot(size = 0.8) +
+  stat_summary(aes(y = -0.4), fun.data = show.n, geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("High", "Low")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = c(0.05, 0.1),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c(High = color_palettes$DiffExp[["Up"]],
+                                Low = color_palettes$DiffExp[["Down"]],
+                                Moderate = default_color)) +
+  theme(legend.position = "none") +
+  ylim(c(-0.4, 0.15)) +
+  ylab("Median Drug Effect")
+
+### ~~Drug Mechanism Volcano Plot by Aneuploidy~~
+### Median Drug Response (Buffering & Aneuploidy)
+panel_drug_response_aneuploidy_buf <- median_response_buf %>%
+  drop_na(CellLine.AneuploidyScore, Model.Buffering.MeanNormRank) %>%
+  mutate(Buffering = if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
+                             "High", "Low"),
+         Aneuploidy = if_else(CellLine.AneuploidyScore > median(CellLine.AneuploidyScore),
+                              "High Aneuploidy", "Low Aneuploidy")) %>%
+  ggplot() +
+  aes(x = Buffering, y = Drug.Effect.Median, color = Buffering) +
+  geom_boxplot(size = 0.8) +
+  stat_summary(aes(y = -0.4), fun.data = show.n, geom = "text", color = default_color) +
+  geom_signif(comparisons = list(c("High", "Low")),
+              test = wilcox.test,
+              map_signif_level = print_signif, y_position = c(0.05, 0.1),
+              size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
+  scale_color_manual(values = c("High" = color_palettes$BufferingClasses[["Buffered"]],
+                                "Low" = color_palettes$BufferingClasses[["Scaling"]])) +
+  theme(legend.position = "none") +
+  ylim(c(-0.4, 0.15)) +
+  ylab("Median Drug Effect") +
+  facet_grid(~Aneuploidy)
+### Counts
+response_counts <- median_response_buf %>%
+  mutate(Buffering = factor(if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
+                             "Buffering", "Other"), levels = c("Buffering", "Other")),
+         Resistant = factor(if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
+                             "Resistant", "Other"), levels = c("Resistant", "Other")),
+         Aneuploidy = factor(if_else(CellLine.AneuploidyScore > median(CellLine.AneuploidyScore, na.rm = TRUE),
+                                     "High Aneuploidy", "Low Aneuploidy"), levels = c("High Aneuploidy", "Low Aneuploidy"))) %>%
+  count(Buffering, Resistant, Aneuploidy) %>%
+  drop_na() %>%
+  arrange(Buffering, Resistant, Aneuploidy)
+
+panel_drug_response_aneuploidy_buf_counts <- response_counts %>%
+  group_by(Buffering, Aneuploidy) %>%
+  mutate(Share = (n / sum(n))) %>%
+  ungroup() %>%
+  ggplot() +
+  aes(x = Buffering, y = Share, fill = Resistant, label = n) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_y_continuous(labels = scales::percent) +
+  facet_grid(~Aneuploidy) +
+  scale_fill_manual(values = c(Resistant = highlight_colors[2],
+                               Other = color_palettes$Missing)) +
+  labs(y = "Fraction", fill = NULL) +
+  theme(legend.position = "top", legend.direction = "horizontal", legend.margin = margin(0,0,0,0, unit = 'cm'))
+
+## Combine Plots
+figure_s6_sub1 <- cowplot::plot_grid(panel_volcano_crispr_control, panel_ora_down_control, labels = c("A", "B"))
+figure_s6_sub2 <- cowplot::plot_grid(panel_drug_response_aneuploidy, panel_drug_response_aneuploidy_buf,
+                                     panel_drug_response_aneuploidy_buf_counts,
+                                     ncol = 3, labels = c("C", "D", "E"))
+figure_s6 <- cowplot::plot_grid(figure_s6_sub1, figure_s6_sub2, nrow = 2)
+
+cairo_pdf(here(plots_dir, "figure_s6.pdf"), width = 12, height = 10)
+figure_s6
+dev.off()

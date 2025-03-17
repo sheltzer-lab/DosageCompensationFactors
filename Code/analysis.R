@@ -689,9 +689,8 @@ plot_terms_compact <- function(ora, selected_sources = c("CORUM", "KEGG", "REAC"
   df <- ora$result %>%
     filter(p_value < p_thresh) %>%
     filter(source %in% selected_sources) %>%
-    group_by(source) %>%
-    slice_min(p_value, n = terms_per_source, with_ties = FALSE) %>%
-    ungroup() %>%
+    slice_min(p_value, n = 1, with_ties = FALSE, by = term_name) %>% # Remove term duplicates
+    slice_min(p_value, n = terms_per_source, with_ties = FALSE, by = source) %>%    # Get n best terms per source
     mutate(`-log10(p)` = -log10(p_value),
            term_name = fct_reorder(str_trunc(term_name, string_trunc), p_value, .desc = TRUE))
 
