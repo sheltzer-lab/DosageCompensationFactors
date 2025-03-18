@@ -238,9 +238,9 @@ panel_oos <- oos_summary %>%
 
 ## Combine figures
 figure_s4_sub1 <- cowplot::plot_grid(NULL, panel_oos,
-                                     ncol = 2, rel_widths = c(1, 0.65), labels = c("", "B"))
-figure_s4 <- cowplot::plot_grid(panel_model_perf, figure_s4_sub1,
-                                nrow = 2, rel_heights = c(0.65, 1), labels = c("A", ""))
+                                     ncol = 2, rel_widths = c(1, 0.65), labels = c("A", "C"))
+figure_s4 <- cowplot::plot_grid(figure_s4_sub1, panel_model_perf,
+                                nrow = 2, rel_heights = c(1, 0.65), labels = c("", "B"))
 
 cairo_pdf(here(plots_dir, "figure_s4.pdf"), width = 14, height = 8)
 figure_s4
