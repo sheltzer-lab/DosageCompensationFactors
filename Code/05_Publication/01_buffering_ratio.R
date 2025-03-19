@@ -435,18 +435,17 @@ panel_corr <- bind_rows(corr_gene, corr_chr) %>%
 panel_corr_top50 <- read_parquet(here(output_data_dir, "br_correlation_gene.parquet")) %>%
   signif_boxplot(Top50, cor) +
   lims(y = c(0, 1)) +
-  labs(x = "Top50 Frequently Buffered Genes", y = "BR Correlation\n(DepMap ~ ProCan)")
+  labs(x = "Top50 Frequently Buffered Genes", y = "BR Correlation\n(DepMap ~ ProCan)") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
 
 ## Combine Figures
-
-
 figure_s1_sub1 <- cowplot::plot_grid(panel_br_wgd, panel_buf_chr_wgd, labels = c("A", "B"))
 figure_s1_sub2 <- cowplot::plot_grid(panel_purity, panel_micro + ylab(NULL) + theme(axis.text.y = element_blank()),
                                      panel_immune + ylab(NULL) + theme(axis.text.y = element_blank()),
                                      panel_stroma + ylab(NULL) + theme(axis.text.y = element_blank()),
                                      rel_widths = c(1, 0.9, 0.85, 0.85), nrow = 1)
 figure_s1_sub3 <- cowplot::plot_grid(panel_corr, panel_corr_top50,
-                                     rel_widths = c(1, 0.7), labels = c("D", "E"))
+                                     rel_widths = c(1, 0.6), labels = c("D", "E"))
 
 figure_s1 <- cowplot::plot_grid(figure_s1_sub1, figure_s1_sub2, figure_s1_sub3,
                                 nrow = 3, rel_heights = c(1, 0.75, 0.9), labels = c("", "C", ""))

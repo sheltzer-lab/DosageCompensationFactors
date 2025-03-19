@@ -434,6 +434,10 @@ surv_os <- survfit(Surv(OS_days, OS_event) ~ Buffering, data = df_cptac_split) %
 surv_pfs <- survfit(Surv(PFS_days, PFS_event) ~ Buffering, data = df_cptac_split) %>%
   ggsurvplot(data = df_cptac_split)
 
+panel_surv <- cowplot::plot_grid(surv_os$plot + labs(x = NULL, y = "Overall\nsurvival probability") + theme(legend.position = "none"),
+                                 surv_pfs$plot + labs(y = "Progression-free\nsurvival probability") + theme(legend.margin = margin(0, 0, 0, 0, unit = 'cm')),
+                                 nrow = 2, rel_heights = c(0.9, 1))
+
 ## Age
 cor_age <- cor.test(df_agg$Model.Buffering.MeanNormRank,
                        df_agg$Age, method = "spearman")
@@ -567,7 +571,7 @@ panel_growth_as <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), d
 ## Combine figures
 figure_s2_sub1 <- cowplot::plot_grid(panel_as_all, panel_ploidy,
                                      ncol = 2, rel_widths = c(1, 0.4), labels = c("A", "B"))
-figure_s2_sub2 <- cowplot::plot_grid(panel_age_cor, panel_age_cat, panel_p53,
+figure_s2_sub2 <- cowplot::plot_grid(panel_surv, panel_age_cat, panel_p53,
                                      ncol = 3, rel_widths = c(0.8, 0.5, 1), labels = c("C", "D", "E"))
 figure_s2_sub3 <- cowplot::plot_grid(panel_growth_as, panel_growth_procan,
                                      ncol = 2, rel_widths = c(1, 1), labels = c("F", "G"))
