@@ -201,11 +201,13 @@ panel_model_perf <- model_results %>%
         axis.ticks.y = element_blank(),
         legend.key.width = unit(24, "points"),
         legend.position = "top",
+        legend.justification.top = "right",
         legend.direction = "horizontal",
         legend.title = element_text(hjust = 1, vjust = 0.9),
         axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.x = element_blank(),
-        axis.title.y = element_blank())
+        axis.title.y = element_blank(),
+        legend.margin = margin(0, 8, 0, 8))
 
 ## Out-of-sample prediction
 oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))
