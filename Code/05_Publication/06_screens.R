@@ -442,6 +442,7 @@ panel_drug_response_aneuploidy_buf <- median_response_buf %>%
   facet_grid(~Aneuploidy)
 ### Counts
 response_counts <- median_response_buf %>%
+  # Consistent factor ordering necessary for Fisher's exact test
   mutate(Buffering = factor(if_else(Model.Buffering.MeanNormRank > median(Model.Buffering.MeanNormRank, na.rm = TRUE),
                              "Buffering", "Other"), levels = c("Buffering", "Other")),
          Resistant = factor(if_else(Drug.Effect.Median > median(Drug.Effect.Median, na.rm = TRUE),
@@ -453,17 +454,18 @@ response_counts <- median_response_buf %>%
   arrange(Buffering, Resistant, Aneuploidy)
 
 panel_drug_response_aneuploidy_buf_counts <- response_counts %>%
-  group_by(Buffering, Aneuploidy) %>%
-  mutate(Share = (n / sum(n))) %>%
-  ungroup() %>%
+  mutate(Share = (n / sum(n)), .by = c(Buffering, Aneuploidy)) %>%
+  mutate(Buffering = str_replace_all(Buffering, c("Buffering" = "High", "Other" = "Low")),
+         Drug = factor(str_replace(Resistant, "Other", "Responsive"),
+                       levels = c("Resistant", "Responsive"))) %>%
   ggplot() +
-  aes(x = Buffering, y = Share, fill = Resistant, label = n) +
-  geom_bar(position = "stack", stat = "identity") +
+  aes(x = Buffering, y = Share, fill = Drug, label = n) +
+  geom_bar(position = position_stack(reverse = TRUE), stat = "identity") +
   scale_y_continuous(labels = scales::percent) +
   facet_grid(~Aneuploidy) +
   scale_fill_manual(values = c(Resistant = highlight_colors[2],
-                               Other = color_palettes$Missing)) +
-  labs(y = "Fraction", fill = NULL) +
+                               Responsive = color_palettes$Missing)) +
+  labs(y = "Fraction") +
   theme(legend.position = "top", legend.direction = "horizontal", legend.margin = margin(0,0,0,0, unit = 'cm'))
 
 ## Combine Plots
@@ -471,7 +473,7 @@ figure_s6_sub1 <- cowplot::plot_grid(panel_volcano_crispr_control, panel_ora_dow
 figure_s6_sub2 <- cowplot::plot_grid(panel_drug_response_aneuploidy, panel_drug_response_aneuploidy_buf,
                                      panel_drug_response_aneuploidy_buf_counts,
                                      ncol = 3, labels = c("C", "D", "E"))
-figure_s6 <- cowplot::plot_grid(figure_s6_sub1, figure_s6_sub2, nrow = 2)
+figure_s6 <- cowplot::plot_grid(figure_s6_sub1, figure_s6_sub2, nrow = 2, rel_heights = c(0.8, 1))
 
 cairo_pdf(here(plots_dir, "figure_s6.pdf"), width = 12, height = 10)
 figure_s6
