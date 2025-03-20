@@ -436,7 +436,7 @@ surv_pfs <- survfit(Surv(PFS_days, PFS_event) ~ Buffering, data = df_cptac_split
 
 panel_surv <- cowplot::plot_grid(surv_os$plot + labs(x = NULL, y = "Overall\nsurvival probability") + theme(legend.position = "none"),
                                  surv_pfs$plot + labs(y = "Progression-free\nsurvival probability") + theme(legend.margin = margin(0, 0, 0, 0, unit = 'cm')),
-                                 nrow = 2, rel_heights = c(0.9, 1))
+                                 nrow = 2, rel_heights = c(0.75, 1))
 
 ## Age
 cor_age <- cor.test(df_agg$Model.Buffering.MeanNormRank,

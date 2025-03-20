@@ -73,7 +73,7 @@ logfc_heatmap <- expr_buf_p0211 %>%
 br_heatmap <- expr_buf_p0211 %>%
   filter(CellLine.Name != "RPE1") %>%
   filter(Gene.Chromosome == 13) %>%
-  mutate(Label = str_replace_all(Buffering.ChrArmLevel.Class, c("Anti-Scaling" = "-", "Buffered" = "*", "Scaling" = ""))) %>%
+  mutate(Label = str_replace_all(Buffering.ChrArmLevel.Class, c("Anti-Scaling" = "#", "Buffered" = "=", "Scaling" = ""))) %>%
   bidirectional_heatmap(Buffering.ChrArmLevel.Ratio, Gene.Symbol, Sample.Name,
                         text_col = Label, cluster_rows = TRUE, cluster_cols = TRUE,
                         show_rownames = TRUE, show_colnames = TRUE,
@@ -83,7 +83,7 @@ br_heatmap <- expr_buf_p0211 %>%
 logfc_heatmap_avg <- expr_buf_p0211 %>%
   filter(CellLine.Name != "RPE1") %>%
   filter(Gene.Chromosome == 13) %>%
-  mutate(Label = str_replace_all(Buffering.ChrArmLevel.Average.Class, c("Anti-Scaling" = "-", "Buffered" = "*", "Scaling" = ""))) %>%
+  mutate(Label = str_replace_all(Buffering.ChrArmLevel.Average.Class, c("Anti-Scaling" = "#", "Buffered" = "=", "Scaling" = ""))) %>%
   bidirectional_heatmap(Log2FC.Average, Gene.Symbol, CellLine.Name,
                         text_col = Label, cluster_rows = FALSE, cluster_cols = TRUE,
                         show_rownames = TRUE, show_colnames = TRUE,
