@@ -164,8 +164,8 @@ df_crispr_model_buf <- model_buf_agg %>%
   inner_join(y = crispr_screens, by = "Model.ID") %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
                           groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10) %>%
-  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap.parquet")) %T>%
-  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap.xlsx"), colNames = TRUE)
+  write_parquet(here(output_data_dir, "model_buffering_gene_dependency.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency.xlsx"), colNames = TRUE)
 
 df_crispr_model_buf %>%
   mutate(Label = if_else(!is.na(Significant), Gene.Symbol, NA)) %>%
@@ -247,8 +247,8 @@ df_crispr_model_buf_adherent <- model_buf_agg %>%
   select(Model.ID, Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore) %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
                           groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10) %>%
-  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_adherent.parquet")) %T>%
-  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap_adherent.xlsx"), colNames = TRUE)
+  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_adherent.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_adherent.xlsx"), colNames = TRUE)
 
 df_crispr_model_buf_control <- model_buf_agg %>%
   split_by_quantiles(Model.Buffering.MeanNormRank, target_group_col = "Model.Buffering.Group") %>%
@@ -259,8 +259,8 @@ df_crispr_model_buf_control <- model_buf_agg %>%
   select(Model.ID, Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore) %>%
   differential_expression(Gene.Symbol, Model.Buffering.Group, CRISPR.DependencyScore,
                           groups = c("Low", "High"), test = wilcox.test, centr = mean, log2fc_thresh = 0.10) %>%
-  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_control.parquet")) %T>%
-  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_depmap_control.xlsx"), colNames = TRUE)
+  write_parquet(here(output_data_dir, "model_buffering_gene_dependency_control.parquet")) %T>%
+  write.xlsx(here(tables_base_dir, "model_buffering_gene_dependency_control.xlsx"), colNames = TRUE)
 
 essential_scaling_only_adherent <- df_crispr_model_buf_adherent %>%
   semi_join(y = essential_scaling_only, by = c("Gene.Symbol", "Significant"))

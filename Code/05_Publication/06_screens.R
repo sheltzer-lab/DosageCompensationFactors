@@ -21,8 +21,8 @@ dir.create(tables_dir, recursive = TRUE)
 
 cancer_genes <- read_parquet(here(output_data_dir, "cancer_genes.parquet"))
 
-df_crispr_model_buf <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap.parquet"))
-df_crispr_model_buf_control <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency_depmap_adherent.parquet"))
+df_crispr_model_buf <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency.parquet"))
+df_crispr_model_buf_control <- read_parquet(here(output_data_dir, "model_buffering_gene_dependency_adherent.parquet"))
 df_crispr_buf <- read_parquet(here(output_data_dir, "buffering_gene_dependency_depmap.parquet"))
 model_buf_agg <- read_parquet(here(output_data_dir, "cellline_buffering_aggregated.parquet"))
 drug_screens <- read_parquet(here(output_data_dir, "drug_screens.parquet")) %>% select(-CellLine.Name)
@@ -310,8 +310,8 @@ figure6
 dev.off()
 
 # === Tables ===
-crispr_model_all <- bind_rows(df_crispr_model_buf %>% mutate(Dataset = "DepMap"),
-                              df_crispr_model_buf_control %>% mutate(Dataset = "DepMap (adherent control)")) %>%
+crispr_model_all <- bind_rows(df_crispr_model_buf %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"),
+                              df_crispr_model_buf_control %>% mutate(Dataset = "Cell Lines (adherent control)")) %>%
   mutate(ExclusiveEssentiality = case_when(
     Significant == "Up" & Mean_GroupA < 0.5 & Mean_GroupB > 0.5 ~ "High Buffering",
     Significant == "Down" & Mean_GroupA > 0.5 & Mean_GroupB < 0.5 ~ "Low Buffering",
