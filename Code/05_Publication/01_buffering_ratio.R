@@ -314,7 +314,72 @@ saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"), overwrite = TRUE
 # TODO: Add field descriptions
 
 # === Supplemental Figures ===
-# TODO: Replace with sample BR?
+## Copy Number Shares
+expr_buf_all <- bind_rows(expr_buf_procan, expr_buf_cptac) %>%
+  mutate(WGD = "All")
+
+gene_cn_share <- bind_rows(expr_buf_procan, expr_buf_cptac) %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  bind_rows(expr_buf_all) %>%
+  mutate(GeneCN = case_when(Gene.CopyNumber > Gene.CopyNumber.Baseline ~ "Gain",
+                            Gene.CopyNumber == Gene.CopyNumber.Baseline ~ "Neutral",
+                            Gene.CopyNumber < Gene.CopyNumber.Baseline ~ "Loss"),
+         GeneCN = factor(GeneCN, levels = c("Gain", "Neutral", "Loss"))) %>%
+  select(GeneCN, Dataset, WGD) %>%
+  drop_na() %>%
+  count(GeneCN, Dataset, WGD) %>%
+  group_by(Dataset, WGD) %>%
+  mutate(Share = n / sum(n)) %>%
+  ungroup()
+
+panel_gene_cn_share <- gene_cn_share %>%
+  mutate(Dataset = factor(Dataset, levels = dataset_order)) %>%
+  ggplot() +
+  aes(fill = GeneCN, y = Share, x = WGD) +
+  geom_bar(stat = "identity") +
+  facet_grid(~Dataset, scales = "free_x", space = "free_x") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c(Gain = color_palettes$CopyNumbers[["4"]],
+                               Neutral = "darkgrey",
+                               Loss = color_palettes$CopyNumbers[["1"]])) +
+  labs(x = NULL, y = "Fraction", fill = "Gene\nCopy Number") +
+  guides(fill = guide_legend(nrow = 2,byrow = TRUE)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        legend.justification = c("left", "top"),
+        legend.title = element_text(hjust = 1),
+        legend.margin = margin(0,0,0,-1, unit = 'cm'))
+
+### Chr Arm
+chr_share <- expr_buf_procan %>%
+  mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
+  bind_rows(expr_buf_all) %>%
+  mutate(CNA = case_when(ChromosomeArm.CNA > 0 ~ "Gain",
+                         ChromosomeArm.CNA == 0 ~ "Neutral",
+                         ChromosomeArm.CNA < 0 ~ "Loss"),
+         CNA = factor(CNA, levels = c("Gain", "Neutral", "Loss"))) %>%
+  distinct(Model.ID, Gene.ChromosomeArm, CNA, WGD) %>%
+  drop_na() %>%
+  count(CNA, WGD) %>%
+  mutate(Share = n / sum(n), .by = WGD)
+
+panel_chr_share <- chr_share %>%
+  ggplot() +
+  aes(fill = CNA, y = Share, x = WGD) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c(Gain = color_palettes$CopyNumbers[["4"]],
+                               Neutral = "darkgrey",
+                               Loss = color_palettes$CopyNumbers[["1"]])) +
+  labs(x = NULL, y = "Fraction", fill = "Chromosome\nArm") +
+  guides(fill = guide_legend(nrow = 2,byrow = TRUE)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        legend.justification = c("left", "top"),
+        legend.title = element_text(hjust = 1),
+        legend.margin = margin(0,0,0,-1, unit = 'cm'))
+
+## Tumor Purity
 mean_br_cptac <- expr_buf_cptac %>%
   #filter(Buffering.GeneLevel.Ratio.Confidence > 0.3) %>%
   summarize(Mean.BR = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
@@ -323,7 +388,6 @@ mean_br_cptac <- expr_buf_cptac %>%
   #filter(Observations > 50) %>%
   left_join(y = df_model_cptac, by = "Model.ID")
 
-## Tumor Purity
 cor_purity <- cor.test(mean_br_cptac$Mean.BR,
                        mean_br_cptac$Model.TumorPurity, method = "spearman")
 
@@ -381,7 +445,7 @@ panel_br_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
   ggplot() +
   aes(y = Buffering.GeneLevel.Ratio, x = CNV) +
   geom_boxplot(outliers = FALSE) +
-  stat_summary(aes(y = -1), fun.data = show.n, geom = "text", color = default_color) +
+  stat_summary(aes(y = -1), fun.data = \(x) show.n(x, prefix = "n="), geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("Gain", "Loss")),
               test = wilcox.test,
               map_signif_level = print_signif, y_position = 1,
@@ -398,7 +462,7 @@ df_share_chr_wgd <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
   drop_na() %>%
   count(Buffering.ChrArmLevel.Class, Dataset, CNV, WGD) %>%
   group_by(Dataset, CNV, WGD) %>%
-  mutate(Share = (n / sum(n)) * 100) %>%
+  mutate(Share = n / sum(n)) %>%
   ungroup()
 
 panel_buf_chr_wgd <- df_share_chr_wgd %>%
@@ -406,8 +470,10 @@ panel_buf_chr_wgd <- df_share_chr_wgd %>%
   aes(fill = Buffering.ChrArmLevel.Class, y = Share, x = Dataset) +
   geom_bar(stat = "identity") +
   facet_grid(vars(WGD), vars(CNV)) +
+  scale_y_continuous(labels = scales::percent) +
   scale_fill_manual(values = color_palettes$BufferingClasses) +
-  labs(fill = NULL, y = "Fraction")
+  labs(fill = NULL, x = NULL, y = "Fraction") +
+  theme(legend.position = "top", legend.direction = "horizontal", legend.margin = margin(0,0,0,0, unit = 'cm'))
 
 ## Buffering Classes (all)
 # TODO: Buffering Classes (all)
@@ -439,16 +505,17 @@ panel_corr_top50 <- read_parquet(here(output_data_dir, "br_correlation_gene.parq
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
 
 ## Combine Figures
-figure_s1_sub1 <- cowplot::plot_grid(panel_br_wgd, panel_buf_chr_wgd, labels = c("A", "B"))
+figure_s1_sub1 <- cowplot::plot_grid(panel_gene_cn_share, panel_br_wgd, panel_buf_chr_wgd,
+                                     labels = c("A", "B", "C"), ncol = 3, rel_widths = c(0.9, 1, 1))
 figure_s1_sub2 <- cowplot::plot_grid(panel_purity, panel_micro + ylab(NULL) + theme(axis.text.y = element_blank()),
                                      panel_immune + ylab(NULL) + theme(axis.text.y = element_blank()),
                                      panel_stroma + ylab(NULL) + theme(axis.text.y = element_blank()),
                                      rel_widths = c(1, 0.9, 0.85, 0.85), nrow = 1)
 figure_s1_sub3 <- cowplot::plot_grid(panel_corr, panel_corr_top50,
-                                     rel_widths = c(1, 0.6), labels = c("D", "E"))
+                                     rel_widths = c(1, 0.6), labels = c("E", "F"))
 
 figure_s1 <- cowplot::plot_grid(figure_s1_sub1, figure_s1_sub2, figure_s1_sub3,
-                                nrow = 3, rel_heights = c(1, 0.75, 0.9), labels = c("", "C", ""))
+                                nrow = 3, rel_heights = c(1, 0.75, 0.9), labels = c("", "D", ""))
 
 cairo_pdf(here(plots_dir, "figure_s1.pdf"), width = 12, height = 11)
 figure_s1

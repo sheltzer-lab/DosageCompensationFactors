@@ -246,6 +246,30 @@ ora_buf %>%
   plot_terms() %>%
   save_plot("frequently_buffered_genes_ora-terms.png", height = 200)
 
+### CN Gain
+ora_buf_gain <- low_var_buf_gain %>%
+  filter(Top50) %>%
+  filter(Dataset == "CPTAC") %>%
+  arrange(Gene.BR.SD.MeanNormRank) %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = TRUE)
+
+ora_buf_gain %>%
+  plot_terms() %>%
+  save_plot("frequently_buffered_genes_ora-terms_gain.png", height = 200)
+
+### CN Loss
+ora_buf_loss <- low_var_buf_loss %>%
+  filter(Top50) %>%
+  filter(Dataset == "CPTAC") %>%
+  arrange(Gene.BR.SD.MeanNormRank) %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = TRUE)
+
+ora_buf_loss %>%
+  plot_terms() %>%
+  save_plot("frequently_buffered_genes_ora-terms_loss.png", height = 200)
+
 # === Analyze if genes are consistently buffered across datasets ===
 br_cor_gene <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
   drop_na(Buffering.GeneLevel.Ratio) %>%
