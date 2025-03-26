@@ -318,13 +318,14 @@ saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"), overwrite = TRUE
 expr_buf_all <- bind_rows(expr_buf_procan, expr_buf_cptac) %>%
   mutate(WGD = "All")
 
-gene_cn_share <- bind_rows(expr_buf_procan, expr_buf_cptac) %>%
+gene_cn_share <- expr_buf_procan %>%
   mutate(WGD = if_else(CellLine.WGD > 0, "WGD", "Non-WGD")) %>%
   bind_rows(expr_buf_all) %>%
-  mutate(GeneCN = case_when(Gene.CopyNumber > Gene.CopyNumber.Baseline ~ "Gain",
-                            Gene.CopyNumber == Gene.CopyNumber.Baseline ~ "Neutral",
-                            Gene.CopyNumber < Gene.CopyNumber.Baseline ~ "Loss"),
-         GeneCN = factor(GeneCN, levels = c("Gain", "Neutral", "Loss"))) %>%
+  filter(Gene.CopyNumber.Baseline == 2) %>%
+  mutate(GeneCN = as.factor(case_when(Gene.CopyNumber == 1 ~ 1L,
+                                      Gene.CopyNumber == 2 ~ 2L,
+                                      Gene.CopyNumber == 3 ~ 3L,
+                                      Gene.CopyNumber >= 4 ~ 4L))) %>%
   select(GeneCN, Dataset, WGD) %>%
   drop_na() %>%
   count(GeneCN, Dataset, WGD) %>%
@@ -336,12 +337,10 @@ panel_gene_cn_share <- gene_cn_share %>%
   mutate(Dataset = factor(Dataset, levels = dataset_order)) %>%
   ggplot() +
   aes(fill = GeneCN, y = Share, x = WGD) +
-  geom_bar(stat = "identity") +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
   facet_grid(~Dataset, scales = "free_x", space = "free_x") +
   scale_y_continuous(labels = scales::percent) +
-  scale_fill_manual(values = c(Gain = color_palettes$CopyNumbers[["4"]],
-                               Neutral = "darkgrey",
-                               Loss = color_palettes$CopyNumbers[["1"]])) +
+  scale_fill_manual(values = color_palettes$CopyNumbers, labels = c("1", "2", "3", "\u22654")) +
   labs(x = NULL, y = "Fraction", fill = "Gene\nCopy Number") +
   guides(fill = guide_legend(nrow = 2,byrow = TRUE)) +
   theme(legend.position = "top",

@@ -59,6 +59,7 @@ color_palettes <- list(
   WGD = c("WGD" = categorical_color_pal[4],
           "Non-WGD" = categorical_color_pal[8]),
   CopyNumbers = c("1" = bidirectional_color_pal[1],
+                  "2" = "lightgrey",
                   "3" = bidirectional_color_pal[4],
                   "4" = bidirectional_color_pal[5]),
   Datasets = c("DepMap" = discrete_color_pal3[1],
