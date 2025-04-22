@@ -365,7 +365,7 @@ top_diff_all <- crispr_model_all %>%
 ### CRISPR-KO Volcano Plot
 max_abs_log2fc_control <- df_crispr_model_buf_control %>% pull(Log2FC) %>% abs() %>% max(na.rm = TRUE)
 panel_volcano_crispr_control <- crispr_model_all %>%
-  filter(Dataset == "DepMap (adherent control)") %>%
+  filter(Dataset == "Cell Lines (adherent control)") %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%
   mutate(Label = if_else(!is.na(Significant) | Gene.Symbol %in% top_diff_all$Gene.Symbol, Gene.Symbol, NA)) %>%
   arrange(!is.na(CancerDriverMode)) %>%
@@ -388,7 +388,8 @@ panel_volcano_crispr_control <- crispr_model_all %>%
   labs(color = "Cancer Driver", x = "Dependency Score Log2FC",
        y = "-log10(p.adj)", shape = "Exclusively\nEssential")
 ### ORA
-panel_ora_down_control <- df_crispr_model_buf_control %>%
+panel_ora_down_control <- crispr_model_all %>%
+  filter(Dataset == "Cell Lines (adherent control)") %>%
   filter(Significant == "Down") %>%
   arrange(Log2FC) %>%
   pull(Gene.Symbol) %>%
