@@ -12,6 +12,7 @@ source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 source(here("Code", "preprocessing.R"))
 source(here("Code", "buffering_ratio.R"))
+source(here("Code", "publication.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 tables_dir <- here(tables_base_dir, "Publication")
@@ -248,30 +249,30 @@ dev.off()
 # === Tables ===
 
 ## Buffering Classes & Ratios
-fields_buf_description <- c(
+t1_fields_description <- c(
   "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
   "Model.ID" = "Unique identifier for cell lines and tumor samples.",
   "CellLine.DepMapModelId" = "Unique identifier for cell lines; Provided by DepMap CCLE.",
   "CellLine.SangerModelId" = "Unique identifier for cell lines; Provided by Sanger Cell Model Passports.",
-  "CellLine.Name" = "Name of the cell line",
+  "CellLine.Name" = "Name of the cell line.",
   "CellLine.Replicate" = "Biological replicate of the cell line; Relevant for engineered cell lines.",
-  "Model.Type" = "Cell Line or Tumor Sample",
+  "Model.Type" = "Cell Line or Tumor Sample.",
   "Gene.Symbol" = "HGNC gene symbol; updated using HGNChelper.",
   "Gene.Chromosome" = "Chromosome the gene is encoded on.",
   "Gene.ChromosomeArm" = "Chromosome arm the gene is encoded on.",
   "Gene.ChromosomeBand" = "Band of the chromosome the gene is encoded on.",
-  "Gene.CopyNumber.Baseline" = "Gene copy number assumed as baseline for calculating the buffering ratio. For tumor samples: 2; For cell lines: Median of Gene.CopyNumber for samples where ChromosomeArm.CNA = 0, for each Gene.Symbol and Dataset.",
   "Gene.CopyNumber" = "Absolute copy number of a gene; Generated using ABSOLUTE for DepMap and ProCan, and using AscatNGS for CPTAC. See manuscript for dataset references.",
-  "ChromosomeArm.CopyNumber.Baseline" = "Chromosome copy number assumed as baseline for calculating the buffering ratio. Determined as the rounded average ploidy of a cell line.",
+  "Gene.CopyNumber.Baseline" = "Gene copy number assumed as baseline for calculating the buffering ratio. For tumor samples: 2; For cell lines: Median of Gene.CopyNumber for samples where ChromosomeArm.CNA = 0, for each Gene.Symbol and Dataset.",
   "ChromosomeArm.CopyNumber" = "Copy number of the chromosome; Determined as ChromosomeArm.CopyNumber.Baseline + ChromosomeArm.CNA.",
+  "ChromosomeArm.CopyNumber.Baseline" = "Chromosome copy number assumed as baseline for calculating the buffering ratio. Determined as the rounded average ploidy of a cell line.",
   "ChromosomeArm.CNA" = "Chromosome copy number alterations relative to background ploidy (loss: -1, neutral: 0, gain: +1); Obtained from Cohen-Sharir et al. (2021) through DepMap.",
   "Protein.Uniprot.Accession" = "Uniprot accession number of the protein.",
-  "Protein.Expression.Baseline.Unweighted" = "Mean neutral protein abundance. Calculated as the mean of Protein.Expression.Normalized for samples where ChromosomeArm.CNA = 0, for each Gene.Symbol and Dataset.",
-  "Protein.Expression.Baseline" = "Median neutral protein abundance. Calculated as the median of Protein.Expression.Normalized for samples where ChromosomeArm.CNA = 0, for each Gene.Symbol and Dataset.",
   "Protein.Expression.Normalized" = "LOESS-normalized log2 protein abundance. See manuscript for dataset references.",
-  "Protein.Expression.Average" = "Mean protein abundance upon chromosome arm gain or loss. Calculated as the mean of Protein.Expression.Normalized for samples where ChromosomeArm.CNA is +1 or -1, for each Gene.Symbol and Dataset.",
-  "Log2FC" = "log2 fold-change between observed protein abundance and baseline protein abundance. Calculated as Protein.Expression.Normalized - Protein.Expression.Baseline.",
-  "Log2FC.Average" = "log2 fold-change between mean protein abundance upon chromosome arm gain or loss and mean neutral protein abundance. Calculated as Protein.Expression.Average - Protein.Expression.Baseline.Unweighted.",
+  "Protein.Expression.Baseline.Unweighted" = "Mean neutral log2 protein abundance. Calculated as the mean of Protein.Expression.Normalized for samples where ChromosomeArm.CNA = 0, for each Gene.Symbol and Dataset.",
+  "Protein.Expression.Baseline" = "Median neutral log2 protein abundance. Calculated as the median of Protein.Expression.Normalized for samples where ChromosomeArm.CNA = 0, for each Gene.Symbol and Dataset.",
+  "Protein.Expression.Average" = "Mean log2 protein abundance upon chromosome arm gain or loss. Calculated as the mean of Protein.Expression.Normalized for samples where ChromosomeArm.CNA is +1 or -1, for each Gene.Symbol and Dataset.",
+  "Log2FC" = "Log2 fold-change between observed protein abundance and baseline protein abundance. Calculated as Protein.Expression.Normalized - Protein.Expression.Baseline.",
+  "Log2FC.Average" = "Log2 fold-change between mean protein abundance upon chromosome arm gain or loss and mean neutral protein abundance. Calculated as Protein.Expression.Average - Protein.Expression.Baseline.Unweighted.",
   "Buffering.GeneLevel.Ratio" = "Buffering Ratio calculated using gene copy numbers (GeneCN analysis variant). Calculated using Protein.Expression.Normalized, Protein.Expression.Baseline, Gene.CopyNumber, and Gene.CopyNumber.Baseline.",
   "Buffering.GeneLevel.Ratio.Confidence" = "Confidence score of the GeneCN-based buffering ratio. Higher values indicate higher confidence, i.e., less potential influence of noise in the buffering ratio.",
   "Buffering.GeneLevel.Class" = "Buffering class (Scaling, Buffered, Anti-Scaling) for the GeneCN analysis variant; Derived from Buffering.GeneLevel.Ratio and Log2FC.",
@@ -282,7 +283,7 @@ fields_buf_description <- c(
   "Buffering.ChrArmLevel.Log2FC.Class" = "Buffering class (Scaling, Buffered, Anti-Scaling) for the ChrArm (Log2FC) analysis variant; Derived from ChromosomeArm.CNA and Log2FC using Log2FC-based thresholds."
 )
 
-fields_buf <- names(fields_buf_description)
+fields_buf <- names(t1_fields_description)
 
 expr_buf_p0211_publish <- expr_buf_p0211 %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome),
@@ -303,17 +304,53 @@ sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   select(all_of(fields_buf)) %>%
   write_parquet(here(tables_dir, "supplementary_table1.parquet"), version = "2.4")
 
-## Frequently Buffering Genes
+### Export README for Table S1
+t1_description <- c(
+  "This table contains buffering ratios (BR) and buffering classes for all analysis varaints described in the methods section of the manuscript (GeneCN, ChrArm, ChrArm (avg.), ChrArm (Log2FC)).",
+  "Protein abundance and copy number baselines required for calculating the BR are also included.",
+  "The values of this table were determined for the proteomics datasets of DepMap CCLE, Sanger ProCan, CPTAC, Chunduri et al. (2021), and for P0211 (chromosome-engineered RPE-1 cell lines)."
+)
+
+createParquetReadme(t1_description, t1_fields_description, title = "Supplementary Table 1 - README",
+                    readme_path = here(tables_dir, "README_supplementary_table1.md"),
+                    file_path = "supplementary_table1.parquet", parquet_version = "2.4")
+
+## Frequently Buffered Genes
+t2_fields_description <- c(
+  "=== TABLES ===" = "",
+  "Frequently Buffered Genes" = "This table contains information about whether a gene was frequently and consistently buffered across multiple datasets, independent of whether the gene was affected by copy number gain or loss.",
+  "Freq. Buffered Genes (CN Gain)" = "This table contains information about whether a gene was frequently and consistently buffered upon gene copy number gain across multiple datasets.",
+  "Freq. Buffered Genes (CN Loss)" = "This table contains information about whether a gene was frequently and consistently buffered upon gene copy number loss across multiple datasets.",
+  "=== COLUMNS ===" = "",
+  "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
+  "Gene.Symbol" = "HGNC gene symbol; updated using HGNChelper.",
+  "Gene.BR.Mean" = "Mean of gene copy number-derived buffering ratios across samples within a dataset.",
+  "Gene.BR.SD" = "Standard deviation of gene copy number-derived buffering ratios across samples within a dataset.",
+  "Samples" = "Number of samples in a dataset with valid gene copy number-derived buffering ratios.",
+  "Gene.Buffered.Count" = "Number of samples within a dataset where the gene was classified as Buffered using gene copy number-derived buffering ratios.",
+  "Gene.Buffered.Share" = "Fraction of samples within a dataset where the gene was classified as Buffered using gene copy number-derived buffering ratios.",
+  "Gene.Buffered.Share.Median" = "Median fraction of Buffered genes within a dataset; Calculated as median of Gene.Buffered.Share across all genes within a dataset.",
+  "Gene.BR.Test" = "Test used to determine whether the distribution of buffering ratios for this gene within is significantly higher than the threshold in Gene.BR.Test.Mu.",
+  "Gene.BR.Test.Mu" = "Threshold on the buffering ratio used for Gene.BR.Test.",
+  "Gene.BR.Test.p" = "p-value resulting from the test specified in Gene.BR.Test.",
+  "Gene.BR.Test.p.adjusted" = "Benjamini-Hochberg adjusted p-value resulting from the test specified in Gene.BR.Test.",
+  "Gene.BR.SD.MeanNormRank" = "Mean normalized rank (MNR) of buffering ratio standard deviations of a gene; Calculated for each gene as the MNR of Gene.BR.SD across datasets.",
+  "Top50" = "Top 50 frequently and consistently buffered genes (ranked by lowest Gene.BR.SD.MeanNormRank). Genes were considered frequently buffered if Gene.Buffered.Share was at least 1/3 and above Gene.Buffered.Share.Median. Genes were considered consitently buffered, if Gene.BR.SD < 2 and Gene.BR.Test.p.adjusted < 0.05.",
+  "Top10" = "Top 10 frequently and consistently buffered genes (ranked by lowest Gene.BR.SD.MeanNormRank)."
+)
+
+df_t2_fields <- data.frame(Column = names(t2_fields_description), Description = unname(t2_fields_description))
+
 wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_low_buf <- addWorksheet(wb, "Frequently Buffered Genes")
 sheet_low_buf_gain <- addWorksheet(wb, "Freq. Buffered Genes (CN Gain)")
 sheet_low_buf_loss <- addWorksheet(wb, "Freq. Buffered Genes (CN Loss)")
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t2_fields)
 writeDataTable(wb = wb, sheet = sheet_low_buf, x = low_var_buf)
 writeDataTable(wb = wb, sheet = sheet_low_buf_gain, x = low_var_buf_gain)
 writeDataTable(wb = wb, sheet = sheet_low_buf_loss, x = low_var_buf_loss)
 saveWorkbook(wb, here(tables_dir, "supplementary_table2.xlsx"), overwrite = TRUE)
-
-# TODO: Add field descriptions
 
 # === Supplemental Figures ===
 ## Copy Number Shares
