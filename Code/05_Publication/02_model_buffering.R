@@ -275,21 +275,22 @@ panel_leuk <- cowplot::plot_grid(leuk_plot,
                                  nrow = 1, ncol = 2)
 
 # === Growth Pattern Panel ===
-df_low_as <- df_depmap %>%
+df_low_as <- df_procan %>%
   filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
   filter(CellLine.AneuploidyScore <= min(
-    max(df_depmap[df_depmap$GrowthPattern == "Adherent",]$CellLine.AneuploidyScore),
-    max(df_depmap[df_depmap$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)
+    max(df_procan[df_procan$GrowthPattern == "Adherent",]$CellLine.AneuploidyScore),
+    max(df_procan[df_procan$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)
   )) %>%
   mutate(Condition = "Low Aneuploidy")
-df_split_growth <- split(df_depmap, df_depmap$GrowthPattern)
+df_split_growth <- split(df_procan, df_procan$GrowthPattern)
 df_equal_as <- df_split_growth$Suspension %>%
   equalize_distributions(df_split_growth$Adherent, CellLine.AneuploidyScore,
                          with_replacement = FALSE, num_buckets = 6) %>%
   mutate(Condition = "Equal Aneuploidy")
 
-panel_growth <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_low_as, df_equal_as) %>%
-  mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
+panel_growth <- bind_rows(df_procan %>% mutate(Condition = "Uncontrolled"), df_low_as, df_equal_as) %>%
+  mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy")),
+         GrowthPattern = str_replace(GrowthPattern, "Semi-Adherent", "Mixed")) %>%
   filter(GrowthPattern != "Unknown") %>%
   ggplot() +
   aes(x = GrowthPattern, y = Model.Buffering.Ratio, color = GrowthPattern) +
@@ -394,35 +395,38 @@ figure2
 dev.off()
 
 # === Tables ===
-fields <- c(
-  "Dataset",
-  "Model.ID",
-  "CellLine.DepMapModelId",
-  "CellLine.SangerModelId",
-  "CellLine.Name",
-  "OncotreeCode",
-  "Model.Buffering.Ratio",
-  "Model.Buffering.Ratio.ZScore",
-  "Observations",
-  "SD",
-  "Rank",
-  "Model.Buffering.MeanNormRank",
-  "Model.Buffering.StandardizedMean"
+t3_field_descriptions <- c(
+  "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
+  "Model.ID" = "Unique identifier for cell lines and tumor samples.",
+  "CellLine.DepMapModelId" = "Unique identifier for cell lines; Provided by DepMap CCLE.",
+  "CellLine.SangerModelId" = "Unique identifier for cell lines; Provided by Sanger Cell Model Passports.",
+  "CellLine.Name" = "Name of the cell line.",
+  "OncotreeCode" = "Cancer type classification using OncoTree codes (hierarchy level 2).",
+  "Model.Buffering.Ratio" = "Sample buffering ratio (sample BR) calculated as the mean gene copy number-derived buffering ratio of (filtered) proteins in a cell line or tumor sample. Proteins missing in at least one of the datasets were removed prior to calculation.",
+  "Model.Buffering.Ratio.ZScore" = "Standardized sample BR calculated as the z-score of Model.Buffering.Ratio.",
+  "Observations" = "Number of valid gene copy number-derived buffering ratios in a cell line or tumor sample after filtering.",
+  "SD" = "Standard deviation of gene copy number-derived buffering ratios of (filtered) proteins in a cell line or tumor sample.",
+  "Rank" = "Rank of the sample BR (ascending).",
+  "Model.Buffering.MeanNormRank" = "Mean normalized rank of sample BRs of a cell line across datasets (DepMap, ProCan).",
+  "Model.Buffering.StandardizedMean" = "Mean of the standardized sample BRs of a cell line across datasets (DepMap, ProCan).",
+  "Model.AneuploidyScore.Estimate" = "Estimated aneuploidy score quantifying the degree of aneuploidy in tumor samples. See manuscript for details."
 )
 
+fields <- names(t3_field_descriptions)
+df_t3_fields <- data.frame(Column = names(t3_field_descriptions), Description = unname(t3_field_descriptions))
+
 wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_depmap <- addWorksheet(wb, "DepMap")
 sheet_procan <- addWorksheet(wb, "ProCan")
 sheet_cptac <- addWorksheet(wb, "CPTAC")
 sheet_agg  <- addWorksheet(wb, "Cell Lines (Aggregated)")
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t3_fields)
 writeDataTable(wb = wb, sheet = sheet_depmap, x = df_depmap %>% select(any_of(fields)))
 writeDataTable(wb = wb, sheet = sheet_procan, x = df_procan %>% select(any_of(fields)))
 writeDataTable(wb = wb, sheet = sheet_cptac, x = df_cptac %>% select(any_of(fields)))
 writeDataTable(wb = wb, sheet = sheet_agg, x = df_agg %>% select(any_of(fields)))
 saveWorkbook(wb, here(tables_dir, "supplementary_table3.xlsx"), overwrite = TRUE)
-
-# TODO: add eAS for cptac
-# TODO: Add field descriptions
 
 # === Supplemental Figures ===
 ## Kaplan-Meyer Plots
@@ -520,20 +524,20 @@ panel_as_all <- bind_rows(df_depmap, df_procan, df_cptac) %>%
   facet_grid(~Dataset, scales = "free_x")
 
 ## Growth Pattern (ProCan)
-df_low_as_procan <- df_procan %>%
+df_low_as_depmap <- df_depmap %>%
   filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
   filter(CellLine.AneuploidyScore <= min(
-    max(df_procan[df_procan$GrowthPattern == "Adherent",]$CellLine.AneuploidyScore),
-    max(df_procan[df_procan$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)
+    max(df_depmap[df_depmap$GrowthPattern == "Adherent",]$CellLine.AneuploidyScore),
+    max(df_depmap[df_depmap$GrowthPattern == "Suspension",]$CellLine.AneuploidyScore)
   )) %>%
   mutate(Condition = "Low Aneuploidy")
-df_split_growth_procan <- split(df_procan, df_procan$GrowthPattern)
-df_equal_as_procan <- df_split_growth_procan$Suspension %>%
-  equalize_distributions(df_split_growth_procan$Adherent, CellLine.AneuploidyScore,
+df_split_growth_depmap <- split(df_depmap, df_depmap$GrowthPattern)
+df_equal_as_depmap <- df_split_growth_depmap$Suspension %>%
+  equalize_distributions(df_split_growth_depmap$Adherent, CellLine.AneuploidyScore,
                          with_replacement = FALSE, num_buckets = 6) %>%
   mutate(Condition = "Equal Aneuploidy")
 
-panel_growth_procan <- bind_rows(df_procan %>% mutate(Condition = "Uncontrolled"), df_low_as_procan, df_equal_as_procan) %>%
+panel_growth_depmap <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_low_as_depmap, df_equal_as_depmap) %>%
   mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
   filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
   ggplot() +
@@ -542,7 +546,7 @@ panel_growth_procan <- bind_rows(df_procan %>% mutate(Condition = "Uncontrolled"
   stat_summary(aes(y = 0.2), fun.data = show.n,
                geom = "text", color = default_color) +
   geom_signif(comparisons = list(c("Adherent", "Suspension")),
-              map_signif_level = print_signif, y_position = 1, size = 1,
+              map_signif_level = print_signif, y_position = 0.9, size = 1,
               tip_length = 0, extend_line = -0.05, color = "black") +
   scale_color_manual(values = c(Adherent = discrete_color_pal2_bright[3],
                                 Suspension = discrete_color_pal2_bright[2]),
@@ -573,7 +577,7 @@ figure_s2_sub1 <- cowplot::plot_grid(panel_as_all, panel_ploidy,
                                      ncol = 2, rel_widths = c(1, 0.4), labels = c("A", "B"))
 figure_s2_sub2 <- cowplot::plot_grid(panel_surv, panel_age_cat, panel_p53,
                                      ncol = 3, rel_widths = c(0.8, 0.5, 1), labels = c("C", "D", "E"))
-figure_s2_sub3 <- cowplot::plot_grid(panel_growth_as, panel_growth_procan,
+figure_s2_sub3 <- cowplot::plot_grid(panel_growth_as, panel_growth_depmap,
                                      ncol = 2, rel_widths = c(1, 1), labels = c("F", "G"))
 
 figure_s2 <- cowplot::plot_grid(figure_s2_sub1, figure_s2_sub2, figure_s2_sub3, nrow = 3)
