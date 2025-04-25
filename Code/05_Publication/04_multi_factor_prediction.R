@@ -12,6 +12,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "publication.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 output_data_dir <- output_data_base_dir
@@ -151,24 +152,84 @@ shap_corr <- shap_results %>%
   distinct(DosageCompensation.Factor, Model.Dataset, Model.Condition, Model.Variant,
            SHAP.Factor.Corr, SHAP.Factor.Corr.p, SHAP.Factor.Corr.p.adj, SHAP.Median.Absolute)
 
+oos_summary_renamed <- oos_summary %>%
+  rename_with(~str_replace(.x, "Model.", "ModelA."), starts_with("Model.")) %>%
+  rename_with(~str_replace(.x, "Dataset.", "ModelB."), starts_with("Dataset."))
+
+t6_field_descriptions <- c(
+  "=== TABLES ===" = "",
+  "Model Performance" = "Contains the performance (ROC AUC) of each multifactorial model in predicting protein buffering. Different models have been trained for different conditions (gene copy number gain, chromosome arm loss in WGD cells, etc.).",
+  "Out-of-Sample Prediction" = "Contains the performance (ROC AUC) of ModelA in predicting the dataset (training + test set) associated to ModelB.",
+  "SHAP-Correlation" = "Correlation between SHAP-values of a model for a given factor and set of observations and the corresponding values of the factor.",
+  "=== COLUMNS ===" = "",
+  "Model.Filename" = "Filename of the trained and stored model. Serves as an identifier of the model.",
+  "Model.ROC.AUC" = "Predictive power of a model (ROC AUC) in classifying a protein as Buffered or Scaling.",
+  "Model.BaseModel" = "Model architecture used for training the model. Either xgbLinear (linear models with XGBoost), rf (Random Forests), or pcaNNet (Neural Network with prior PCA feature transformation and reduction).",
+  "Model.Variant" = "Describes the copy number variant used for filtering the dataset (e.g., ChromosomeArm-Level_Gain). A combination of the columns Model.Level and Model.Condition.",
+  "Model.Dataset" = "Proteomics dataset used as a source for training and evaluating the model after preprocessing (variant filtering, training-test-split).",
+  "Model.Subset" = "Indicates whether all samples, whole genome doubled (WGD) samples, or non-WGD samples have been used for training and evaluating the model.",
+  "Model.Condition" = "Copy number condition considered for the model (either Gain or Loss).",
+  "Model.Level" = "Level of copy number data used for the model (either Chromosome Arm or Gene Copy Number).",
+  "Model.Samples" = "Describes whether the samples used for the model have been averaged prior to determining buffering status (as in the ChrArm (avg.) analysis variant using average Log2FC values) or not (GeneCN, ChrArm analysis variants).",
+  "Model.BufferingMethod" = "Quantities and thresholds applied for determining buffering classes used in the model.",
+  "SHAP.Factor.Corr" = "Spearman's correlation coefficient between SHAP-value of a feature in a model and the associated value of the feature. Negative correlations indicate a higher confidence of the model in predicting a protein as Buffered if the value of the feature is high (e.g., high gene essentiality).",
+  "SHAP.Factor.Corr.p" = "P-value of the correlation coefficient.",
+  "SHAP.Factor.Corr.p.adj" = "Benjamini-Hochberg-adjusted p-value of the correlation coefficient.",
+  "SHAP.Median.Absolute" = "Median absolute SHAP-value of a factor in a model."
+)
+
+df_t6_fields <- data.frame(Column = names(t6_field_descriptions), Description = unname(t6_field_descriptions))
+
 wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_model_results <- addWorksheet(wb, "Model Performance")
 sheet_oos <- addWorksheet(wb, "Out-of-Sample Prediction")
 sheet_shap <- addWorksheet(wb, "SHAP-Correlation")
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t6_fields)
 writeDataTable(wb = wb, sheet = sheet_model_results, x = model_results)
 writeDataTable(wb = wb, sheet = sheet_oos, x = oos_summary)
 writeDataTable(wb = wb, sheet = sheet_shap, x = shap_corr)
 saveWorkbook(wb, here(tables_dir, "supplementary_table6.xlsx"), overwrite = TRUE)
 
-sup_table7 <- write_parquet(shap_results, here(tables_dir, "supplementary_table7.parquet"), version = "2.4")
+t7_description <- c("This table contains the raw SHAP-values and derived quantities generated using trained multifactorial models.",
+                    "SHAP-values are provided for each model, factor of a model, and observation (protein in a sample).",
+                    "Observations are a random subset of the test set associated with a model. Only observations with correct model predictions are considered.",
+                    "See manuscript for method details.")
 
-# TODO: Dataset.Dataset is a strange field name (Eval.Dataset?)
-# TODO: Add field descriptions
+t7_field_descriptions <- c(
+  "ID" = "ID of the protein (observation) used for calculating the SHAP value. Consists of a sample ID (specific to the dataset; e.g., DepMap/Sanger cell model ID) and a Uniprot accession.",
+  "DosageCompensation.Factor" = "Factor used in a model for predicting protein buffering.",
+  "Factor.Value" = "Value of the factor.",
+  "Factor.Value.Relative" = "Min-max-scaled value of the factor.",
+  "SHAP.Value" = "SHAP-value of a factor in a model for a given protein in a sample. Indicates the confidence of the model in predicting the protein as Buffered (negative value) or Scaling (positive) using the associated relative feature value.",
+  "SHAP.p25.Absolute" = "First quartile of absolute SHAP-values of a factor in a model.",
+  "SHAP.Median.Absolute" = "Median absolute SHAP-value of a factor in a model.",
+  "SHAP.p75.Absolute" = "Third quartile of absolute SHAP-values of a factor in a model.",
+  "SHAP.Factor.Corr" = "Spearman's correlation coefficient between SHAP-value of a feature in a model and the associated value of the feature. Negative correlations indicate a higher confidence of the model in predicting a protein as Buffered if the value of the feature is high (e.g., high gene essentiality).",
+  "SHAP.Factor.Corr.p" = "P-value of the correlation coefficient.",
+  "SHAP.Factor.Corr.p.adj" = "Benjamini-Hochberg-adjusted p-value of the correlation coefficient.",
+  "Model.Filename" = "Filename of the trained and stored model. Serves as an identifier of the model.",
+  "Model.ROC.AUC" = "Predictive power of a model (ROC AUC) in classifying a protein as Buffered or Scaling.",
+  "Model.BaseModel" = "Model architecture used for training the model. Either xgbLinear (linear models with XGBoost), rf (Random Forests), or pcaNNet (Neural Network with prior PCA feature transformation and reduction).",
+  "Model.Variant" = "Describes the copy number variant used for filtering the dataset (e.g., ChromosomeArm-Level_Gain). A combination of the columns Model.Level and Model.Condition.",
+  "Model.Dataset" = "Proteomics dataset used as a source for training and evaluating the model after preprocessing (variant filtering, training-test-split).",
+  "Model.Subset" = "Indicates whether all samples, whole genome doubled (WGD) samples, or non-WGD samples have been used for training and evaluating the model.",
+  "Model.Condition" = "Copy number condition considered for the model (either Gain or Loss).",
+  "Model.Level" = "Level of copy number data used for the model (either Chromosome Arm or Gene Copy Number).",
+  "Model.Samples" = "Describes whether the samples used for the model have been averaged prior to determining buffering status (as in the ChrArm (avg.) analysis variant using average Log2FC values) or not (GeneCN, ChrArm analysis variants).",
+  "Model.BufferingMethod" = "Quantities and thresholds applied for determining buffering classes used in the model."
+)
+
+sup_table7 <- shap_results %>%
+  select(all_of(names(t7_field_descriptions))) %>%
+  write_parquet(here(tables_dir, "supplementary_table7.parquet"), version = "2.4")
+
+createParquetReadme(t7_description, t7_field_descriptions, title = "Supplementary Table 7 - README",
+                    readme_path = here(tables_dir, "README_supplementary_table7.md"),
+                    file_path = "supplementary_table7.parquet", parquet_version = "2.4")
 
 # === Supplemental Figures ===
 ## Model performance heatmap
-model_results <- read_parquet(here(output_data_dir, 'multivariate_model_results.parquet'))
-
 ### Get model order (xgbLinear outperforms other models on all pan cancer datasets wrt. mean and max ROC AUC)
 model_order <- model_results %>%
   filter(!(Model.Level == "Chromosome Arm" & Model.BufferingMethod == "Log2FC" & Model.Samples == "Unaveraged")) %>%
@@ -210,8 +271,6 @@ panel_model_perf <- model_results %>%
         legend.margin = margin(0, 8, 0, 8))
 
 ## Out-of-sample prediction
-oos_summary <- read_parquet(here(output_data_dir, "out-of-sample-evaluation_summary.parquet"))
-
 panel_oos <- oos_summary %>%
   filter(Model.Condition == Dataset.Condition,
          Model.BaseModel == Dataset.BaseModel,    # Datasets should be equal across base models; avoid duplicates

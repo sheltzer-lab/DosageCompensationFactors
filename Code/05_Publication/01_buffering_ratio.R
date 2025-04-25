@@ -283,8 +283,6 @@ t1_field_descriptions <- c(
   "Buffering.ChrArmLevel.Log2FC.Class" = "Buffering class (Scaling, Buffered, Anti-Scaling) for the ChrArm (Log2FC) analysis variant; Derived from ChromosomeArm.CNA and Log2FC using Log2FC-based thresholds."
 )
 
-t1_fields <- names(t1_field_descriptions)
-
 expr_buf_p0211_publish <- expr_buf_p0211 %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome),
          Dataset = "P0211",
@@ -301,7 +299,7 @@ sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
   bind_rows(expr_buf_p0211_publish, expr_buf_chunduri_publish) %>%
   mutate(CellLine.Replicate = as.integer(CellLine.Replicate)) %>%
-  select(all_of(t1_fields)) %>%
+  select(all_of(names(t1_field_descriptions))) %>%
   write_parquet(here(tables_dir, "supplementary_table1.parquet"), version = "2.4")
 
 ### Export README for Table S1
