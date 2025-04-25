@@ -11,6 +11,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "publication.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 models_base_dir <- here("Output", "Models")
@@ -129,7 +130,35 @@ bootstrap_summary <- bootstrap_results %>%
             Bootstrap.Samples = n(),
             .by = c("DosageCompensation.Factor", "Dataset", "Level", "Event"))
 
+t4_field_descriptions <- c(
+  "=== TABLES ===" = "",
+  "Gain" = "Unifactorial performance of biochemical and genetic factors in predicting protein buffering upon gene and chromosome arm copy number gain. Aggregated across multiple datasets (DepMap, ProCan, CPTAC) and analysis variants (GeneCN, ChrArm, ChrArm (avg.)).",
+  "Loss" = "Unifactorial performance of biochemical and genetic factors in predicting protein buffering upon gene and chromosome arm copy number loss. Aggregated across multiple datasets (DepMap, ProCan, CPTAC) and analysis variants (GeneCN, ChrArm, ChrArm (avg.)).",
+  "Gain, WGD" = "Unifactorial performance of biochemical and genetic factors in predicting protein buffering upon gene and chromosome arm copy number gain in whole genome doubled cell lines (DepMap). Aggregated across multiple analysis variants (GeneCN, ChrArm, ChrArm (avg.)).",
+  "Loss, WGD" = "Unifactorial performance of biochemical and genetic factors in predicting protein buffering upon gene and chromosome arm copy number loss in whole genome doubled cell lines (DepMap). Aggregated across multiple analysis variants (GeneCN, ChrArm, ChrArm (avg.)).",
+  "Gain, Non-WGD" = "Unifactorial performance of biochemical and genetic factors in predicting protein buffering upon gene and chromosome arm copy number gain in cell lines without whole genome doubling (DepMap). Aggregated across multiple analysis variants (GeneCN, ChrArm, ChrArm (avg.)).",
+  "Loss, Non-WGD" = "Unifactorial performance of biochemical and genetic factors in predicting protein buffering upon gene and chromosome arm copy number loss in cell lines without whole genome doubling (DepMap). Aggregated across multiple analysis variants (GeneCN, ChrArm, ChrArm (avg.)).",
+  "Bootstrapped ROC AUC (Summary)" = "Contains summary statistics of the bootstrapped unifactorial analysis. The full dataset with all datapoints of the bootstrapped analysis is contained in supplementary table 5.",
+  "BR-Factor-Correlation" = "Unifactorial correlation between biochemical and genetic factors and buffering ratios.",
+  "=== COLUMNS ===" = "",
+  "DosageCompensation.Factor" = "Factor used for predicting protein buffering.",
+  "MeanNormRank" = "Mean normalized rank of ROC AUCs for each factor across multiple conditions (see table description). ROC AUCs represent the predictive power of a factor in classifying a protein as Buffered or Scaling.",
+  "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
+  "Level" = "Level of copy number data used (either Chromosome Arm or Gene Copy Number).",
+  "Event" = "Copy number event considered (either Gain or Loss).",
+  "ROC.AUC.Median" = "Median ROC AUC of a factor for each Dataset, Level, and Event across bootstrapped samples.",
+  "ROC.AUC.Min" = "Minimum ROC AUC of a factor for each Dataset, Level, and Event across bootstrapped samples.",
+  "ROC.AUC.Max" = "Maximum ROC AUC of a factor for each Dataset, Level, and Event across bootstrapped samples.",
+  "Observations.Median" = "Median number of valid values of a factor for each Dataset, Level, and Event across bootstrapped samples.",
+  "Observations.Min" = "Minimum number of valid values of a factor for each Dataset, Level, and Event across bootstrapped samples.",
+  "Observations.Max" = "Maximum number of valid values of a factor for each Dataset, Level, and Event across bootstrapped samples.",
+  "Bootstrap.Samples" = "Number of bootstrapped samples generated for each Dataset, Level, and Event."
+)
+
+df_t4_fields <- data.frame(Column = names(t4_field_descriptions), Description = unname(t4_field_descriptions))
+
 wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_rank_gain <- addWorksheet(wb, "Gain")
 sheet_rank_loss <- addWorksheet(wb, "Loss")
 sheet_rank_gain_wgd <- addWorksheet(wb, "Gain, WGD")
@@ -138,6 +167,7 @@ sheet_rank_gain_nonwgd <- addWorksheet(wb, "Gain, Non-WGD")
 sheet_rank_loss_nonwgd <- addWorksheet(wb, "Loss, Non-WGD")
 sheet_bootstrap_summary <- addWorksheet(wb, "Bootstrapped ROC AUC (Summary)")
 sheet_corr <- addWorksheet(wb, "BR-Factor Correlation")
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t4_fields)
 writeDataTable(wb = wb, sheet = sheet_rank_gain, x = rank_gain_all)
 writeDataTable(wb = wb, sheet = sheet_rank_loss, x = rank_loss_all)
 writeDataTable(wb = wb, sheet = sheet_rank_gain_wgd, x = rank_gain_wgd)
@@ -148,9 +178,26 @@ writeDataTable(wb = wb, sheet = sheet_bootstrap_summary, x = bootstrap_summary)
 writeDataTable(wb = wb, sheet = sheet_corr, x = br_factor_cor)
 saveWorkbook(wb, here(tables_dir, "supplementary_table4.xlsx"), overwrite = TRUE)
 
+t5_description <- c("This table contains all datapoints of the unifactorial bootstrapped analysis.",
+                    "ROC AUCs were calculated for each bootstrapped sample and factor.",
+                    "N = 10000 bootstrapped samples were generated for each chromosome arm / gene copy number condition and dataset.")
+
+t5_field_descriptions <- c(
+  "DosageCompensation.Factor" = "Factor used for predicting protein buffering.",
+  "DosageCompensation.Factor.Observations" = "Number of valid factor values in a bootstrapped sample usable for predicting protein buffering.",
+  "DosageCompensation.Factor.ROC.AUC" = "ROC AUC of a factor in predicting protein buffering in a bootstrapped sample. ROC AUCs represent the predictive power of a factor in classifying a protein as Buffered or Scaling.",
+  "Condition" = "Copy number condition considered (e.g., chromosome arm loss). Combination of Level and Event columns.",
+  "Level" = "Level of copy number data used (either Chromosome Arm or Gene Copy Number).",
+  "Event" = "Copy number event considered (either Gain or Loss).",
+  "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
+  "Bootstrap.Samples" = "Index of the bootstrapped sample generated for a Dataset, Level, and Event."
+)
+
 sup_table5 <- write_parquet(bootstrap_auc, here(tables_dir, "supplementary_table5.parquet"), version = "2.4")
 
-# TODO: Add field descriptions
+createParquetReadme(t5_description, t5_field_descriptions, title = "Supplementary Table 5 - README",
+                    readme_path = here(tables_dir, "README_supplementary_table5.md"),
+                    file_path = "supplementary_table5.parquet", parquet_version = "2.4")
 
 # === Supplemental Figures ===
 ## ROC AUC ranks (all)

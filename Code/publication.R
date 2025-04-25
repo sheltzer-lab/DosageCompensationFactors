@@ -23,7 +23,7 @@ createParquetReadme <- function(table_description, col_descriptions, title = "Su
     "Parquet is a column-oriented data file format supporting data type annotations and compression.",
     "",
     "You can open Parquet files in R using the 'arrow' package (https://arrow.apache.org/docs/r/index.html).",
-    "With the arrow package installed you can open the supplemental data in R by executing:",
+    "With the arrow package installed, you can open the supplemental data in R by executing:",
     "",
     "```r",
     "library(arrow)",

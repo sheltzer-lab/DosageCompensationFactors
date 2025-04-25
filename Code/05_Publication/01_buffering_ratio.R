@@ -249,7 +249,7 @@ dev.off()
 # === Tables ===
 
 ## Buffering Classes & Ratios
-t1_fields_description <- c(
+t1_field_descriptions <- c(
   "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
   "Model.ID" = "Unique identifier for cell lines and tumor samples.",
   "CellLine.DepMapModelId" = "Unique identifier for cell lines; Provided by DepMap CCLE.",
@@ -283,7 +283,7 @@ t1_fields_description <- c(
   "Buffering.ChrArmLevel.Log2FC.Class" = "Buffering class (Scaling, Buffered, Anti-Scaling) for the ChrArm (Log2FC) analysis variant; Derived from ChromosomeArm.CNA and Log2FC using Log2FC-based thresholds."
 )
 
-fields_buf <- names(t1_fields_description)
+t1_fields <- names(t1_field_descriptions)
 
 expr_buf_p0211_publish <- expr_buf_p0211 %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome),
@@ -301,7 +301,7 @@ sup_table1 <- bind_rows(expr_buf_depmap, expr_buf_procan, expr_buf_cptac) %>%
   mutate(Gene.Chromosome = as.integer(Gene.Chromosome)) %>%
   bind_rows(expr_buf_p0211_publish, expr_buf_chunduri_publish) %>%
   mutate(CellLine.Replicate = as.integer(CellLine.Replicate)) %>%
-  select(all_of(fields_buf)) %>%
+  select(all_of(t1_fields)) %>%
   write_parquet(here(tables_dir, "supplementary_table1.parquet"), version = "2.4")
 
 ### Export README for Table S1
@@ -311,12 +311,12 @@ t1_description <- c(
   "The values of this table were determined for the proteomics datasets of DepMap CCLE, Sanger ProCan, CPTAC, Chunduri et al. (2021), and for P0211 (chromosome-engineered RPE-1 cell lines)."
 )
 
-createParquetReadme(t1_description, t1_fields_description, title = "Supplementary Table 1 - README",
+createParquetReadme(t1_description, t1_field_descriptions, title = "Supplementary Table 1 - README",
                     readme_path = here(tables_dir, "README_supplementary_table1.md"),
                     file_path = "supplementary_table1.parquet", parquet_version = "2.4")
 
 ## Frequently Buffered Genes
-t2_fields_description <- c(
+t2_field_descriptions <- c(
   "=== TABLES ===" = "",
   "Frequently Buffered Genes" = "This table contains information about whether a gene was frequently and consistently buffered across multiple datasets, independent of whether the gene was affected by copy number gain or loss.",
   "Freq. Buffered Genes (CN Gain)" = "This table contains information about whether a gene was frequently and consistently buffered upon gene copy number gain across multiple datasets.",
@@ -339,7 +339,7 @@ t2_fields_description <- c(
   "Top10" = "Top 10 frequently and consistently buffered genes (ranked by lowest Gene.BR.SD.MeanNormRank)."
 )
 
-df_t2_fields <- data.frame(Column = names(t2_fields_description), Description = unname(t2_fields_description))
+df_t2_fields <- data.frame(Column = names(t2_field_descriptions), Description = unname(t2_field_descriptions))
 
 wb <- createWorkbook()
 sheet_readme <- addWorksheet(wb, "README")
