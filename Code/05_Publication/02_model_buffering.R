@@ -17,6 +17,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "publication.R"))
 
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
 depmap_cn_data_dir <- here(external_data_dir, "CopyNumber", "DepMap")

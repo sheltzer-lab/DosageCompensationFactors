@@ -11,6 +11,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "publication.R"))
 
 plots_dir <- here(plots_base_dir, "Publication")
 temp_dir <- temp_base_dir
@@ -315,11 +316,51 @@ gsea_export <- bind_rows(
   gsea_all_as %>% mutate(Comparison = "Aneuploidy (High - Low)")
 )
 
+t8_field_descriptions <- c(
+  "=== TABLES ===" = "",
+  "Differential Expression" = "Contains the differential expression profiles of genes in high buffering samples (cell lines or tumor samples; >80% sample buffering ratio) against low buffering samples (<20% sample BR) across different datasets (DepMap, ProCan, CPTAC, etc.).",
+  "DiffExp (common genes)" = "Contains the differential expression profiles of genes that are commonly up- or downregulated in all cell line datasets.",
+  "GSEA" = "Gene Set Enrichment Analysis results for the HALLMARK gene sets from MSigDB; Generated using the ranks of the differential expression profiles. This table was generated using the fGSEA R-package. See documentation of fgsea::fgseaMultilevel() for further details.",
+  "ssGSEA" = "Single-sample Gene Set Enrichment Analysis results for the HALLMARK gene sets from MSigDB; ssGSEA scores are generated for each HALLMARK gene set and each tumor sample in CPTAC using the normalized protein abundance (supplementary table 1). This table was generated using the GSVA R-package. See documentation of GSVA::gsva() for further details.",
+  "=== COLUMNS ===" = "",
+  "Gene.Symbol" = "HGNC gene symbol; updated using HGNChelper.",
+  "GroupA" = "First group in the statistical analysis. Here: Samples with low average buffering (<20% of sample buffering ratios of a dataset).",
+  "GroupB" = "Second group in the statistical analysis. Here: Samples with high average buffering (<80% of sample buffering ratios of a dataset).",
+  "Mean_GroupA" = "Mean normalized log2 protein abundance of GroupA.",
+  "Mean_GroupB" = "Mean normalized log2 protein abundance of GroupB.",
+  "Count_GroupA" = "Number of valid protein abundance values in GroupA.",
+  "Count_GroupB" = "Number of valid protein abundance values in GroupB.",
+  "Log2FC" = "Protein abundance log2 fold-chnage between high and low buffering samples for each gene. Calculated as Mean_GroupB - Mean_GroupA.",
+  "Test.p" = "P-value of the two-sided Welch's unequal variances t-test used to determine whether the difference between GroupA and GroupB is significant.",
+  "Test.p.adj" = "Benjamini-Hochberg-adjusted p-value.",
+  "Dataset" = "Proteomics dataset used for analysis (e.g., DepMap, ProCan, CPTAC, etc.).",
+  "pathway" = "Gene set used for the enrichment analysis.",
+  "pval" = "P-value of the Gene Set Enrichment Analysis (GSEA).",
+  "padj" = "Benjamini-Hochberg-adjusted p-value of the Gene Set Enrichment Analysis (GSEA).",
+  "log2err" = "Expected error for the standard deviation of the GSEA p-value.",
+  "ES" = "GSEA enrichment score, same as the Broad GSEA implementation. Positive values indicate an upregulation of the gene set.",
+  "NES" = "Enrichment score normalized to the mean enrichment of random samples of the same size.",
+  "size" = "Size of the gene set after removing genes not present in the differntial expression results.",
+  "leadingEdge" = "Vector with leading edge genes that drive the enrichment, see http://software.broadinstitute.org/gsea/doc/GSEAUserGuideTEXT.htm#_Running_a_Leading",
+  "Comparison" = "Indicates which groups were compared for the enrichment analysis (high vs. low buffering, high vs. low aneuploidy).",
+  "Model.ID" = "Unique identifier of the tumor sample.",
+  "HALLMARK_*" = "Single-sample GSEA enrichment score for each gene set (columns) and sample (rows).",
+  "Model.CancerType" = "CPTAC cancer type associated with te tumor sample.",
+  "Model.TumorPurity" = "Purity of the tumor sample reported by CPTAC.",
+  "Model.Ploidy" = "Ploidy of the tumor sample reported by CPTAC.",
+  "Model.WGD.Estimate" = "Estimated WGD status of the tumor sample; Defined as Model.Ploidy >= 3.",
+  "Model.AneuploidyScore.Estimate" = "Estimated aneuploidy score quantifying the degree of aneuploidy in tumor samples. See manuscript for details."
+)
+
+df_t8_fields <- data.frame(Column = names(t8_field_descriptions), Description = unname(t8_field_descriptions))
+
 wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_diffexp <- addWorksheet(wb, "Differential Expression")
 sheet_diffexp_common <- addWorksheet(wb, "DiffExp (common genes)")
 sheet_gsea <- addWorksheet(wb, "GSEA")
 sheet_ssgsea <- addWorksheet(wb, "ssGSEA")
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t8_fields)
 writeDataTable(wb = wb, sheet = sheet_diffexp, x = diff_exp_all)
 writeDataTable(wb = wb, sheet = sheet_diffexp_common, x = diff_exp_common)
 writeDataTable(wb = wb, sheet = sheet_gsea, x = gsea_export)
