@@ -338,37 +338,34 @@ drugs_export <- bind_rows(
 drug_mechanisms_control <- drug_mechanisms_control %>%
   mutate(GroupA = "Low Aneuploidy", GroupB = "High Aneuploidy")
 
-t8_field_descriptions <- c(
+t9_field_descriptions <- c(
   "=== TABLES ===" = "",
   "CRISPR-KO" = "Differential dependency results comparing the gene dependency scores from CRISPR knock-out screens between high and low buffering cell lines.",
   "CRISPR-KO (common)" = "Differential dependency results for genes that have matching exclusive essentiality for all cell lines and cell lines in the adherent control dataset.",
-  "Median Drug Effect" = "Median effect of a cancer drug on cell growth compared to sample buffering ratios and aneuploidy scores.",
-  "Drugs" = "Compares growth effects of single drugs with sample buffering ratios.",
-  "Drug Mechanisms" = "Compares growth effects of multiple drugs grouped by drug mechanism with sample buffering ratios.",
-  "Drug Mechanisms (control)" = "Differential growth effects of multiple drugs grouped by drug mechanism between high and low aneuploid cell lines.",
-  "Drug Targets" = "Compares growth effects of multiple drugs grouped by drug target with sample buffering ratios.",
   "=== COLUMNS ===" = "",
   "Gene.Symbol" = "HGNC gene symbol; updated using HGNChelper.",
   "GroupA" = "First group in the statistical analysis. Here: Cell lines with low average buffering (<20% of mean normalized ranks of sample buffering ratios).",
   "GroupB" = "Second group in the statistical analysis. Here: Cell lines with high average buffering (>80% of mean normalized ranks of sample buffering ratios).",
-  "GroupA (Drug Mechanisms (control))" = "First group in the statistical analysis. Here: Cell lines with low aneuploidy (<20% of aneuploidy scores).",
-  "GroupB (Drug Mechanisms (control))" = "Second group in the statistical analysis. Here: Cell lines with high aneuploidy (>80% of aneuploidy scores).",
   "Mean_GroupA" = "Mean gene dependency score of GroupA.",
   "Mean_GroupB" = "Mean gene dependency score of GroupB.",
-  "Mean_GroupA (Drug Mechanisms (control))" = "Mean drug effect score of GroupA.",
-  "Mean_GroupB (Drug Mechanisms (control))" = "Mean drug effect score of GroupB.",
   "Count_GroupA" = "Number of valid gene dependency scores in GroupA.",
   "Count_GroupB" = "Number of valid gene dependency scores in GroupB.",
-  "Count_GroupA (Drug Mechanisms (control))" = "Number of valid drug effect scores in GroupA.",
-  "Count_GroupB (Drug Mechanisms (control))" = "Number of valid drug effect scores in GroupB.",
   "Diff" = "Dependency score difference between high and low buffering cell lines for each gene. Calculated as Mean_GroupB - Mean_GroupA.",
-  "Log2FC" = "Drug effect log2 fold-change between high and low aneuploid cell lines for each drug mechanism. Calculated as Mean_GroupB - Mean_GroupA.",
   "Test.p" = "P-value of the two-sided Wilcoxon-Mann-Whitney test used to determine whether the difference between GroupA and GroupB is significant.",
-  "Test.p (Drug Mechanisms (control))" = "P-value of the two-sided Welch's unequal variances t-test used to determine whether the difference between GroupA and GroupB is significant.",
   "Test.p.adj" = "Benjamini-Hochberg-adjusted p-value.",
   "Significant" = "Indicates whether a protein had significantly increased or decreased differential dependency in high buffering cell lines (Test.p.adj < 0.05, |Diff| > 0.1). Either Up, Down, or empty.",
   "Dataset" = "Dataset used for determining which cell lines were high or low buffering. Dependency scores always stem from DepMap CCLE.",
-  "ExclusiveEssentiality" = "Indicates whether a gene is only essential in either the low or high buffering group. Exclusive essentiality is given, if the differential dependency is significant, and if the mean dependency score is below 0.5 in one group, while being above 0.5 in the other.",
+  "ExclusiveEssentiality" = "Indicates whether a gene is only essential in either the low or high buffering group. Exclusive essentiality is given, if the differential dependency is significant, and if the mean dependency score is below 0.5 in one group, while being above 0.5 in the other."
+)
+
+t10_field_descriptions <- c(
+  "=== TABLES ===" = "",
+  "Median Drug Effect" = "Median effect of cancer drugs on cell growth compared to sample buffering ratios and aneuploidy scores.",
+  "Drugs" = "Growth effects of single drugs compared to sample buffering ratios.",
+  "Drug Mechanisms" = "Growth effects of drugs compared to sample buffering ratios grouped by drug mechanism.",
+  "Drug Mechanisms (control)" = "Differential growth effects of drugs between high and low aneuploid cell lines grouped by drug mechanism.",
+  "Drug Targets" = "Growth effects of drugs compared to sample buffering ratios grouped by drug target.",
+  "=== COLUMNS ===" = "",
   "Model.ID" = "Unique identifier for cell lines.",
   "Drug.Effect.Median" = "Median growth effect per cell line across all drugs in the PRISM Repurposing dataset.",
   "Drug.Effect.Observations" = "Number of valid drug effect values for each cell line.",
@@ -380,43 +377,58 @@ t8_field_descriptions <- c(
   "Drug.Name" = "Name of the drug provided by the PRISM Repurposing dataset.",
   "Drug.MOA" = "Mechanism of action of a drug; Provided by the PRISM Repurposing dataset.",
   "Drug.Target" = "Gene targeted by a drug; Provided by the PRISM Repurposing dataset.",
-  "DrugEffect.Buffering.Corr" = "",
-  "DrugEffect.Buffering.Corr.p" = "",
+  "DrugEffect.Buffering.Corr" = "Spearman's correlation coefficient between drug effect and sample buffering ratios. If multiple drugs where grouped together (by mechanism or target) the median drug effect was calculated and used for correlation.",
+  "DrugEffect.Buffering.Corr.p" = "P-value of the correlation coefficient.",
   "DrugEffect.Buffering.Corr.p.adj" = "Benjamini-Hochberg-adjusted p-value.",
-  "DrugEffect.Buffering.Group.Low.Mean" = "",
-  "DrugEffect.Buffering.Group.High.Mean" = "",
-  "DrugEffect.Buffering.Group.Low.Count" = "",
-  "DrugEffect.Buffering.Group.High.Count" = "",
+  "DrugEffect.Buffering.Group.Low.Mean" = "Mean drug effect in low buffering cell lines (<20% of sample BRs / sample BR MNRs)",
+  "DrugEffect.Buffering.Group.High.Mean" = "Mean drug effect in high buffering cell lines (>80% of sample BRs / sample BR MNRs)",
+  "DrugEffect.Buffering.Group.Low.Count" = "Number of valied drug effect values in the high buffering group.",
+  "DrugEffect.Buffering.Group.High.Count" = "Number of valied drug effect values in the low buffering group.",
   "DrugEffect.Buffering.Group.Log2FC" = "Drug effect log2 fold-change between high and low buffering cell lines. Calculated as Mean_GroupB - Mean_GroupA.",
   "DrugEffect.Buffering.Group.Log2FC.p" = "P-value of the two-sided Welch's unequal variances t-test used to determine whether the difference between the high and low buffering groups is significant.",
   "DrugEffect.Buffering.Group.Log2FC.p.adj" = "Benjamini-Hochberg-adjusted p-value.",
-  "DrugEffect.Buffering.Group.Log2FC.Significant" = "",
-  "EffectiveIn" = "",
-  "CommonEffect" = ""
+  "DrugEffect.Buffering.Group.Log2FC.Significant" = "Indicates whether drugs of a certain mechanism had a significant effect on growth in high buffering cell lines (Test.p.adj < 0.05, |Log2FC| > 0.2). Either Up, Down, or empty.",
+  "EffectiveIn" = "Indicates whether a drug is effective in the high or low buffering group of cell lines. A drug is effective in the high buffering group if the Log2FC is signficantly decreased and if DrugEffect.Buffering.Group.High.Mean < -0.2 (equivalently for low buffering group).",
+  "CommonEffect" = "Indicates whether correlation and differential drug effect reults agree. Boolean; TRUE if DrugEffect.Buffering.Corr.p.adj and DrugEffect.Buffering.Group.Log2FC.p.adj < 0.05, and if sign(DrugEffect.Buffering.Corr) = sign(DrugEffect.Buffering.Group.Log2FC).",
+  "Dataset" = "Dataset used for determining which cell lines were high or low buffering. Drug effect scores always stem from the PRISM Repurposing dataset.",
+  "GroupA" = "First group in the statistical analysis. Here: Cell lines with low aneuploidy (<20% of aneuploidy scores).",
+  "GroupB" = "Second group in the statistical analysis. Here: Cell lines with high aneuploidy (>80% of aneuploidy scores).",
+  "Mean_GroupA" = "Mean drug effect score of GroupA.",
+  "Mean_GroupB" = "Mean drug effect score of GroupB.",
+  "Count_GroupA" = "Number of valid drug effect scores in GroupA.",
+  "Count_GroupB" = "Number of valid drug effect scores in GroupB.",
+  "Log2FC" = "Drug effect log2 fold-change between high and low aneuploid cell lines for each drug mechanism. Calculated as Mean_GroupB - Mean_GroupA.",
+  "Test.p" = "P-value of the two-sided Welch's unequal variances t-test used to determine whether the difference between GroupA and GroupB is significant.",
+  "Test.p.adj" = "Benjamini-Hochberg-adjusted p-value.",
+  "Significant" = "Indicates whether drugs of a certain mechanism had a significant effect on growth in highly aneuploid cell lines (Test.p.adj < 0.05, |Log2FC| > 0.2). Either Up, Down, or empty."
 )
 
-# TODO: Complete field descriptions
-# TODO: Disambiguate fields in CRISPR-KO and Drug Mechanism sheets (Split supp. tables?)
-# TODO: Remove unnecessary columns from Median Drug Effect sheet
-
-df_t8_fields <- data.frame(Column = names(t8_field_descriptions), Description = unname(t8_field_descriptions))
+df_t9_fields <- data.frame(Column = names(t9_field_descriptions), Description = unname(t9_field_descriptions))
+df_t10_fields <- data.frame(Column = names(t10_field_descriptions), Description = unname(t10_field_descriptions))
 
 wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_crispr <- addWorksheet(wb, "CRISPR-KO")
 sheet_crispr_common <- addWorksheet(wb, "CRISPR-KO (common)")
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t9_fields)
+writeDataTable(wb = wb, sheet = sheet_crispr, x = crispr_model_all)
+writeDataTable(wb = wb, sheet = sheet_crispr_common, x = crispr_model_common)
+saveWorkbook(wb, here(tables_dir, "supplementary_table9.xlsx"), overwrite = TRUE)
+
+wb <- createWorkbook()
+sheet_readme <- addWorksheet(wb, "README")
 sheet_drug_effect <- addWorksheet(wb, "Median Drug Effect")
 sheet_drugs <- addWorksheet(wb, "Drugs")
 sheet_moa <- addWorksheet(wb, "Drug Mechanisms")
 sheet_moa_control <- addWorksheet(wb, "Drug Mechanisms (control)")
 sheet_target <- addWorksheet(wb, "Drug Targets")
-writeDataTable(wb = wb, sheet = sheet_crispr, x = crispr_model_all)
-writeDataTable(wb = wb, sheet = sheet_crispr_common, x = crispr_model_common)
-writeDataTable(wb = wb, sheet = sheet_drug_effect, x = median_response_buf)
+writeDataTable(wb = wb, sheet = sheet_readme, x = df_t10_fields)
+writeDataTable(wb = wb, sheet = sheet_drug_effect, x = median_response_buf %>% select(any_of(names(t10_field_descriptions))))
 writeDataTable(wb = wb, sheet = sheet_drugs, x = drugs_export)
 writeDataTable(wb = wb, sheet = sheet_moa, x = drug_mechanisms %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
 writeDataTable(wb = wb, sheet = sheet_moa_control, x = drug_mechanisms_control)
 writeDataTable(wb = wb, sheet = sheet_target, x = drug_targets %>% mutate(Dataset = "Cell Lines (aggregated, Mean Normalized Ranks)"))
-saveWorkbook(wb, here(tables_dir, "supplementary_table9.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, here(tables_dir, "supplementary_table10.xlsx"), overwrite = TRUE)
 
 # === Supplemental Figures ===
 ## Adherent Control
