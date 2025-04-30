@@ -542,10 +542,11 @@ unidirectional_heatmap <- function(df, x_col, y_col, color_col, order_desc = FAL
     theme_settings
 }
 
-roc_auc_heatmap <- function(df, rank_tests, color_lab = NULL) {
+roc_auc_heatmap <- function(df, rank_tests, color_lab = NULL, color_scale = NULL) {
   heatmap_boot_auc <- df %>%
     unidirectional_heatmap(DosageCompensation.Factor, Condition, DosageCompensation.Factor.ROC.AUC,
-                           order_desc = TRUE, color_lab = color_lab)
+                           order_desc = TRUE, color_lab = color_lab) +
+    color_scale
 
   signif_bars <- data.frame(Condition = unique(df$Condition), y = c(2, 2, 2, 2)) %>%
     ggplot() +

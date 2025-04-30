@@ -128,7 +128,7 @@ volcano_dep_diff <- df_crispr_model_buf %>%
                    point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
                    force = 5, max.overlaps = 20) +
   xlim(c(-max_abs_log2fc, max_abs_log2fc)) +
-  labs(color = "Cancer Driver", x = "Dependency Score Log2FC",
+  labs(color = "Cancer Driver", x = "Dependency Score Difference",
        y = "-log10(p.adj)", shape = "Exclusively\nEssential")
 #  theme(legend.position = "top", legend.direction = "horizontal",
 #        legend.box = "vertical", legend.box.just = "left", legend.margin = margin(0,0,0,0, unit = 'cm')) +
@@ -435,11 +435,11 @@ saveWorkbook(wb, here(tables_dir, "supplementary_table10.xlsx"), overwrite = TRU
 top_diff_all <- crispr_model_all %>%
   filter(Test.p.adj < p_threshold & !is.na(Significant)) %>%
   group_by(Dataset, Significant) %>%
-  slice_max(abs(Log2FC), n = 5) %>%
+  slice_max(abs(Diff), n = 5) %>%
   ungroup() %>%
   distinct(Gene.Symbol, .keep_all = TRUE)
 ### CRISPR-KO Volcano Plot
-max_abs_log2fc_control <- df_crispr_model_buf_control %>% pull(Log2FC) %>% abs() %>% max(na.rm = TRUE)
+max_abs_diff_control <- df_crispr_model_buf_control %>% pull(Log2FC) %>% abs() %>% max(na.rm = TRUE)
 panel_volcano_crispr_control <- crispr_model_all %>%
   filter(Dataset == "Cell Lines (adherent control)") %>%
   left_join(y = cancer_genes, by = "Gene.Symbol") %>%
@@ -447,7 +447,7 @@ panel_volcano_crispr_control <- crispr_model_all %>%
   arrange(!is.na(CancerDriverMode)) %>%
   mutate(`-log10(p)` = -log10(Test.p.adj)) %>%
   ggplot() +
-  aes(x = Log2FC, y = `-log10(p)`, label = Label, color = CancerDriverMode) +
+  aes(x = Diff, y = `-log10(p)`, label = Label, color = CancerDriverMode) +
   geom_point(aes(alpha = Significant, shape = ExclusiveEssentiality, size = ExclusiveEssentiality)) +
   color_mapping_driver +
   scale_shape_manual(values = c(`High Buffering` = 17, `Low Buffering` = 15), na.value = 16) +
@@ -460,14 +460,14 @@ panel_volcano_crispr_control <- crispr_model_all %>%
                    seed = 42, max.iter = 30000, max.time = 1.5,
                    point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
                    force = 5, max.overlaps = 20) +
-  xlim(c(-max_abs_log2fc_control, max_abs_log2fc_control)) +
-  labs(color = "Cancer Driver", x = "Dependency Score Log2FC",
+  xlim(c(-max_abs_diff_control, max_abs_diff_control)) +
+  labs(color = "Cancer Driver", x = "Dependency Score Difference",
        y = "-log10(p.adj)", shape = "Exclusively\nEssential")
 ### ORA
 panel_ora_down_control <- crispr_model_all %>%
   filter(Dataset == "Cell Lines (adherent control)") %>%
   filter(Significant == "Down") %>%
-  arrange(Log2FC) %>%
+  arrange(Diff) %>%
   pull(Gene.Symbol) %>%
   overrepresentation_analysis() %>%
   plot_terms_compact(custom_color = color_palettes$DiffExp["Down"], string_trunc = 75) +

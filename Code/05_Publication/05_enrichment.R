@@ -130,8 +130,8 @@ panel_2d_enrichment <- gsea_all %>%
     padj_ProCan < p_threshold & padj_CPTAC >= p_threshold ~ "ProCan",
     TRUE ~ "None"),
          Significant = factor(Significant, levels = c("ProCan", "CPTAC", "Both", "None")),
-         Label = str_replace(pathway, "HALLMARK_", ""),
-         Label = if_else(Significant == "Both" | Label %in% selected_pathways,
+         Label = str_replace_all(str_replace(pathway, "HALLMARK_", ""), "_", " "),
+         Label = if_else(Significant != "None" | Label %in% selected_pathways,
                          Label, NA)) %>%
   ggplot() +
   aes(x = NES_ProCan, y = NES_CPTAC, label = Label, color = Significant) +
@@ -139,7 +139,7 @@ panel_2d_enrichment <- gsea_all %>%
   geom_vline(xintercept = 0, color = default_color) +
   geom_abline(xintercept = 0, yintercept = 0, slope = 1, color = default_color) +
   geom_point(size = 3) +
-  geom_label_repel(size = ceiling(base_size / 4), force = 30, min.segment.length = 0.01) +
+  geom_label_repel(size = ceiling(base_size / 4), force = 40, min.segment.length = 0.01) +
   scale_color_manual(values = c(Both = highlight_colors[1], color_palettes$Datasets,
                                 None = default_color)) +
   lims(x = c(-max_abs_nes_procan, max_abs_nes_procan), y = c(-max_abs_nes_cptac, max_abs_nes_cptac)) +

@@ -47,8 +47,9 @@ rank_loss_heatmap <- rank_loss %>%
                        breaks = seq(0.5, 1, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9", "1.0")) +
   coord_flip() +
   ggtitle("Loss") +
-  labs(fill = "MNR(ROC AUC)") +
-  theme(legend.position = "right", legend.direction = "vertical", axis.text.x = element_text(angle = 0, hjust = 0.5))
+  labs(fill = "ROC AUC\nMNR") +
+  theme(legend.position = "right", legend.direction = "vertical", legend.title = element_text(size = 12, hjust = 0),
+        axis.text.x = element_text(angle = 0, hjust = 0.5))
 rank_gain_heatmap <- rank_gain %>%
   # Shorten list of factors
   group_by(DosageCompensation.Factor) %>%
@@ -61,7 +62,7 @@ rank_gain_heatmap <- rank_gain %>%
   theme(legend.position = "none", axis.text.x = element_text(angle = 0, hjust = 0.5))
 
 panel_rank <- cowplot::plot_grid(rank_gain_heatmap, rank_loss_heatmap,
-                                 labels = c("A", "B"), nrow = 1, ncol = 2, rel_widths = c(0.8, 1))
+                                 labels = c("A", "B"), nrow = 1, ncol = 2, rel_widths = c(0.85, 1))
 
 # === Univariate Bootstrap Panel ===
 bootstrap_results <- read_parquet(here(output_data_dir, 'bootstrap_univariate.parquet'))
@@ -102,11 +103,16 @@ rank_tests <- list(
                   print_corr_obj(results_cngain_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
                   print_corr_obj(results_chrgain_cngain$rank_test, estimate_symbol = utf8_tau, map_p = TRUE),
                   print_corr_obj(results_chrloss_cnloss$rank_test, estimate_symbol = utf8_tau, map_p = TRUE)),
-  y_position = c(1, 1, 1.5, 2)
+  y_position = c(2, 1.5, 1, 1)
 )
 
+col_scale <- scale_fill_viridis_c(option = "magma", direction = 1, end = 0.95, oob = scales::squish, limits = c(0.5, 0.65),
+                                  breaks = seq(0.5, 0.65, 0.05), labels = c("\u22640.50", "0.55", "0.60", "0.65"))
+
 panel_bootstrap <- bootstrap_auc %>%
-  roc_auc_heatmap(rank_tests, color_lab = "Median ROC AUC")
+  mutate(Condition = factor(Condition, levels = rev(c("Gene Copy Number Gain", "Chromosome Arm Gain",
+                                                  "Gene Copy Number Loss", "Chromosome Arm Loss")))) %>%
+  roc_auc_heatmap(rank_tests, color_lab = "Median ROC AUC", color_scale = col_scale)
 
 # === Combine Panels into Figure ===
 figure3 <- cowplot::plot_grid(panel_rank, panel_bootstrap,
@@ -204,9 +210,10 @@ createParquetReadme(t5_description, t5_field_descriptions, title = "Supplementar
 rank_heatmap <- rank_univariate %>%
   unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
   coord_flip() +
-  labs(fill = "MNR\n(ROC AUC)") +
+  labs(fill = "ROC AUC\nMNR") +
   theme(legend.position = "right",
         legend.direction = "vertical",
+        legend.title = element_text(size = 12, hjust = 0),
         axis.text.x = element_text(angle = 0, hjust = 0.5))
 
 ## BR-Factor correlation
@@ -259,7 +266,7 @@ panel_factor_cor <- read_parquet(here(output_data_dir, 'dosage_compensation_fact
   plot_correlation_matrix() +
   theme(legend.key.width = unit(24, "points"),
         text = element_text(size = 11),
-        legend.title = element_text(size = base_size),
+        legend.title = element_text(size = base_size, vjust = 0.9),
         legend.text = element_text(size = 12))
 
 ## Combine figures

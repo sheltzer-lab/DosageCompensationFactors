@@ -524,7 +524,7 @@ panel_as_all <- bind_rows(df_depmap, df_procan, df_cptac) %>%
         legend.text = element_text(size = base_size)) +
   facet_grid(~Dataset, scales = "free_x")
 
-## Growth Pattern (ProCan)
+## Growth Pattern (DepMap)
 df_low_as_depmap <- df_depmap %>%
   filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
   filter(CellLine.AneuploidyScore <= min(
@@ -556,7 +556,7 @@ panel_growth_depmap <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"
   facet_grid(~Condition, scales = "free_x", space = "free_x")
 
 ## Aneuploidy Score per growth pattern
-panel_growth_as <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_low_as, df_equal_as) %>%
+panel_growth_as <- bind_rows(df_depmap %>% mutate(Condition = "Uncontrolled"), df_low_as_depmap, df_equal_as_depmap) %>%
   mutate(Condition = factor(Condition, levels = c("Uncontrolled", "Low Aneuploidy", "Equal Aneuploidy"))) %>%
   filter(GrowthPattern %in% c("Adherent", "Suspension")) %>%
   ggplot() +
