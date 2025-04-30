@@ -144,7 +144,7 @@ plot_volcano_buffered <- function(df, ratio_col, signif_col, label_col, class_co
                  title = title, subtitle = subtitle)
 }
 
-plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
+plot_volcano <- function(df, value_col, signif_col, label_col, color_col, font_col = NULL,
                          color_mapping = scale_color_manual(values = color_palettes$DiffExp,
                                                             na.value = color_palettes$Missing),
                          value_threshold = log2fc_threshold, signif_threshold = p_threshold,
@@ -154,8 +154,14 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
   df %>%
     mutate(`-log10(p)` = -log10({ { signif_col } })) %>%
     ggplot() +
-    aes(x = { { value_col } }, y = `-log10(p)`,
-        label = { { label_col } }, color = { { color_col } }) +
+    {
+      if (quo_is_null(enquo(font_col))) {
+        aes(x = { { value_col } }, y = `-log10(p)`, label = { { label_col } }, color = { { color_col } })
+      } else {
+        aes(x = { { value_col } }, y = `-log10(p)`, label = { { label_col } }, color = { { color_col } },
+            fontface = { { font_col } })
+      }
+    } +
     geom_point(alpha = 0.5, size = 1) +
     color_mapping +
     geom_hline(yintercept = -log10(signif_threshold),
@@ -167,7 +173,7 @@ plot_volcano <- function(df, value_col, signif_col, label_col, color_col,
     geom_label_repel(min.segment.length = 0.01, label.size = 0.15,
                      seed = 42, max.iter = 30000, max.time = 1.5,
                      point.padding = 0.3, label.padding = 0.3, box.padding = 0.3,
-                     force = 5, max.overlaps = 20) +
+                     force = 10, max.overlaps = 20) +
     labs(title = title, subtitle = subtitle) +
     xlim(c(-max_abs_value, max_abs_value))
 }

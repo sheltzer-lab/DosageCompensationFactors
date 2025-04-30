@@ -63,15 +63,29 @@ color_mapping <- scale_color_manual(values = color_palettes$DiffExp,
 top_diff <- diff_exp_procan %>%
   distinct(Gene.Symbol, .keep_all = TRUE) %>%
   filter(Test.p.adj < p_threshold) %>%
-  slice_max(abs(Log2FC), n = 10)
+  slice_max(abs(Log2FC), n = 10) %>%
+  pull(Gene.Symbol)
 
-diff_exp_procan <- diff_exp_procan  %>%
-  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
-  mutate(Label = if_else(!is.na(Significant) & (!is.na(CancerDriverMode) | Gene.Symbol %in% top_diff$Gene.Symbol),
-                         Gene.Symbol, NA))
+common_genes <- bind_rows(diff_exp_depmap %>% mutate(Dataset = "DepMap"),
+                             diff_exp_procan %>% mutate(Dataset = "ProCan"),
+                             diff_exp_control %>% mutate(Dataset = "ProCan (adherent control)"),
+                             diff_exp_cptac %>% mutate(Dataset = "CPTAC")) %>%
+  drop_na(Significant) %>%
+  filter(Dataset != "CPTAC") %>%
+  add_count(Gene.Symbol, Significant) %>%
+  filter(n == 3) %>%
+  distinct(Gene.Symbol) %>%
+  pull(Gene.Symbol)
+
+selected_common_genes <- c("CTSA", "UBE2N", "ITGA3", "ITGAV")
 
 panel_volcano <- diff_exp_procan %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
+  mutate(IsCommon = Gene.Symbol %in% common_genes,
+         Font = if_else(IsCommon, "bold", "plain"),
+         Label = if_else(!is.na(Significant) & (CancerDriverMode %in% c("OG", "TSG", "OG/TSG") | Gene.Symbol %in% top_diff | Gene.Symbol %in% selected_common_genes),
+                         Gene.Symbol, NA)) %>%
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, font_col = Font, color_mapping = color_mapping) +
   theme(legend.position = "none") +
   labs(y = "-log10(p.adj)", x = "Protein Log2FC (High - Low Buffering)")
 
@@ -296,7 +310,6 @@ diff_exp_all <- bind_rows(diff_exp_depmap %>% mutate(Dataset = "DepMap"),
                           diff_exp_procan %>% mutate(Dataset = "ProCan"),
                           diff_exp_control %>% mutate(Dataset = "ProCan (adherent control)"),
                           diff_exp_cptac %>% mutate(Dataset = "CPTAC")) %>%
-  select(-CancerDriverMode, -Occurrences, -Label) %>%
   mutate(GroupA = "Low Buffering", GroupB = "High Buffering")
 
 diff_exp_common <- diff_exp_all %>%
@@ -390,7 +403,7 @@ panel_volcano_all <- diff_exp_all %>%
   mutate(Label = if_else(!is.na(Significant) &
                            (!is.na(CancerDriverMode) | Gene.Symbol %in% top_diff_all$Gene.Symbol),
                          Gene.Symbol, NA)) %>%
-  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping) +
+  plot_volcano(Log2FC, Test.p.adj, Label, Significant, color_mapping = color_mapping) +
   theme(legend.position = "none") +
   labs(y = "-log10(p.adj)", x = "Protein Log2FC (High - Low Buffering)") +
   facet_grid(~Dataset)
@@ -421,6 +434,7 @@ ora_down_control <- genes_down_control %>%
 ## Cancer Driver Buffering
 panel_og_tsg <- expr_buf_procan %>%
   inner_join(y = diff_exp_procan, by = "Gene.Symbol") %>%
+  left_join(y = cancer_genes, by = "Gene.Symbol") %>%
   filter(Gene.CopyNumber != Gene.CopyNumber.Baseline) %>%
   mutate(GeneGroup = case_when(CancerDriverMode == "TSG" & Significant == "Down" ~ "TSG (down)",
                                CancerDriverMode == "OG" & Significant == "Up" ~ "OG (up)",
