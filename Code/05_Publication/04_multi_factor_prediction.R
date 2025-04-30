@@ -253,8 +253,8 @@ panel_model_perf <- model_results %>%
   aes(x = "", y = Model.BaseModel, fill = Model.ROC.AUC) +
   geom_raster() +
   ggh4x::facet_nested(. ~ Model.Dataset + Model.Subset + Model.AnalysisVariant + Model.Condition) +
-  scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, limits = c(0.5, 1), oob = scales::squish,
-                       breaks = seq(0.5, 1, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9", "1.0")) +
+  scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, limits = c(0.5, 0.9), oob = scales::squish,
+                       breaks = seq(0.5, 0.9, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9")) +
   labs(x = NULL, y = NULL, fill = "ROC AUC") +
   cowplot::theme_minimal_grid() +
   theme(panel.spacing = unit(0, "lines"),
@@ -285,14 +285,15 @@ panel_oos <- oos_summary %>%
          Model.Subset == "All",
          Model.BaseModel == "xgbLinear") %>%
   mutate(Model.Level = str_replace(Model.Level, "Gene", "Gene CN"),
+         Dataset.Dataset = factor(Dataset.Dataset, levels = dataset_order),
          Model.Dataset = factor(Model.Dataset, levels = dataset_order)) %>%
   ggplot() +
   aes(y = Model.Dataset, x = Dataset.Dataset, fill = OOS.ROC.AUC,
       label = format(round(OOS.ROC.AUC, 2), nsmall = 2, scientific = FALSE)) +
   geom_tile() +
   geom_text(color = "white") +
-  scale_fill_viridis_c(option = "magma", direction = 1,
-                       limits = c(0.5, 1), oob = scales::squish) +
+  scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, limits = c(0.5, 0.9), oob = scales::squish,
+                       breaks = seq(0.5, 0.9, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9")) +
   facet_grid(Model.Level ~ Model.Condition) +
   labs(fill = "ROC AUC", x = "Evaluation Dataset (training + test)", y = "Model Training Dataset") +
   theme(legend.position = "none")
