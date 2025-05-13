@@ -435,9 +435,9 @@ df_cptac_split <- df_cptac %>%
   split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Buffering")
 
 surv_os <- survfit(Surv(OS_days, OS_event) ~ Buffering, data = df_cptac_split) %>%
-  ggsurvplot(data = df_cptac_split)
+  ggsurvplot(data = df_cptac_split, pval = TRUE)
 surv_pfs <- survfit(Surv(PFS_days, PFS_event) ~ Buffering, data = df_cptac_split) %>%
-  ggsurvplot(data = df_cptac_split)
+  ggsurvplot(data = df_cptac_split, pval = TRUE)
 
 panel_surv <- cowplot::plot_grid(surv_os$plot + labs(x = NULL, y = "Overall\nsurvival probability") + theme(legend.position = "none"),
                                  surv_pfs$plot + labs(y = "Progression-free\nsurvival probability") + theme(legend.margin = margin(0, 0, 0, 0, unit = 'cm')),
