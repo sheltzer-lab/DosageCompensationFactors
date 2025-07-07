@@ -926,6 +926,8 @@ nested_shap_heatmap <- function(df, nesting_formula) {
     ggh4x::facet_nested(nesting_formula, switch = "y") +
     scale_fill_gradientn(colors = c(bidirectional_color_pal_viridis[4], "white", bidirectional_color_pal_viridis[2]),
                          space = "Lab", limits = c(-1, 1), oob = scales::squish) +
+    scale_x_discrete(expand = c(0, 0)) +
+    scale_y_discrete(expand = c(0, 0)) +
     labs(x = "Feature", y = "Model", fill = "SHAP-Value Correlation") +
     cowplot::theme_minimal_grid() +
     theme(panel.spacing = unit(0, "lines"),

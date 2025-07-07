@@ -520,6 +520,8 @@ panel_gsea_all <- bind_rows(gsea_all %>% mutate(Comparison = "Buffering"),
   ggh4x::facet_nested(Comparison + Dataset ~ ., switch = "y") +
   scale_fill_gradientn(colors = bidirectional_color_pal,
                        space = "Lab", limits = c(-3, 3), oob = scales::squish) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
   labs(x = "Cancer Hallmark Pathway", y = "", fill = "Normalized Enrichment Score") +
   cowplot::theme_minimal_grid() +
   theme(panel.spacing = unit(0, "lines"),
