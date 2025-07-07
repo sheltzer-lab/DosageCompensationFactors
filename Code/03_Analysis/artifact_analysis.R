@@ -30,12 +30,14 @@ dir.create(reports_dir, recursive = TRUE)
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+expr_buf_cptac <- read_parquet(here(output_data_dir, 'expression_buffering_cptac_pure.parquet'))
+# No CN-dependent BRs for P0211 and Chunduri
 
 # Plot regression between Buffering Ratio, Protein Expression, etc. to uncover non-linearities and compression artifacts
 # for Dosage Compensation of heavily amplified genes
 
 ## Plots may be too large if all values are used
-downsample_n <-  50000
+downsample_n <- 50000
 
 ## Add additional fields (mean, sd)
 add_fields <- function(df_buf) {
@@ -48,13 +50,17 @@ add_fields <- function(df_buf) {
            Log2FC.SD = sd(Log2FC, na.rm = TRUE),
            Buffering.GeneLevel.Ratio.Average = mean(Buffering.GeneLevel.Ratio, na.rm = TRUE),
            Buffering.GeneLevel.Ratio.SD = sd(Buffering.GeneLevel.Ratio, na.rm = TRUE),
-           Protein.Expression.Normalized.Average = mean(Protein.Expression.Normalized, na.rm = TRUE)) %>%
+           Protein.Expression.Normalized.Average = mean(Protein.Expression.Normalized, na.rm = TRUE),
+           Protein.Expression.CV = sd(2^Protein.Expression.Normalized, na.rm = TRUE) / mean(2^Protein.Expression.Normalized, na.rm = TRUE)
+    ) %>%
     ungroup()
 }
 
 expr_buf_procan <- expr_buf_procan %>%
   add_fields()
 expr_buf_depmap <- expr_buf_depmap %>%
+  add_fields()
+expr_buf_cptac <- expr_buf_cptac %>%
   add_fields()
 
 ## Define datasets to be processed
@@ -64,7 +70,10 @@ datasets <- list(
   list(dataset = expr_buf_procan %>% filter_cn_loss(remove_above = "50%"), name = "ProCan_CN-Loss"),
   list(dataset = expr_buf_depmap, name = "DepMap"),
   list(dataset = expr_buf_depmap %>% filter_cn_gain(remove_below = "50%"), name = "DepMap_CN-Gain"),
-  list(dataset = expr_buf_depmap %>% filter_cn_loss(remove_above = "50%"), name = "DepMap_CN-Loss")
+  list(dataset = expr_buf_depmap %>% filter_cn_loss(remove_above = "50%"), name = "DepMap_CN-Loss"),
+  list(dataset = expr_buf_cptac, name = "CPTAC"),
+  list(dataset = expr_buf_cptac %>% filter_cn_gain(remove_below = "50%"), name = "CPTAC_CN-Gain"),
+  list(dataset = expr_buf_cptac %>% filter_cn_loss(remove_above = "50%"), name = "CPTAC_CN-Loss")
 )
 
 ## Define conditions to compare
@@ -128,7 +137,25 @@ comparisons <- list(
        name = "br_log2fc", label_coords = c(4, 10)),
   ## Mean Buffering Ratio vs. Mean Log2FC
   list(x = "Log2FC.Average", y = "Buffering.GeneLevel.Ratio.Average",
-       name = "br-mean_log2fc-mean", label_coords = c(1, 2))
+       name = "br-mean_log2fc-mean", label_coords = c(1, 2)),
+  ## Buffering Ratio vs. Protein Neutral CV
+  list(x = "Protein Neutral CV", y = "Buffering.GeneLevel.Ratio",
+       name = "protein-cv-neutral_br", label_coords = c(1, 10)),
+  ## Mean Buffering Ratio vs. Protein Neutral CV
+  list(x = "Protein Neutral CV", y = "Buffering.GeneLevel.Ratio.Average",
+       name = "protein-cv-neutral_br-mean", label_coords = c(1, 2)),
+  ## Mean Log2FC vs. Protein Neutral CV
+  list(x = "Protein Neutral CV", y = "Log2FC.Average",
+       name = "protein-cv-neutral_log2fc-mean", label_coords = c(1, 2)),
+  ## Buffering Ratio vs. Protein CV
+  list(x = "Protein.Expression.CV", y = "Buffering.GeneLevel.Ratio",
+       name = "protein-cv_br", label_coords = c(1, 10)),
+  ## Mean Buffering Ratio vs. Protein CV
+  list(x = "Protein.Expression.CV", y = "Buffering.GeneLevel.Ratio.Average",
+       name = "protein-cv_br-mean", label_coords = c(1, 2)),
+  ## Mean Log2FC vs. Protein CV
+  list(x = "Protein.Expression.CV", y = "Log2FC.Average",
+       name = "protein-cv_log2fc-mean", label_coords = c(1, 2))
 )
 
 ### Generate plots
