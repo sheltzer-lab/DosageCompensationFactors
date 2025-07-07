@@ -586,3 +586,40 @@ figure_s2 <- cowplot::plot_grid(figure_s2_sub1, figure_s2_sub2, figure_s2_sub3, 
 cairo_pdf(here(plots_dir, "figure_s2.pdf"), width = 12, height = 12)
 figure_s2
 dev.off()
+
+# === Revisions ===
+## Analyze sample BR of multiple myeloma / MBN
+df_depmap_mbn <- model_buf_depmap %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
+  mutate(MBN = OncotreeCodeLvl4 == "MBN",
+         Dataset = "DepMap")
+
+df_procan_mbn <- model_buf_procan %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
+  mutate(MBN = OncotreeCodeLvl4 == "MBN",
+         Dataset = "ProCan")
+
+### MBN against other cancer types
+bind_rows(df_depmap_mbn, df_procan_mbn) %>%
+  signif_beeswarm_plot(MBN, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
+                       color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
+  facet_wrap(~Dataset)
+
+### MBN by aneuploidy score
+bind_rows(df_depmap_mbn, df_procan_mbn) %>%
+  filter(MBN) %>%
+  ggscatter(
+    x = "CellLine.AneuploidyScore", y = "Model.Buffering.Ratio.ZScore",
+    color = default_color, size = 3,
+    add = "reg.line", add.params = list(color = highlight_colors[2]),
+    conf.int = TRUE, cor.coef = TRUE,
+    cor.coeff.args = list(method = "spearman", label.sep = "\n", cor.coef.name = "rho")
+  ) +
+  facet_wrap(~Dataset)
