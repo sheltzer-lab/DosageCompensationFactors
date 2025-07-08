@@ -420,14 +420,14 @@ jittered_boxplot <- function(df, group_col, value_col, color_col = NULL, alpha =
     #scale_color_gradientn(colors = biderectional_color_pal, space = "Lab")
 }
 
-plot_pca <- function(pca, color_col = CellLine.Name, label_col = Sample.Name) {
+plot_pca <- function(pca, color_col = CellLine.Name, label_col = Sample.Name, point_size = 1.5) {
   eigenvalues <- pca$eigenvalues
   df_pca <- pca$df_pca
 
   df_pca %>%
     ggplot() +
     aes(.fittedPC1, .fittedPC2, color = { { color_col } }, label = { { label_col } }) +
-    geom_point(size = 1.5) +
+    geom_point(size = point_size) +
     {
       if (!quo_is_null(enquo(label_col))) geom_label_repel(force = 10, seed = 123)
     } +
@@ -446,6 +446,17 @@ scree_plot <- function(pca) {
     ) +
     xlab("Principal Component") +
     ylab("Explained Variance")
+}
+
+plot_umap <- function(umap, color_col = NULL, label_col = NULL, point_size = 1.5) {
+  umap$df_umap %>%
+    ggplot() +
+    aes(V1, V2, color = { { color_col } }, label = { { label_col } }) +
+    geom_point(size = point_size) +
+    {
+      if (!quo_is_null(enquo(label_col))) geom_label_repel(force = 10, seed = 123)
+    } +
+    labs(x = "UMAP1", y = "UMAP2")
 }
 
 bidirectional_heatmap <- function(df, value_col, sample_col, group_col, text_col = NULL,

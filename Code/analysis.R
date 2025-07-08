@@ -155,6 +155,8 @@ dataset_correlation <- function(df, dataset_col, value_col, comparison_name, met
     mutate(Comparison = comparison_name)
 }
 
+# === Dimensionality Reduction ===
+## PCA
 calculate_pca <- function(df, sample_col, sample_group_col, value_group_col, value_col) {
   pca_fit <- df %>%
     select({ { sample_col } }, { { sample_group_col } }, { { value_group_col } }, { { value_col } }) %>%
@@ -180,6 +182,35 @@ calculate_pca <- function(df, sample_col, sample_group_col, value_group_col, val
     tidy(matrix = "eigenvalues")
 
   return(list(pca = pca_fit, df_pca = df_pca, eigenvalues = eigenvalues))
+}
+
+## UMAP
+calculate_umap <- function(df, sample_col, sample_group_col, value_group_col, value_col, random_state = 123) {
+  require(umap)
+  require(broom)
+
+  umap_fit <- df %>%
+    select({ { sample_col } }, { { sample_group_col } }, { { value_group_col } }, { { value_col } }) %>%
+    pivot_wider(names_from = { { sample_col } }, values_from = { { value_col } },
+                id_cols = { { value_group_col } }) %>%
+    drop_na() %>%
+    select(where(is.numeric)) %>%
+    tibble::rownames_to_column() %>%
+    pivot_longer(-rowname) %>%
+    pivot_wider(names_from = rowname, values_from = value) %>%
+    tibble::column_to_rownames(var = "name") %>%
+    scale() %>%
+    umap(random_state = random_state)
+
+  sample_metadata <- df %>%
+    distinct({ { sample_col } }, { { sample_group_col } }, .keep_all = TRUE)
+
+  df_umap <- umap_fit$layout %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = quo_name(enquo(sample_col))) %>%
+    left_join(y = sample_metadata, by = quo_name(enquo(sample_col)))
+
+  return(list(umap = umap, df_umap = df_umap))
 }
 
 # Resample the target distribution in a stratified way using a reference distribution,
