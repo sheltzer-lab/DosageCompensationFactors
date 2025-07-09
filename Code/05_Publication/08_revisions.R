@@ -19,10 +19,24 @@ dir.create(plots_dir, recursive = TRUE)
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
 
 # === Cluster SHAP values ===
-# TODO: perform hierarchical clustering and color by clusters
+cluster_shap <- function(df, value_col, n_clusters = 3, metric = "pearson", linkage = "average") {
+  require(amap)
+
+  df %>%
+    select(ID, DosageCompensation.Factor, { { value_col } }) %>%
+    pivot_wider(names_from = ID, values_from = { { value_col } }, id_cols = DosageCompensation.Factor) %>%
+    tibble::column_to_rownames("DosageCompensation.Factor") %>%
+    amap::Dist(method = metric) %>%
+    hclust(method = linkage) %>%
+    cutree(k = n_clusters) %>%
+    as.data.frame() %>%
+    rename(Cluster = 1) %>%
+    mutate(Cluster = as.character(Cluster)) %>%
+    tibble::rownames_to_column("DosageCompensation.Factor")
+}
 
 ## All (pan-cancer) Models
-pca_shap <- shap_results %>%
+shap_pan_cancer <- shap_results %>%
   filter(Model.BufferingMethod == "BR" & Model.Samples == "Unaveraged") %>%
   filter(Model.Dataset != "Engineered") %>%
   filter(Model.Subset == "All") %>%
@@ -30,23 +44,34 @@ pca_shap <- shap_results %>%
   #filter(Model.Condition == "Gain") %>%
   filter(Model.ROC.AUC > 0.65) %>%
   unite("ID", ID, Model.Dataset, Model.Subset, Model.Condition, Model.Level) %>%
-  mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value)), .by = "Model.Filename") %>%
+  mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value)), .by = "Model.Filename")
+
+clusters_pan_cancer <- shap_pan_cancer %>%
+  cluster_shap(SHAP.Value.Scaled, n_clusters = 3, metric = "pearson", linkage = "average")
+
+pca_shap <- shap_pan_cancer %>%
+  left_join(y = clusters_pan_cancer, by = "DosageCompensation.Factor") %>%
   calculate_pca(DosageCompensation.Factor, NULL, ID, SHAP.Value.Scaled) %>%
-  plot_pca(color_col = NULL, label_col = DosageCompensation.Factor) %>%
+  plot_pca(color_col = Cluster, label_col = DosageCompensation.Factor) %>%
   save_plot("shap_pca.png", width = 250, height = 250)
 
 ## SHAP per dataset
 datasets <- c("DepMap", "ProCan", "CPTAC")
 for (dataset in datasets) {
-  pca_shap_dataset <- shap_results %>%
+  shap_dataset <- shap_results %>%
     filter(Model.BufferingMethod == "BR" & Model.Samples == "Unaveraged") %>%
     filter(Model.Dataset == dataset) %>%
     filter(Model.Subset == "All") %>%
     filter(Model.Level == "Gene") %>%
-    filter(Model.Condition == "Gain") %>%
-    mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value)), .by = "Model.Filename") %>%
+    mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value)), .by = "Model.Filename")
+
+  clusters_dataset <- shap_dataset %>%
+    cluster_shap(SHAP.Value.Scaled, n_clusters = 3, metric = "pearson", linkage = "average")
+
+  pca_shap_dataset <-  shap_dataset %>%
+    left_join(y = clusters_dataset, by = "DosageCompensation.Factor") %>%
     calculate_pca(DosageCompensation.Factor, NULL, ID, SHAP.Value.Scaled) %>%
-    plot_pca(color_col = NULL, label_col = DosageCompensation.Factor) %>%
+    plot_pca(color_col = Cluster, label_col = DosageCompensation.Factor) %>%
     save_plot(paste0("shap_pca_", tolower(dataset), ".png"), width = 250, height = 250)
 }
 
@@ -54,15 +79,21 @@ for (dataset in datasets) {
 conditions <- c("Gain", "Loss")
 
 for (condition in conditions) {
-  pca_shap_cn <- shap_results %>%
+  shap_cn <- shap_results %>%
     filter(Model.BufferingMethod == "BR" & Model.Samples == "Unaveraged") %>%
     filter(Model.Dataset != "Engineered") %>%
     filter(Model.Subset == "All") %>%
     filter(Model.Level == "Gene") %>%
     filter(Model.Condition == condition) %>%
-    mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value)), .by = "Model.Filename") %>%
+    mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value, scale = FALSE)), .by = "Model.Filename")
+
+  clusters_cn <- shap_cn %>%
+    cluster_shap(SHAP.Value.Scaled, n_clusters = 3, metric = "pearson", linkage = "average")
+
+  pca_shap_cn <- shap_cn %>%
+    left_join(y = clusters_cn, by = "DosageCompensation.Factor") %>%
     calculate_pca(DosageCompensation.Factor, NULL, ID, SHAP.Value.Scaled) %>%
-    plot_pca(color_col = NULL, label_col = DosageCompensation.Factor) %>%
+    plot_pca(color_col = Cluster, label_col = DosageCompensation.Factor) %>%
     save_plot(paste0("shap_pca_", tolower(condition), ".png"), width = 250, height = 250)
 }
 
@@ -70,25 +101,26 @@ for (condition in conditions) {
 ## Remark: PCA of single models results in one PC with >90% explained variance.
 # TODO: Investigate PC with large coverage
 for (condition in conditions) {
-  pca_shap_cn <- shap_results %>%
+  shap_cptac <- shap_results %>%
     filter(Model.BufferingMethod == "BR" & Model.Samples == "Unaveraged") %>%
     filter(Model.Dataset == "CPTAC") %>%
     filter(Model.Subset == "All") %>%
     filter(Model.Level == "Gene") %>%
-    filter(Model.Condition == condition) %>%
+    filter(Model.Condition == condition)
+
+  clusters_cptac <- shap_cptac %>%
+    cluster_shap(SHAP.Value, n_clusters = 3, metric = "pearson", linkage = "average")
+
+  pca_shap_cptac <- shap_cptac %>%
+    left_join(y = clusters_cptac, by = "DosageCompensation.Factor") %>%
     calculate_pca(DosageCompensation.Factor, NULL, ID, SHAP.Value) %>%
-    plot_pca(color_col = NULL, label_col = DosageCompensation.Factor) %>%
+    plot_pca(color_col = Cluster, label_col = DosageCompensation.Factor) %>%
     save_plot(paste0("shap_pca_cptac_", tolower(condition), ".png"), width = 250, height = 250)
 }
 
 ## Try UMAP
-umap_shap <- shap_results %>%
-  filter(Model.BufferingMethod == "BR" & Model.Samples == "Unaveraged") %>%
-  filter(Model.Dataset != "Engineered") %>%
-  filter(Model.Subset == "All") %>%
-  filter(Model.ROC.AUC > 0.65) %>%
-  unite("ID", ID, Model.Dataset, Model.Subset, Model.Condition, Model.Level) %>%
-  mutate(SHAP.Value.Scaled = as.vector(scale(SHAP.Value)), .by = "Model.Filename") %>%
+umap_shap <- shap_pan_cancer %>%
+  left_join(y = clusters_pan_cancer, by = "DosageCompensation.Factor") %>%
   calculate_umap(DosageCompensation.Factor, NULL, ID, SHAP.Value.Scaled) %>%
-  plot_umap(label_col = DosageCompensation.Factor) %>%
+  plot_umap(color_col = Cluster, label_col = DosageCompensation.Factor) %>%
   save_plot("shap_umap.png", width = 250, height = 250)
