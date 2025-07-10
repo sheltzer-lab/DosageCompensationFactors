@@ -107,11 +107,12 @@ volcano_dep_diff <- df_crispr_model_buf %>%
                            (!is.na(CancerDriverMode) |
                              Gene.Symbol %in% top_diff$Gene.Symbol |
                              !is.na(ExclusiveEssentiality)),
-                         Gene.Symbol, NA)) %>%
+                         Gene.Symbol, NA),
+         Font = if_else(!is.na(ExclusiveEssentiality), "bold", "plain"),
+         `-log10(p)` = -log10(Test.p.adj)) %>%
   arrange(!is.na(CancerDriverMode)) %>%
-  mutate(`-log10(p)` = -log10(Test.p.adj)) %>%
   ggplot() +
-  aes(x = Log2FC, y = `-log10(p)`, label = Label, color = CancerDriverMode) +
+  aes(x = Log2FC, y = `-log10(p)`, label = Label, color = CancerDriverMode, fontface = Font) +
   geom_point(aes(alpha = Significant, shape = ExclusiveEssentiality, size = ExclusiveEssentiality)) +
   color_mapping_driver +
   scale_shape_manual(values = c(`High Buffering` = 17, `Low Buffering` = 15), na.value = 16) +

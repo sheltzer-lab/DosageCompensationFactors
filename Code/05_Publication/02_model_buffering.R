@@ -514,7 +514,7 @@ panel_as_all <- bind_rows(df_depmap, df_procan, df_cptac) %>%
   stat_smooth(method = lm, color = "dimgrey") +
   #annotate("text", x = 0, y = 1.8, hjust = 0, size = 5, label = paste0(print_corr(cor_as_test$estimate), ", ", print_signif(cor_as_test$p.value))) +
   stat_cor(aes(color = NULL), method = "spearman", show.legend = FALSE,
-           p.accuracy = 0.001, r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
+           r.accuracy = 0.001, size = 5, cor.coef.name = "rho") +
   scale_color_manual(values = color_palettes$WGD) +
   labs(x = "(Estimated) Aneuploidy Score", y = "Sample Buffering Ratio") +
   theme(legend.position = c("left", "top"),
