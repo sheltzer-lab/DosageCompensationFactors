@@ -228,6 +228,8 @@ panel_br_factor_cor <- br_factor_cor %>%
   ggh4x::facet_nested(Dataset + Gene.CNV ~ ., switch = "y") +
   scale_fill_gradientn(colors = c(bidirectional_color_pal_viridis[2], "white", bidirectional_color_pal_viridis[4]),
                          space = "Lab", limits = c(-0.25, 0.25), oob = scales::squish) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
   labs(x = "Dosage Compensation Factor", y = "", fill = "Buffering Ratio Correlation") +
   cowplot::theme_minimal_grid() +
   theme(panel.spacing = unit(0, "lines"),

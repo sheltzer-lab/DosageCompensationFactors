@@ -253,6 +253,8 @@ panel_model_perf <- model_results %>%
   aes(x = "", y = Model.BaseModel, fill = Model.ROC.AUC) +
   geom_raster() +
   ggh4x::facet_nested(. ~ Model.Dataset + Model.Subset + Model.AnalysisVariant + Model.Condition) +
+  # scale_x_discrete(expand = c(0, 0)) +
+  # scale_y_discrete(expand = c(0, 0)) +
   scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, limits = c(0.5, 0.9), oob = scales::squish,
                        breaks = seq(0.5, 0.9, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9")) +
   labs(x = NULL, y = NULL, fill = "ROC AUC") +
@@ -294,6 +296,8 @@ panel_oos <- oos_summary %>%
   geom_text(color = "white") +
   scale_fill_viridis_c(option = "magma", direction = 1, end = 0.9, limits = c(0.5, 0.9), oob = scales::squish,
                        breaks = seq(0.5, 0.9, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9")) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
   facet_grid(Model.Level ~ Model.Condition) +
   labs(fill = "ROC AUC", x = "Evaluation Dataset (training + test)", y = "Model Training Dataset") +
   theme(legend.position = "none")
