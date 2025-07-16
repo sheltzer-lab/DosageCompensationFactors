@@ -163,22 +163,26 @@ median_response_plot_buf <- median_response_buf %>%
               test = wilcox.test,
               map_signif_level = print_signif, y_position = 0.06,
               size = 0.8, tip_length = 0, color = "black") +
+  stat_summary(aes(y = -0.35), fun.data = show.n,
+               geom = "text", color = default_color) +
   scale_color_manual(values = c("High" = color_palettes$BufferingClasses[["Buffered"]],
                                 "Low" = color_palettes$BufferingClasses[["Scaling"]])) +
-  theme(legend.position = "none") +
   ylim(c(-0.35, 0.15)) +
-  labs(x = "Sample Buffering", y = "Median Drug Effect")
+  labs(x = "Sample Buffering", y = "Median Drug Effect") +
+  theme(legend.position = "none")
 
 median_response_plot_control <- median_response_buf %>%
   drop_na(DrugStatus) %>%
   ggplot() +
   aes(x = DrugStatus, y = Drug.Effect.Median) +
   geom_boxplot(size = 0.8) +
-  theme(legend.position = "none") +
+  stat_summary(aes(y = -0.35), fun.data = show.n,
+               geom = "text", color = default_color) +
   xlab("Drug Control") +
   ylim(c(-0.35, 0.15)) +
   ylab(NULL) +
-  theme(axis.text.y = element_blank(),
+  theme(legend.position = "none",
+        axis.text.y = element_blank(),
         axis.ticks.y = element_blank())
 
 panel_drug_response <- cowplot::plot_grid(median_response_plot_buf,
