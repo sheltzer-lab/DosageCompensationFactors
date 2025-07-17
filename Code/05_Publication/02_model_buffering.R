@@ -606,14 +606,16 @@ df_procan_mbn <- model_buf_procan %>%
          Dataset = "ProCan")
 
 ### MBN against other cancer types
-bind_rows(df_depmap_mbn, df_procan_mbn) %>%
+plot_mbn_br <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
   signif_beeswarm_plot(MBN, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
                        color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
   facet_wrap(~Dataset)
 
+save_plot(plot_mbn_br, "buffering_mbr.png", dir = here(plots_dir, "Revisions"))
+
 ### MBN by aneuploidy score
-bind_rows(df_depmap_mbn, df_procan_mbn) %>%
+plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
   filter(MBN) %>%
   ggscatter(
     x = "CellLine.AneuploidyScore", y = "Model.Buffering.Ratio.ZScore",
@@ -623,3 +625,5 @@ bind_rows(df_depmap_mbn, df_procan_mbn) %>%
     cor.coeff.args = list(method = "spearman", label.sep = "\n", cor.coef.name = "rho")
   ) +
   facet_wrap(~Dataset)
+
+save_plot(plot_mbn_br_as, "buffering_mbr_aneuploidy.png", dir = here(plots_dir, "Revisions"))
