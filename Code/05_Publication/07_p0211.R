@@ -70,13 +70,20 @@ logfc_heatmap <- expr_buf_p0211 %>%
                         title = "Protein Log2FC", treeheight_col = 25, treeheight_row = 25)
 
 ## ChrArm Buffering Ratio by replicate
+## Color code: BR<0.2 = Scaling (viridis 0.15), BR>0.2 = Buffered (viridis 0.7)
+## BR: Q0 = -0.4, Q1 = 0.2, Q2 = 0.5, Q3 = 0.75, Q4 = 1.26
+color <- c(viridis(20, option = color_palettes$BufferingRatio, end = 0.15),
+           viridis(6, option = color_palettes$BufferingRatio, begin = 0.15, end = 0.7)[-1],
+           viridis(16, option = color_palettes$BufferingRatio, begin = 0.7, end = 0.95)[-1])
+breaks <- seq(-1, 1, 0.05)
+
 br_heatmap <- expr_buf_p0211 %>%
   filter(CellLine.Name != "RPE1") %>%
   filter(Gene.Chromosome == 13) %>%
   mutate(Label = str_replace_all(Buffering.ChrArmLevel.Class, c("Anti-Scaling" = "#", "Buffered" = "=", "Scaling" = ""))) %>%
   bidirectional_heatmap(Buffering.ChrArmLevel.Ratio, Gene.Symbol, Sample.Name,
                         text_col = Label, cluster_rows = TRUE, cluster_cols = TRUE,
-                        show_rownames = TRUE, show_colnames = TRUE,
+                        show_rownames = TRUE, show_colnames = TRUE, color_pal = color, breaks = breaks,
                         title = "Buffering Ratio", treeheight_col = 25, treeheight_row = 25)
 
 ## Average Log2FC by Cell Line
