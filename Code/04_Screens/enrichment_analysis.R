@@ -822,12 +822,42 @@ df_sensitivity <- df_grid_results %>%
     0.05 * Log2FC.Abs.Max_norm +       # effect size magnitude
     0.10 * Group.Balance.Min +         # balance of observations between compared groups
     0.15 * Observations.Min_norm       # minimum number of observations in either group
-  ))
+  )) %>%
+  mutate(Penalty = if_else(Significant.Count < 10 | (Robustness.InterDataset < 0.01 & Observations.Min < 4 & Group.Balance.Min < 0.3), 0.05, 0),
+         PenalizedSensitivity = SensitivityScore - Penalty) %>%
+  write_parquet(here(output_data_dir, "diffexp_sensitivity_scores.parquet"))
 
 df_sensitivity %>%
-  # summarize(SensitivityScore = median(SensitivityScore), .by = c(Low, High)) %>%
   ggplot() +
-  aes(x = Low, y = High, fill = SensitivityScore) +
+  aes(x = Low, y = High, fill = PenalizedSensitivity) +
   geom_tile() +
-  scale_fill_viridis(limits = c(0, 0.5), oob = scales::squish) +
+  scale_fill_viridis(limits = c(0, 0.4), oob = scales::squish) +
   facet_wrap(~Dataset)
+
+df_sensitivity %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = Significant.Count_norm) +
+  geom_tile() +
+  scale_fill_viridis() +
+  facet_wrap(~Dataset)
+
+df_sensitivity %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = p.adj.Max_norm) +
+  geom_tile() +
+  scale_fill_viridis() +
+  facet_wrap(~Dataset)
+
+df_sensitivity %>%
+  summarize(SensitivityScore.Median = median(SensitivityScore), .by = c(Low, High)) %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = SensitivityScore.Median) +
+  geom_tile() +
+  scale_fill_viridis()
+
+df_sensitivity %>%
+  summarize(SensitivityScore.SD = sd(SensitivityScore), .by = c(Low, High)) %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = -log10(SensitivityScore.SD)) +
+  geom_tile() +
+  scale_fill_viridis()
