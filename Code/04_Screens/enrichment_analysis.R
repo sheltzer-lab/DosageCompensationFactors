@@ -698,3 +698,136 @@ genes_down_common_adherent %>%
   overrepresentation_analysis() %>%
   plot_terms() %>%
   save_plot("overrepresentation_terms_down_common_adherent.png", height = 300)
+
+# === Evaluation - BR-cutoff sensitivity analysis ===
+## Get quantile based on z-score cutoff
+z_cutoff <- abs(qnorm(0.2))
+model_buf_quantiles <- bind_rows(model_buf_depmap, model_buf_procan, model_buf_cptac) %>%
+  mutate(Model.Buffering.Ratio.Quantile = ecdf(Model.Buffering.Ratio.ZScore)(Model.Buffering.Ratio.ZScore),
+         .by = Dataset)
+
+model_buf_quantiles %>%
+  ggplot() +
+  aes(x = Model.Buffering.Ratio.ZScore, y = Model.Buffering.Ratio.Quantile, color = Dataset) +
+  geom_line() +
+  geom_vline(xintercept = -z_cutoff) +
+  geom_vline(xintercept = z_cutoff) +
+  scale_x_continuous(breaks = seq(floor(min(model_buf_quantiles$Model.Buffering.Ratio.ZScore)),
+                                  ceiling(max(model_buf_quantiles$Model.Buffering.Ratio.ZScore)),
+                                  1)) +
+  scale_y_continuous(breaks = seq(0, 1, 0.05)) +
+  scale_color_manual(values = color_palettes$Datasets)
+
+## Grid search of cutoffs
+cutoff_steps <- seq(5, 50, 5)
+df_grid <- expand_grid(cutoff_steps, cutoff_steps)
+
+eval_datasets <- list(
+  DepMap = list(ModelBR = model_buf_depmap, Proteome = expr_buf_depmap),
+  ProCan = list(ModelBR = model_buf_procan, Proteome = expr_buf_procan),
+  CPTAC = list(ModelBR = model_buf_cptac, Proteome = expr_buf_cptac)
+)
+
+results <- list()
+pb <- txtProgressBar(min = 1, max = nrow(df_grid) * 3, style = 3)
+for (eval_dataset in names(eval_datasets)) {
+ model_buf_current <- eval_datasets[[eval_dataset]]$ModelBR
+ expr_buf_current <- eval_datasets[[eval_dataset]]$Proteome
+
+ for (i in seq_len(nrow(df_grid))) {
+  cutoff_low <- df_grid[[i, 1]]
+  cutoff_high <- 100 - df_grid[[i, 2]]
+
+  suppressWarnings({
+   results[[paste0(eval_dataset, i)]] <- model_buf_current %>%
+     split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                        quantile_low = paste0(cutoff_low, "%"), quantile_high = paste0(cutoff_high, "%")) %>%
+     inner_join(y = expr_buf_current, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+     select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
+     differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
+                             groups = c("Low", "High")) %>%
+     # Evaluation metrics
+     mutate(Group.Balance = Count_GroupA / (Count_GroupA + Count_GroupB),
+            Group.Balance.Norm = 1 - abs(0.5 - Group.Balance) * 2) %>%
+     summarize(Dataset = eval_dataset,
+               Low = cutoff_low,
+               High = cutoff_high,
+               Log2FC.Abs.Max = max(abs(Log2FC)),
+               p.adj.Max = max(-log10(Test.p.adj)),
+               Observations.Min = min(Count_GroupA, Count_GroupB),
+               Group.Balance.Min = min(Group.Balance.Norm),
+               Significant.Count = sum(!is.na(Significant)),
+               Significant.Genes = list(Gene.Symbol[!is.na(Significant)]))
+  })
+  setTxtProgressBar(pb, pb$getVal() + 1)
+ }
+}
+close(pb)
+
+df_grid_results <- bind_rows(results) %>%
+  write_parquet(here(output_data_dir, "diffexp_sensitivity.parquet"))
+
+jaccard_index <- function(set_list) {
+  set_list <- lapply(set_list, unique)
+  intersection <- length(Reduce(intersect, set_list))
+  union <- length(unique(unlist(set_list)))
+  return(intersection / union)
+}
+
+df_grid_results <- read_parquet(here(output_data_dir, "diffexp_sensitivity.parquet"))
+
+## Inter-dataset robustness
+df_robustness_inter <- df_grid_results %>%
+  # filter(Dataset != "CPTAC") %>%
+  summarize(GeneLists = list(Significant.Genes),
+            .by = c(Low, High)) %>%
+  mutate(Robustness.InterDataset = purrr::map_dbl(GeneLists, jaccard_index))
+
+df_robustness_inter %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = Robustness.InterDataset) +
+  geom_tile() +
+  scale_fill_viridis()
+
+## Intra-data robustness
+df_robustness_intra <- df_grid_results %>%
+  inner_join(df_grid_results, by = "Dataset", suffix = c("", ".neighbor")) %>%
+  filter(abs(Low - Low.neighbor) <= 5 & abs(High - High.neighbor) <= 5) %>%
+  summarize(GeneLists = list(Significant.Genes.neighbor),
+            .by = c(Low, High, Dataset)) %>%
+  mutate(Robustness.IntraDataset = purrr::map_dbl(GeneLists, jaccard_index),
+         Robustness.IntraDataset = if_else(is.nan(Robustness.IntraDataset), 0, Robustness.IntraDataset))
+
+df_robustness_intra %>%
+  filter(Dataset == "ProCan") %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = Robustness.IntraDataset) +
+  geom_tile() +
+  scale_fill_viridis()
+
+## Joint analysis
+normalize_min_max <- function(x) (x - min(x)) / (max(x) - min(x))
+norm_cols <- c("Log2FC.Abs.Max", "p.adj.Max", "Significant.Count", "Observations.Min",
+               "Robustness.InterDataset", "Robustness.IntraDataset", "Group.Balance.Min")
+
+df_sensitivity <- df_grid_results %>%
+  inner_join(df_robustness_intra %>% select(-GeneLists), by = c("High", "Low", "Dataset")) %>%
+  inner_join(df_robustness_inter %>% select(-GeneLists), by = c("High", "Low")) %>%
+  mutate(across(norm_cols, normalize_min_max, .names = "{.col}_norm")) %>%
+  mutate(SensitivityScore = (
+    0.30 * Significant.Count_norm +    # prioritize number of hits
+    0.20 * Robustness.InterDataset +   # inter-dataset consistency
+    0.10 * Robustness.IntraDataset +   # local robustness
+    0.10 * p.adj.Max_norm +            # strength of statistical evidence
+    0.05 * Log2FC.Abs.Max_norm +       # effect size magnitude
+    0.10 * Group.Balance.Min +         # balance of observations between compared groups
+    0.15 * Observations.Min_norm       # minimum number of observations in either group
+  ))
+
+df_sensitivity %>%
+  # summarize(SensitivityScore = median(SensitivityScore), .by = c(Low, High)) %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = SensitivityScore) +
+  geom_tile() +
+  scale_fill_viridis(limits = c(0, 0.5), oob = scales::squish) +
+  facet_wrap(~Dataset)
