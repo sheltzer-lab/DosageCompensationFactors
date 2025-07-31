@@ -3,6 +3,7 @@ library(arrow)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(msigdbr)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -124,3 +125,69 @@ umap_shap <- shap_pan_cancer %>%
   calculate_umap(DosageCompensation.Factor, NULL, ID, SHAP.Value.Scaled) %>%
   plot_umap(color_col = Cluster, label_col = DosageCompensation.Factor) %>%
   save_plot("shap_umap.png", width = 250, height = 250)
+
+# === Evaluate GSEA of UPR Gene Set ===
+diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
+diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
+diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
+diff_exp_control <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
+
+upr_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
+  rename(Gene.Symbol = "gene_symbol") %>%
+  filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE")
+
+upr_de_procan <- diff_exp_procan %>%
+  semi_join(y = upr_gene_set, by = "Gene.Symbol")
+
+upr_de_cptac <- diff_exp_cptac %>%
+  semi_join(y = upr_gene_set, by = "Gene.Symbol")
+
+upr_down_common <- semi_join(
+  x = upr_de_procan %>% filter(Log2FC < 0),
+  y = upr_de_cptac %>% filter(Log2FC < 0),
+  by = "Gene.Symbol"
+)
+
+ora_down_common <- upr_down_common %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = FALSE) %>%
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), string_trunc = 70,
+                     custom_color = color_palettes$DiffExp["Down"]) %>%
+  save_plot("ora_upr_common_down.png", width = 150, height = 150)
+
+upr_up_common <- semi_join(
+  x = upr_de_procan %>% filter(Log2FC > 0),
+  y = upr_de_cptac %>% filter(Log2FC > 0),
+  by = "Gene.Symbol"
+)
+
+ora_up_common <- upr_up_common %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = FALSE) %>%
+  plot_terms_compact(custom_color = color_palettes$DiffExp["Up"], string_trunc = 70) %>%
+  save_plot("ora_upr_common_up.png", width = 150, height = 150)
+
+upr_tumor_down_cellline_up <- semi_join(
+  x = upr_de_procan %>% filter(Log2FC > 0),
+  y = upr_de_cptac %>% filter(Log2FC < 0),
+  by = "Gene.Symbol"
+)
+
+ora_up_tumor_down_cellline_up <- upr_tumor_down_cellline_up %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = FALSE) %>%
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), string_trunc = 70,
+                     custom_color = color_palettes$Datasets["CPTAC"]) %>%
+  save_plot("ora_upr_tumor_down_cellline_up.png", width = 150, height = 150)
+
+upr_tumor_up_cellline_down <- semi_join(
+  x = upr_de_procan %>% filter(Log2FC < 0),
+  y = upr_de_cptac %>% filter(Log2FC > 0),
+  by = "Gene.Symbol"
+)
+
+ora_tumor_up_cellline_down <- upr_tumor_up_cellline_down %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(ordered = FALSE) %>%
+  plot_terms_compact(custom_color = color_palettes$Datasets["ProCan"], string_trunc = 70) %>%
+  save_plot("ora_upr_tumor_up_cellline_down.png", width = 150, height = 150)
