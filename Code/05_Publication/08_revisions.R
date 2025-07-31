@@ -142,6 +142,7 @@ upr_de_procan <- diff_exp_procan %>%
 upr_de_cptac <- diff_exp_cptac %>%
   semi_join(y = upr_gene_set, by = "Gene.Symbol")
 
+## Perform ORA
 upr_down_common <- semi_join(
   x = upr_de_procan %>% filter(Log2FC < 0),
   y = upr_de_cptac %>% filter(Log2FC < 0),
@@ -150,10 +151,7 @@ upr_down_common <- semi_join(
 
 ora_down_common <- upr_down_common %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis(ordered = FALSE) %>%
-  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), string_trunc = 70,
-                     custom_color = color_palettes$DiffExp["Down"]) %>%
-  save_plot("ora_upr_common_down.png", width = 150, height = 150)
+  overrepresentation_analysis(ordered = FALSE)
 
 upr_up_common <- semi_join(
   x = upr_de_procan %>% filter(Log2FC > 0),
@@ -163,9 +161,7 @@ upr_up_common <- semi_join(
 
 ora_up_common <- upr_up_common %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis(ordered = FALSE) %>%
-  plot_terms_compact(custom_color = color_palettes$DiffExp["Up"], string_trunc = 70) %>%
-  save_plot("ora_upr_common_up.png", width = 150, height = 150)
+  overrepresentation_analysis(ordered = FALSE)
 
 upr_tumor_down_cellline_up <- semi_join(
   x = upr_de_procan %>% filter(Log2FC > 0),
@@ -173,12 +169,9 @@ upr_tumor_down_cellline_up <- semi_join(
   by = "Gene.Symbol"
 )
 
-ora_up_tumor_down_cellline_up <- upr_tumor_down_cellline_up %>%
+ora_tumor_down_cellline_up <- upr_tumor_down_cellline_up %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis(ordered = FALSE) %>%
-  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), string_trunc = 70,
-                     custom_color = color_palettes$Datasets["CPTAC"]) %>%
-  save_plot("ora_upr_tumor_down_cellline_up.png", width = 150, height = 150)
+  overrepresentation_analysis(ordered = FALSE)
 
 upr_tumor_up_cellline_down <- semi_join(
   x = upr_de_procan %>% filter(Log2FC < 0),
@@ -188,6 +181,40 @@ upr_tumor_up_cellline_down <- semi_join(
 
 ora_tumor_up_cellline_down <- upr_tumor_up_cellline_down %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis(ordered = FALSE) %>%
+  overrepresentation_analysis(ordered = FALSE)
+
+## Select unique terms per group
+ora_down_common_unique <- ora_down_common$result %>%
+  anti_join(y = bind_rows(ora_up_common$result, ora_tumor_down_cellline_up$result, ora_tumor_up_cellline_down$result),
+            by = "term_id")
+
+ora_up_common_unique <- ora_up_common$result %>%
+  anti_join(y = bind_rows(ora_down_common$result, ora_tumor_down_cellline_up$result, ora_tumor_up_cellline_down$result),
+            by = "term_id")
+
+ora_tumor_down_cellline_up_unique <- ora_tumor_down_cellline_up$result %>%
+  anti_join(y = bind_rows(ora_down_common$result, ora_up_common$result, ora_tumor_up_cellline_down$result),
+            by = "term_id")
+
+ora_tumor_up_cellline_down_unique <- ora_tumor_up_cellline_down$result %>%
+  anti_join(y = bind_rows(ora_down_common$result, ora_up_common$result, ora_tumor_down_cellline_up$result),
+            by = "term_id")
+
+## Plot ORA results
+list(result = ora_down_common_unique) %>%
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), string_trunc = 70,
+                     custom_color = color_palettes$DiffExp["Down"]) %>%
+  save_plot("ora_upr_common_down.png", width = 150, height = 150)
+
+list(result = ora_up_common_unique) %>%
+  plot_terms_compact(custom_color = color_palettes$DiffExp["Up"], string_trunc = 70) %>%
+  save_plot("ora_upr_common_up.png", width = 150, height = 150)
+
+list(result = ora_tumor_down_cellline_up_unique) %>%
+  plot_terms_compact(selected_sources = c("GO:BP", "GO:MF", "REAC"), string_trunc = 70,
+                     custom_color = color_palettes$Datasets["CPTAC"]) %>%
+  save_plot("ora_upr_tumor_down_cellline_up.png", width = 150, height = 150)
+
+list(result = ora_tumor_up_cellline_down_unique) %>%
   plot_terms_compact(custom_color = color_palettes$Datasets["ProCan"], string_trunc = 70) %>%
   save_plot("ora_upr_tumor_up_cellline_down.png", width = 150, height = 150)
