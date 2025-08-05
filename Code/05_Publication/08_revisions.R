@@ -4,6 +4,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(msigdbr)
+library(openxlsx)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -12,9 +13,11 @@ source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 
 plots_dir <- here(plots_base_dir, "Publication", "Revisions")
+tables_dir <- here(tables_base_dir, "Publication", "Revisions")
 output_data_dir <- output_data_base_dir
 
 dir.create(plots_dir, recursive = TRUE)
+dir.create(tables_dir, recursive = TRUE)
 
 # === Load Data ===
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
@@ -287,6 +290,7 @@ for (eval_dataset in names(eval_datasets)) {
                Log2FC.Abs.Max = max(abs(Log2FC)),
                p.adj.Max = max(-log10(Test.p.adj)),
                Observations.Min = min(Count_GroupA, Count_GroupB),
+               Observations.Median = median(c(Count_GroupA, Count_GroupB)),
                Group.Balance.Min = min(Group.Balance.Norm),
                Significant.Count = sum(!is.na(Significant)),
                Significant.Genes = list(Gene.Symbol[!is.na(Significant)]))
@@ -296,7 +300,7 @@ for (eval_dataset in names(eval_datasets)) {
 }
 close(pb)
 
-df_grid_results <- bind_rows(results) %>%
+bind_rows(results) %>%
   write_parquet(here(output_data_dir, "diffexp_sensitivity.parquet"))
 
 jaccard_index <- function(set_list) {
@@ -314,7 +318,11 @@ df_grid_results %>%
   aes(x = Low, y = High, fill = Significant.Count) +
   geom_tile() +
   scale_fill_viridis() +
-  facet_wrap(~Dataset)
+  labs(fill = "Significant Hits") +
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_hits.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 ## Maximum Absolute Log2FC
 df_grid_results %>%
@@ -322,7 +330,11 @@ df_grid_results %>%
   aes(x = Low, y = High, fill = Log2FC.Abs.Max) +
   geom_tile() +
   scale_fill_viridis() +
-  facet_wrap(~Dataset)
+  facet_wrap(~Dataset) +
+  labs(fill = "max(abs(Log2FC))") +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_Log2FC.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 ## Maximum -log10 adjusted p value
 df_grid_results %>%
@@ -330,7 +342,11 @@ df_grid_results %>%
   aes(x = Low, y = High, fill = p.adj.Max) +
   geom_tile() +
   scale_fill_viridis() +
-  facet_wrap(~Dataset)
+  facet_wrap(~Dataset) +
+  labs(fill = "max(-log10(p.adj))") +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_p.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 ## Minimum number of observation
 df_grid_results %>%
@@ -338,7 +354,23 @@ df_grid_results %>%
   aes(x = Low, y = High, fill = Observations.Min) +
   geom_tile() +
   scale_fill_viridis() +
-  facet_wrap(~Dataset)
+  labs(fill = "Min. Obseravtions") +
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_observations.png"), width = 300, height = 150, units = "mm", dpi = 300)
+
+## Median number of observation
+df_grid_results %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = Observations.Median) +
+  geom_tile() +
+  scale_fill_viridis() +
+  labs(fill = "Min. Obseravtions") +
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_observations_median.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 ## Minimum group balance per parameter across genes
 df_grid_results %>%
@@ -346,7 +378,11 @@ df_grid_results %>%
   aes(x = Low, y = High, fill = Group.Balance.Min) +
   geom_tile() +
   scale_fill_viridis() +
-  facet_wrap(~Dataset)
+  labs(fill = "Min. Group Balance") +
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_balance.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 ## Inter-dataset robustness
 df_robustness_inter <- df_grid_results %>%
@@ -359,7 +395,10 @@ df_robustness_inter %>%
   ggplot() +
   aes(x = Low, y = High, fill = Robustness.InterDataset) +
   geom_tile() +
-  scale_fill_viridis()
+  scale_fill_viridis() +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_robustness_inter.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
 ## Intra-data robustness
 df_robustness_intra <- df_grid_results %>%
@@ -375,7 +414,10 @@ df_robustness_intra %>%
   ggplot() +
   aes(x = Low, y = High, fill = Robustness.IntraDataset) +
   geom_tile() +
-  scale_fill_viridis()
+  scale_fill_viridis() +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_robustness_intra.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
 ## Joint analysis
 normalize_min_max <- function(x) (x - min(x)) / (max(x) - min(x))
@@ -400,36 +442,45 @@ df_sensitivity <- df_grid_results %>%
   write_parquet(here(output_data_dir, "diffexp_sensitivity_scores.parquet"))
 
 df_sensitivity %>%
+  select(Dataset, Low, High, all_of(norm_cols), SensitivityScore, Penalty, PenalizedSensitivity) %>%
+  write.xlsx(here(tables_dir, "diffexp_sensitivity.xlsx"), asTable = TRUE)
+
+df_sensitivity %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = SensitivityScore) +
+  geom_tile() +
+  scale_fill_viridis(limits = c(0, 0.5), oob = scales::squish) +
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_score.png"), width = 300, height = 150, units = "mm", dpi = 300)
+
+df_sensitivity %>%
   ggplot() +
   aes(x = Low, y = High, fill = PenalizedSensitivity) +
   geom_tile() +
   scale_fill_viridis(limits = c(0, 0.4), oob = scales::squish) +
-  facet_wrap(~Dataset)
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
 
-df_sensitivity %>%
-  ggplot() +
-  aes(x = Low, y = High, fill = Significant.Count_norm) +
-  geom_tile() +
-  scale_fill_viridis() +
-  facet_wrap(~Dataset)
-
-df_sensitivity %>%
-  ggplot() +
-  aes(x = Low, y = High, fill = p.adj.Max_norm) +
-  geom_tile() +
-  scale_fill_viridis() +
-  facet_wrap(~Dataset)
+ggsave(here(plots_dir, "sensitivity_score_penalized.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 df_sensitivity %>%
   summarize(SensitivityScore.Median = median(SensitivityScore), .by = c(Low, High)) %>%
   ggplot() +
   aes(x = Low, y = High, fill = SensitivityScore.Median) +
   geom_tile() +
-  scale_fill_viridis()
+  scale_fill_viridis() +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_score_median.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
 df_sensitivity %>%
   summarize(SensitivityScore.SD = sd(SensitivityScore), .by = c(Low, High)) %>%
   ggplot() +
   aes(x = Low, y = High, fill = -log10(SensitivityScore.SD)) +
   geom_tile() +
-  scale_fill_viridis()
+  scale_fill_viridis() +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_score_sd.png"), width = 150, height = 180, units = "mm", dpi = 300)
