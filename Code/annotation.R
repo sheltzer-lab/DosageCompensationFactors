@@ -111,3 +111,20 @@ updateGeneSymbols <- function(df, gene_col = "Gene.Symbol") {
     mutate(!!gene_col := toupper(Suggested.Symbol)) %>%
     select(-Approved, -Suggested.Symbol)
 }
+
+get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target_level = 3) {
+  require(mskcc.oncotree)
+
+  if (is.null(start_code) || is.na(start_code)) return(NA)
+
+  if (is.null(df_tumor_types))
+    df_tumor_types <- mskcc.oncotree::get_tumor_types()
+
+  current <- df_tumor_types %>%
+    filter(oncotree_code == start_code)
+
+  if (nrow(current) == 0) return(NA)
+
+  if (current$level <= target_level) return(current$oncotree_code)
+  else get_oncotree_parent(df_tumor_types, current$parent, target_level)
+}

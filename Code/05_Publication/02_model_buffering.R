@@ -17,6 +17,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "annotation.R"))
 source(here("Code", "publication.R"))
 
 procan_cn_data_dir <- here(external_data_dir, "CopyNumber", "ProCan")
@@ -65,23 +66,6 @@ df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet')) 
 
 intersect(unique(df_model_depmap$OncotreeCode), unique(df_model_cptac$Model.CancerType))
 intersect(unique(tumor_types$oncotree_code), unique(df_model_cptac$Model.CancerType))
-
-get_oncotree_parent <- function(df_tumor_types = NULL, start_code = NULL, target_level = 3) {
-  require(mskcc.oncotree)
-
-  if (is.null(start_code) || is.na(start_code)) return(NA)
-
-  if (is.null(df_tumor_types))
-    df_tumor_types <- mskcc.oncotree::get_tumor_types()
-
-  current <- df_tumor_types %>%
-    filter(oncotree_code == start_code)
-
-  if (nrow(current) == 0) return(NA)
-
-  if (current$level <= target_level) return(current$oncotree_code)
-  else get_oncotree_parent(df_tumor_types, current$parent, target_level)
-}
 
 df_depmap <- model_buf_depmap %>%
   inner_join(y = df_model_depmap, by = "Model.ID",
@@ -586,44 +570,3 @@ figure_s2 <- cowplot::plot_grid(figure_s2_sub1, figure_s2_sub2, figure_s2_sub3, 
 cairo_pdf(here(plots_dir, "figure_s2.pdf"), width = 12, height = 12)
 figure_s2
 dev.off()
-
-# === Revisions ===
-## Analyze sample BR of multiple myeloma / MBN
-df_depmap_mbn <- model_buf_depmap %>%
-  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
-  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
-  mutate(MBN = OncotreeCodeLvl4 == "MBN",
-         Dataset = "DepMap")
-
-df_procan_mbn <- model_buf_procan %>%
-  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
-  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
-  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
-  mutate(MBN = OncotreeCodeLvl4 == "MBN",
-         Dataset = "ProCan")
-
-### MBN against other cancer types
-plot_mbn_br <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
-  signif_beeswarm_plot(MBN, Model.Buffering.Ratio,
-                       color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
-                       color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
-  facet_wrap(~Dataset)
-
-save_plot(plot_mbn_br, "buffering_mbr.png", dir = here(plots_dir, "Revisions"))
-
-### MBN by aneuploidy score
-plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
-  filter(MBN) %>%
-  ggscatter(
-    x = "CellLine.AneuploidyScore", y = "Model.Buffering.Ratio.ZScore",
-    color = default_color, size = 3,
-    add = "reg.line", add.params = list(color = highlight_colors[2]),
-    conf.int = TRUE, cor.coef = TRUE,
-    cor.coeff.args = list(method = "spearman", label.sep = "\n", cor.coef.name = "rho")
-  ) +
-  facet_wrap(~Dataset)
-
-save_plot(plot_mbn_br_as, "buffering_mbr_aneuploidy.png", dir = here(plots_dir, "Revisions"))

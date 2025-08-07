@@ -2,7 +2,9 @@ library(here)
 library(arrow)
 library(dplyr)
 library(tidyr)
+library(stringr)
 library(ggplot2)
+library(ggpubr)
 library(msigdbr)
 library(openxlsx)
 
@@ -11,6 +13,7 @@ here::i_am("DosageCompensationFactors.Rproj")
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
+source(here("Code", "annotation.R"))
 
 plots_dir <- here(plots_base_dir, "Publication", "Revisions")
 tables_dir <- here(tables_base_dir, "Publication", "Revisions")
@@ -21,6 +24,31 @@ dir.create(tables_dir, recursive = TRUE)
 
 # === Load Data ===
 shap_results <- read_parquet(here(output_data_dir, 'shap-analysis.parquet'))
+
+df_celllines <- read_parquet(here(output_data_dir, 'celllines.parquet'))
+copy_number <- read_parquet(here(output_data_dir, "copy_number.parquet")) %>%
+  distinct(Model.ID, CellLine.AneuploidyScore, CellLine.WGD, CellLine.Ploidy)
+
+diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
+diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
+diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
+diff_exp_control <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
+
+expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
+model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
+expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
+model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
+expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
+model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+
+df_model_depmap <- read_csv_arrow(here(external_data_dir, "CopyNumber", "DepMap", "Model.csv")) %>%
+  rename(CellLine.DepMapModelId = "ModelID") %>%
+  inner_join(y = df_celllines, by = "CellLine.DepMapModelId") %>%
+  select(-CellLine.Name)
+
+df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet')) %>%
+  # Oncotree uses different cancer type abbrieviations than CPTAC
+  mutate(Model.CancerType = str_replace_all(Model.CancerType, c(HNSCC = "HNSC", LSCC = "LUSC", PDAC = "PAAD")))
 
 # === Cluster SHAP values ===
 cluster_shap <- function(df, value_col, n_clusters = 3, metric = "pearson", linkage = "average") {
@@ -130,11 +158,6 @@ umap_shap <- shap_pan_cancer %>%
   save_plot("shap_umap.png", width = 250, height = 250)
 
 # === Evaluate GSEA of UPR Gene Set ===
-diff_exp_cptac <- read_parquet(here(output_data_dir, "model_buf_diff-exp_cptac.parquet"))
-diff_exp_procan <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan.parquet"))
-diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap.parquet"))
-diff_exp_control <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
-
 upr_gene_set <- msigdbr(species = "Homo sapiens", category = "H") %>%
   rename(Gene.Symbol = "gene_symbol") %>%
   filter(gs_name == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE")
@@ -223,15 +246,6 @@ list(result = ora_tumor_up_cellline_down_unique) %>%
   save_plot("ora_upr_tumor_up_cellline_down.png")
 
 # === BR-cutoff sensitivity analysis ===
-expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
-model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
-
-expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
-model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
-
-expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
-model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
-
 ## Get quantile based on z-score cutoff
 z_cutoff <- abs(qnorm(0.2))
 model_buf_quantiles <- bind_rows(model_buf_depmap, model_buf_procan, model_buf_cptac) %>%
@@ -484,3 +498,60 @@ df_sensitivity %>%
   theme(legend.position = "top")
 
 ggsave(here(plots_dir, "sensitivity_score_sd.png"), width = 150, height = 180, units = "mm", dpi = 300)
+
+# === Multiple Myeloma ===
+tumor_types <- get_tumor_types()
+
+## Analyze sample BR of multiple myeloma / MBN
+df_depmap_mbn <- model_buf_depmap %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
+  mutate(MBN = OncotreeCodeLvl4 == "MBN",
+         Dataset = "DepMap")
+
+df_procan_mbn <- model_buf_procan %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "one-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
+  mutate(MBN = OncotreeCodeLvl4 == "MBN",
+         Dataset = "ProCan")
+
+### MBN against other cancer types
+plot_mbn_br <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
+  signif_beeswarm_plot(MBN, Model.Buffering.Ratio,
+                       color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
+                       color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
+  facet_wrap(~Dataset)
+
+save_plot(plot_mbn_br, "buffering_mbr.png")
+
+### MBN by aneuploidy score
+plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
+  filter(MBN) %>%
+  ggscatter(
+    x = "CellLine.AneuploidyScore", y = "Model.Buffering.Ratio.ZScore",
+    color = default_color, size = 3,
+    add = "reg.line", add.params = list(color = highlight_colors[2]),
+    conf.int = TRUE, cor.coef = TRUE,
+    cor.coeff.args = list(method = "spearman", label.sep = "\n", cor.coef.name = "rho")
+  ) +
+  facet_wrap(~Dataset)
+
+save_plot(plot_mbn_br_as, "buffering_mbr_aneuploidy.png")
+
+mbn_ids_depmap <- df_depmap_mbn %>%
+  filter(MBN) %>%
+  distinct(Model.ID) %>%
+  pull(Model.ID)
+
+mbn_ids_procan <- df_procan_mbn %>%
+  filter(MBN) %>%
+  distinct(Model.ID) %>%
+  pull(Model.ID)
+
+length(unique(c(mbn_ids_depmap, mbn_ids_procan)))
+length(mbn_ids_depmap)
+length(mbn_ids_procan)
