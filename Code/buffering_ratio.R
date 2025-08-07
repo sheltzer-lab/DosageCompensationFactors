@@ -154,6 +154,7 @@ plot_buffering_ratio_classes <- function(cnv_lim = c(-1.99, 2), buffered_thresho
   require(dplyr)
   require(tidyr)
   require(ggplot2)
+  require(ggpubr)
 
   cn_diff <- seq(cnv_lim[1], cnv_lim[2], by = 0.01)
   cn_base <- rep(2, length(cn_diff))
@@ -191,21 +192,24 @@ plot_buffering_ratio_classes <- function(cnv_lim = c(-1.99, 2), buffered_thresho
     geom_rect(xmin = -1, xmax = 0, ymin = 0.1, ymax = 1, fill = color_palettes$BufferingClasses[["Anti-Scaling"]]) +
     geom_rect(xmin = 0, xmax = 1, ymin = -1, ymax = -0.1, fill = color_palettes$BufferingClasses[["Anti-Scaling"]]) +
     geom_rect(xmin = undefined_cn_range[1], xmax = undefined_cn_range[2], ymin = -1, ymax = 1, fill = "white") +
-    geom_hline(yintercept = 0, color = default_color) +
-    geom_vline(xintercept = 0, color = default_color) +
+    geom_hline(yintercept = 0, color = default_color, linetype = "dashed") +
+    geom_vline(xintercept = 0, color = default_color, linetype = "dashed") +
     #geom_line(color = color_palettes$BufferingClasses[["Buffered"]]) +
     annotate("text", x = -0.95, y = -0.9, label = "Scaling", hjust = 0, vjust = 0, color = "white", size = base_size/3) +
     annotate("text", x = -0.95, y = -0.1, label = "Buffered", hjust = 0, color = "white", size = base_size/3) +
+    annotate("text", x = -0.95, y = -0.25, label = paste0("BR > ", buffered_threshold), hjust = 0, color = "white", size = base_size/4, alpha = 3/4) +
     annotate("text", x = -0.95, y = 0.9, label = "Anti-Scaling", hjust = 0,  vjust = 1, color = "white", size = base_size/3) +
     annotate("text", x = 0.95, y = 0.9, label = "Scaling", hjust = 1, vjust = 1, color = "white", size = base_size/3) +
     annotate("text", x = 0.95, y = 0.1, label = "Buffered", hjust = 1, color = "white", size = base_size/3) +
+    annotate("text", x = 0.95, y = 0.25, label = paste0("BR > ", buffered_threshold), hjust = 1, color = "white", size = base_size/4, alpha = 3/4) +
     annotate("text", x = 0.95, y = -0.9, label = "Anti-Scaling", hjust = 1, vjust = 0, color = "white", size = base_size/3) +
-    annotate("label", x = 0, y = 0, label = paste0("BR > ", buffered_threshold),
-             hjust = 0.5, vjust = 0.5, color = color_palettes$BufferingClasses[["Buffered"]], size = base_size/3) +
-    scale_x_continuous(limits = c(-1,1), breaks = c(seq(-1, 1, 0.5), undefined_cn_range), minor_breaks = NULL) +
-    scale_y_continuous(limits = c(-1,1), breaks = seq(-1, 1, 0.5), minor_breaks = NULL) +
-    labs(x = "Copy Number Log2FC", y = "Protein Log2FC") +
-    theme_minimal(base_size = base_size)
+    # geom_bracket(xmin = -0.3, xmax = 0.3, y.position = 1.05, label = "Insignificant\nCN Change") +
+    annotate("label", x = 0, y = -0.9, label = "Insignificant\nCN Change", hjust = 0.5, vjust = 0, color = "black",
+             size = base_size/3, alpha = 2/3, label.size = 0) +
+    scale_x_continuous(limits = c(-1,1), breaks = c(seq(-1, 1, 0.5), undefined_cn_range), minor_breaks = NULL, expand = c(0, 0)) +
+    scale_y_continuous(limits = c(-1,1), breaks = seq(-1, 1, 0.5), minor_breaks = NULL, expand = c(0, 0)) +
+    labs(x = "DNA Copy Number Log2FC", y = "Protein Log2FC") +
+    theme_bw(base_size = base_size)
 }
 
 plot_buffering_ratio_3d <- function(br_func, cnv_lim = c(-1, 1), expr_lim = c(-1, 1)) {

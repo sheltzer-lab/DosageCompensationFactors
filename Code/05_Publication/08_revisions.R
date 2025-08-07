@@ -500,7 +500,7 @@ df_sensitivity %>%
 ggsave(here(plots_dir, "sensitivity_score_sd.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
 # === Multiple Myeloma ===
-tumor_types <- get_tumor_types()
+tumor_types <- mskcc.oncotree::get_tumor_types()
 
 ## Analyze sample BR of multiple myeloma / MBN
 df_depmap_mbn <- model_buf_depmap %>%
@@ -526,7 +526,7 @@ plot_mbn_br <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
                        color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
   facet_wrap(~Dataset)
 
-save_plot(plot_mbn_br, "buffering_mbr.png")
+save_plot(plot_mbn_br, "buffering_mbn.png")
 
 ### MBN by aneuploidy score
 plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
@@ -540,7 +540,7 @@ plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
   ) +
   facet_wrap(~Dataset)
 
-save_plot(plot_mbn_br_as, "buffering_mbr_aneuploidy.png")
+save_plot(plot_mbn_br_as, "buffering_mbn_aneuploidy.png")
 
 mbn_ids_depmap <- df_depmap_mbn %>%
   filter(MBN) %>%

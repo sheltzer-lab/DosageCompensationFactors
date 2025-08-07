@@ -125,7 +125,7 @@ prot_exp_dc_class <- expr_buf_depmap %>%
               map_signif_level = print_signif, y_position = c(1.5, 1.5, 1.8),
               size = 0.8, tip_length = 0, extend_line = -0.05, color = "black") +
   facet_grid(~Gene.CopyNumber.Event) +
-  labs(x = "Buffering Class", y = "Protein Abundance") +
+  labs(x = "Buffering Class", y = expression("Log" [2] * " Protein Abundance [a.u.]")) +
   scale_color_manual(values = color_palettes$BufferingClasses) +
   theme(legend.position = "none")
 
