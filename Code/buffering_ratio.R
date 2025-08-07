@@ -204,7 +204,7 @@ plot_buffering_ratio_classes <- function(cnv_lim = c(-1.99, 2), buffered_thresho
     annotate("text", x = 0.95, y = 0.25, label = paste0("BR > ", buffered_threshold), hjust = 1, color = "white", size = base_size/4, alpha = 3/4) +
     annotate("text", x = 0.95, y = -0.9, label = "Anti-Scaling", hjust = 1, vjust = 0, color = "white", size = base_size/3) +
     # geom_bracket(xmin = -0.3, xmax = 0.3, y.position = 1.05, label = "Insignificant\nCN Change") +
-    annotate("label", x = 0, y = -0.9, label = "Insignificant\nCN Change", hjust = 0.5, vjust = 0, color = "black",
+    annotate("label", x = 0, y = -0.9, label = "Insufficient\nCN Change", hjust = 0.5, vjust = 0, color = "black",
              size = base_size/3, alpha = 2/3, label.size = 0) +
     scale_x_continuous(limits = c(-1,1), breaks = c(seq(-1, 1, 0.5), undefined_cn_range), minor_breaks = NULL, expand = c(0, 0)) +
     scale_y_continuous(limits = c(-1,1), breaks = seq(-1, 1, 0.5), minor_breaks = NULL, expand = c(0, 0)) +
