@@ -245,6 +245,27 @@ list(result = ora_tumor_up_cellline_down_unique) %>%
   plot_terms_compact(custom_color = color_palettes$Datasets["ProCan"], string_trunc = 70) %>%
   save_plot("ora_upr_tumor_up_cellline_down.png")
 
+## Check for overlap between ORA gene sets in Figure 5 and UPR hallmark gene set
+### Check: CCT complex (CORUM), unfolded protein binding (GO:MF), {UGGT1, CANX, TAPBP}
+genes_down <- diff_exp_procan %>%
+  filter(Significant == "Down") %>%
+  mutate(Gene.Symbol = fct_reorder(Gene.Symbol, Log2FC, .desc = FALSE)) %>%
+  arrange(Gene.Symbol)
+
+ora_down <- genes_down %>%
+  pull(Gene.Symbol) %>%
+  overrepresentation_analysis(list_genes = TRUE)
+
+ora_genes <- ora_down$result %>%
+  filter(grepl("CCT", term_name) & source == "CORUM" | grepl("unfolded", term_name) & source == "GO:MF") %>%
+  separate_longer_delim(intersection, ",") %>%
+  rename(Gene.Symbol = "intersection")
+
+intersect(upr_gene_set$Gene.Symbol, ora_genes$Gene.Symbol)
+intersect(upr_gene_set$Gene.Symbol, c("UGGT1", "CANX", "TAPBP"))
+
+### Conclusion: Gene sets identified via ORA and STRING are disjoint to UPR gene set from mSigDB
+
 # === BR-cutoff sensitivity analysis ===
 ## Get quantile based on z-score cutoff
 z_cutoff <- abs(qnorm(0.2))

@@ -666,7 +666,7 @@ overrepresentation_analysis <- function(genes, ordered = TRUE, p_thresh = p_thre
   gost(query = genes,
        organism = "hsapiens", ordered_query = ordered,
        multi_query = FALSE, significant = TRUE, exclude_iea = FALSE,
-       measure_underrepresentation = FALSE, evcodes = FALSE,
+       measure_underrepresentation = FALSE, evcodes = TRUE,
        user_threshold = p_thresh, correction_method = "g_SCS",
        domain_scope = "annotated", custom_bg = ref_background,
        numeric_ns = "", sources = databases, as_short_link = FALSE, highlight = TRUE)
