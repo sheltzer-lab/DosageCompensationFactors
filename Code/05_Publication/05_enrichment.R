@@ -180,7 +180,7 @@ panel_proteotox <- ssgsea_cptac_filtered %>%
   stat_smooth(method = lm, color = "dimgrey") +
   annotate("text", x = 0.35, y = 0.275, hjust = 0, size = 5,
            label = paste0(print_corr(cor_proteotox_test$estimate), ", ", print_signif(cor_proteotox_test$p.value))) +
-  labs(x = "Sample Buffering Ratio", y = "Unfolded Protein Response", color = "eAS") +
+  labs(x = "Sample Buffering Ratio", y = "Unfolded Protein Response", color = "AS") +
   ylim(c(0.085, 0.275)) +
   scale_color_viridis_c(option = color_palettes$AneuploidyScore, end = 0.8) +
   theme(legend.position = c("left", "bottom"),

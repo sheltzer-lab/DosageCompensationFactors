@@ -465,7 +465,7 @@ panel_p53 <- df_p53 %>%
   signif_beeswarm_plot(TP53.Mutated, Model.Buffering.Ratio,
                        facet_col = Dataset, color_col = Aneuploidy.Estimate,
                        viridis_color_pal = color_palettes$AneuploidyScore, cex = 1, color_lims = c(0, 0.8)) +
-  labs(x = "Damaging TP53 Mutation", y = "Sample Buffering Ratio", color = "(Estimated) Aneuploidy Score") +
+  labs(x = "Damaging TP53 Mutation", y = "Sample Buffering Ratio", color = "Aneuploidy Score") +
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
         legend.position = "top",
         legend.title = element_text(hjust = 0.5),
