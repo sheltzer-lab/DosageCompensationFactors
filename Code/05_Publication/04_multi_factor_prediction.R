@@ -107,29 +107,6 @@ panel_roc <- cowplot::plot_grid(models_depmap, models_procan, models_cptac,
                                 labels = c("A", "B", "C"),
                                 nrow = 1, ncol = 3)
 
-# === SHAP Value Panel ===
-### Select models for visualization
-shap_gain <- shap_results %>%
-  filter(Model.Variant == "Gene-Level_Filtered_Gain" & Model.Dataset == "CPTAC") %>%
-  group_by(DosageCompensation.Factor) %>%
-  #slice_sample(n = 200) %>%     # Simplify visualization
-  ungroup()
-shap_loss <- shap_results %>%
-  filter(Model.Variant == "Gene-Level_Filtered_Loss" & Model.Dataset == "CPTAC") %>%
-  group_by(DosageCompensation.Factor) %>%
-  #slice_sample(n = 200) %>%     # Simplify visualization
-  ungroup()
-
-shap_arrows_plot_gain <- shap_gain %>%
-  shap_plot_arrows(category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
-shap_arrows_plot_loss <- shap_loss %>%
-  shap_plot_arrows(category_lab = NULL, color_lab = "Factor\nValue", title = "Gene CN Loss")
-
-shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
-                                     nrow = 1, ncol = 2, align = "h", axis = "lr",
-                                     labels = c("D", "E"),
-                                     rel_widths = c(0.85, 1))
-
 # === SHAP Correlation Heatmap Panel (per Dataset) ===
 shap_heatmap_datasets <- shap_results %>%
   filter(Model.Level == "Gene" & Model.Subset == "All") %>%
@@ -139,11 +116,11 @@ shap_heatmap_datasets <- shap_results %>%
   nested_shap_heatmap(as.formula(Model.Dataset + Model.Condition ~ .))
 
 # === Combine Panels into Figure ===
-figure4 <- cowplot::plot_grid(panel_roc, shap_raw_plots, shap_heatmap_datasets,
-                              labels = c("", "", "F"),
-                              nrow = 3, ncol = 1, rel_heights = c(0.5, 1, 0.666))
+figure4 <- cowplot::plot_grid(panel_roc, shap_heatmap_datasets,
+                              labels = c("", "D"),
+                              nrow = 2, ncol = 1, rel_heights = c(0.5, 0.666))
 
-cairo_pdf(here(plots_dir, "figure04.pdf"), width = 12, height = 17)
+cairo_pdf(here(plots_dir, "figure04.pdf"), width = 12, height = 9)
 figure4
 dev.off()
 
@@ -302,12 +279,36 @@ panel_oos <- oos_summary %>%
   labs(fill = "ROC AUC", x = "Evaluation Dataset (training + test)", y = "Model Training Dataset") +
   theme(legend.position = "none")
 
+## Raw SHAP Value Panel
+### Select models for visualization
+shap_gain <- shap_results %>%
+  filter(Model.Variant == "Gene-Level_Filtered_Gain" & Model.Dataset == "CPTAC") %>%
+  group_by(DosageCompensation.Factor) %>%
+  #slice_sample(n = 200) %>%     # Simplify visualization
+  ungroup()
+shap_loss <- shap_results %>%
+  filter(Model.Variant == "Gene-Level_Filtered_Loss" & Model.Dataset == "CPTAC") %>%
+  group_by(DosageCompensation.Factor) %>%
+  #slice_sample(n = 200) %>%     # Simplify visualization
+  ungroup()
+
+shap_arrows_plot_gain <- shap_gain %>%
+  shap_plot(category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
+shap_arrows_plot_loss <- shap_loss %>%
+  shap_plot(category_lab = NULL, color_lab = "Factor\nValue", title = "Gene CN Loss")
+
+shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
+                                     nrow = 1, ncol = 2, align = "h", axis = "lr",
+                                     labels = c("D", "E"),
+                                     rel_widths = c(0.85, 1))
+
+
 ## Combine figures
 figure_s4_sub1 <- cowplot::plot_grid(NULL, panel_oos,
                                      ncol = 2, rel_widths = c(1, 0.65), labels = c("A", "C"))
-figure_s4 <- cowplot::plot_grid(figure_s4_sub1, panel_model_perf,
-                                nrow = 2, rel_heights = c(1, 0.65), labels = c("", "B"))
+figure_s4 <- cowplot::plot_grid(figure_s4_sub1, panel_model_perf, shap_raw_plots,
+                                nrow = 3, rel_heights = c(1, 0.65, 1.5), labels = c("", "B", ""))
 
-cairo_pdf(here(plots_dir, "figure_s4.pdf"), width = 14, height = 8)
+cairo_pdf(here(plots_dir, "figure_s4.pdf"), width = 14, height = 16)
 figure_s4
 dev.off()
