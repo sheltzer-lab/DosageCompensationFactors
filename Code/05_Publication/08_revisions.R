@@ -35,20 +35,28 @@ diff_exp_depmap <- read_parquet(here(output_data_dir, "model_buf_diff-exp_depmap
 diff_exp_control <- read_parquet(here(output_data_dir, "model_buf_diff-exp_procan_adherent.parquet"))
 
 expr_buf_procan <- read_parquet(here(output_data_dir, "expression_buffering_procan.parquet"))
-model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet"))
 expr_buf_depmap <- read_parquet(here(output_data_dir, "expression_buffering_depmap.parquet"))
-model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet"))
 expr_buf_cptac <- read_parquet(here(output_data_dir, "expression_buffering_cptac_pure.parquet"))
-model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet"))
+
+tumor_types <- mskcc.oncotree::get_tumor_types()
 
 df_model_depmap <- read_csv_arrow(here(external_data_dir, "CopyNumber", "DepMap", "Model.csv")) %>%
   rename(CellLine.DepMapModelId = "ModelID") %>%
   inner_join(y = df_celllines, by = "CellLine.DepMapModelId") %>%
-  select(-CellLine.Name)
+  select(-CellLine.Name) %>%
+  mutate(Model.CancerType = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 3)))
 
 df_model_cptac <- read_parquet(here(output_data_dir, 'metadata_cptac.parquet')) %>%
   # Oncotree uses different cancer type abbrieviations than CPTAC
-  mutate(Model.CancerType = str_replace_all(Model.CancerType, c(HNSCC = "HNSC", LSCC = "LUSC", PDAC = "PAAD")))
+  mutate(Model.CancerType = str_replace_all(Model.CancerType, c(HNSCC = "HNSC", LSCC = "LUSC", PDAC = "PAAD"))) %>%
+  mutate(Model.CancerType = sapply(Model.CancerType, \(x) get_oncotree_parent(tumor_types, x, target_level = 3)))
+
+model_buf_procan <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_procan.parquet")) %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, Model.CancerType), by = "Model.ID")
+model_buf_depmap <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_depmap.parquet")) %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, Model.CancerType), by = "Model.ID")
+model_buf_cptac <- read_parquet(here(output_data_dir, "cellline_buffering_gene_filtered_cptac.parquet")) %>%
+  inner_join(y = df_model_cptac %>% select(Model.ID, Model.CancerType), by = "Model.ID")
 
 # === Cluster SHAP values ===
 cluster_shap <- function(df, value_col, n_clusters = 3, metric = "pearson", linkage = "average") {
@@ -301,37 +309,42 @@ eval_datasets <- list(
 results <- list()
 pb <- txtProgressBar(min = 1, max = nrow(df_grid) * 3, style = 3)
 for (eval_dataset in names(eval_datasets)) {
- model_buf_current <- eval_datasets[[eval_dataset]]$ModelBR
- expr_buf_current <- eval_datasets[[eval_dataset]]$Proteome
+  model_buf_current <- eval_datasets[[eval_dataset]]$ModelBR
+  expr_buf_current <- eval_datasets[[eval_dataset]]$Proteome
 
- for (i in seq_len(nrow(df_grid))) {
-  cutoff_low <- df_grid[[i, 1]]
-  cutoff_high <- 100 - df_grid[[i, 2]]
+  for (i in seq_len(nrow(df_grid))) {
+    cutoff_low <- df_grid[[i, 1]]
+    cutoff_high <- 100 - df_grid[[i, 2]]
 
-  suppressWarnings({
-   results[[paste0(eval_dataset, i)]] <- model_buf_current %>%
-     split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
-                        quantile_low = paste0(cutoff_low, "%"), quantile_high = paste0(cutoff_high, "%")) %>%
-     inner_join(y = expr_buf_current, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
-     select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
-     differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
-                             groups = c("Low", "High")) %>%
-     # Evaluation metrics
-     mutate(Group.Balance = Count_GroupA / (Count_GroupA + Count_GroupB),
-            Group.Balance.Norm = 1 - abs(0.5 - Group.Balance) * 2) %>%
-     summarize(Dataset = eval_dataset,
-               Low = cutoff_low,
-               High = cutoff_high,
-               Log2FC.Abs.Max = max(abs(Log2FC)),
-               p.adj.Max = max(-log10(Test.p.adj)),
-               Observations.Min = min(Count_GroupA, Count_GroupB),
-               Observations.Median = median(c(Count_GroupA, Count_GroupB)),
-               Group.Balance.Min = min(Group.Balance.Norm),
-               Significant.Count = sum(!is.na(Significant)),
-               Significant.Genes = list(Gene.Symbol[!is.na(Significant)]))
-  })
-  setTxtProgressBar(pb, pb$getVal() + 1)
- }
+    suppressWarnings({
+      df_split <- model_buf_current %>%
+        split_by_quantiles(Model.Buffering.Ratio, target_group_col = "Model.Buffering.Group",
+                           quantile_low = paste0(cutoff_low, "%"), quantile_high = paste0(cutoff_high, "%"))
+
+      cancertype_count <- length(unique(df_split$Model.CancerType))
+
+      results[[paste0(eval_dataset, i)]] <- df_split %>%
+        inner_join(y = expr_buf_current, by = "Model.ID", relationship = "one-to-many", na_matches = "never") %>%
+        select(Model.Buffering.Group, Gene.Symbol, Protein.Expression.Normalized) %>%
+        differential_expression(Gene.Symbol, Model.Buffering.Group, Protein.Expression.Normalized,
+                                groups = c("Low", "High")) %>%
+        # Evaluation metrics
+        mutate(Group.Balance = Count_GroupA / (Count_GroupA + Count_GroupB),
+               Group.Balance.Norm = 1 - abs(0.5 - Group.Balance) * 2) %>%
+        summarize(Dataset = eval_dataset,
+                  Low = cutoff_low,
+                  High = cutoff_high,
+                  Log2FC.Abs.Max = max(abs(Log2FC)),
+                  p.adj.Max = max(-log10(Test.p.adj)),
+                  Observations.Min = min(Count_GroupA, Count_GroupB),
+                  Observations.Median = median(c(Count_GroupA, Count_GroupB)),
+                  Group.Balance.Min = min(Group.Balance.Norm),
+                  Significant.Count = sum(!is.na(Significant)),
+                  Significant.Genes = list(Gene.Symbol[!is.na(Significant)]),
+                  CancerTypes.Count = cancertype_count)
+    })
+    setTxtProgressBar(pb, pb$getVal() + 1)
+  }
 }
 close(pb)
 
@@ -347,11 +360,25 @@ jaccard_index <- function(set_list) {
 
 df_grid_results <- read_parquet(here(output_data_dir, "diffexp_sensitivity.parquet"))
 
+## Number of Cancer Types
+df_grid_results %>%
+  ggplot() +
+  aes(x = Low, y = High, fill = CancerTypes.Count, label = CancerTypes.Count) +
+  geom_tile() +
+  geom_text(color = "white") +
+  scale_fill_viridis() +
+  labs(fill = "Cancer Types (Primary Disease)") +
+  facet_wrap(~Dataset) +
+  theme(legend.position = "top")
+
+ggsave(here(plots_dir, "sensitivity_cancertypes.png"), width = 300, height = 150, units = "mm", dpi = 300)
+
 ## Number of Significant Hits
 df_grid_results %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Significant.Count) +
+  aes(x = Low, y = High, fill = Significant.Count, label = Significant.Count) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   labs(fill = "Significant Hits") +
   facet_wrap(~Dataset) +
@@ -362,8 +389,9 @@ ggsave(here(plots_dir, "sensitivity_hits.png"), width = 300, height = 150, units
 ## Maximum Absolute Log2FC
 df_grid_results %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Log2FC.Abs.Max) +
+  aes(x = Low, y = High, fill = Log2FC.Abs.Max, label = round(Log2FC.Abs.Max, digits = 1)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   facet_wrap(~Dataset) +
   labs(fill = "max(abs(Log2FC))") +
@@ -374,8 +402,9 @@ ggsave(here(plots_dir, "sensitivity_Log2FC.png"), width = 300, height = 150, uni
 ## Maximum -log10 adjusted p value
 df_grid_results %>%
   ggplot() +
-  aes(x = Low, y = High, fill = p.adj.Max) +
+  aes(x = Low, y = High, fill = p.adj.Max, label = round(p.adj.Max, digits = 1)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   facet_wrap(~Dataset) +
   labs(fill = "max(-log10(p.adj))") +
@@ -383,11 +412,12 @@ df_grid_results %>%
 
 ggsave(here(plots_dir, "sensitivity_p.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
-## Minimum number of observation
+## Minimum number of observations
 df_grid_results %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Observations.Min) +
+  aes(x = Low, y = High, fill = Observations.Min, label = Observations.Min) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   labs(fill = "Min. Obseravtions") +
   facet_wrap(~Dataset) +
@@ -398,8 +428,9 @@ ggsave(here(plots_dir, "sensitivity_observations.png"), width = 300, height = 15
 ## Median number of observation
 df_grid_results %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Observations.Median) +
+  aes(x = Low, y = High, fill = Observations.Median, label = round(Observations.Median)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   labs(fill = "Min. Obseravtions") +
   facet_wrap(~Dataset) +
@@ -410,8 +441,9 @@ ggsave(here(plots_dir, "sensitivity_observations_median.png"), width = 300, heig
 ## Minimum group balance per parameter across genes
 df_grid_results %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Group.Balance.Min) +
+  aes(x = Low, y = High, fill = Group.Balance.Min, label = round(Group.Balance.Min, digits = 1)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   labs(fill = "Min. Group Balance") +
   facet_wrap(~Dataset) +
@@ -428,8 +460,9 @@ df_robustness_inter <- df_grid_results %>%
 
 df_robustness_inter %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Robustness.InterDataset) +
+  aes(x = Low, y = High, fill = Robustness.InterDataset, label = round(Robustness.InterDataset, digits = 2)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   theme(legend.position = "top")
 
@@ -445,32 +478,35 @@ df_robustness_intra <- df_grid_results %>%
          Robustness.IntraDataset = if_else(is.nan(Robustness.IntraDataset), 0, Robustness.IntraDataset))
 
 df_robustness_intra %>%
-  filter(Dataset == "ProCan") %>%
   ggplot() +
-  aes(x = Low, y = High, fill = Robustness.IntraDataset) +
+  aes(x = Low, y = High, fill = Robustness.IntraDataset, label = round(Robustness.IntraDataset, digits = 2)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
+  facet_wrap(~Dataset) +
   theme(legend.position = "top")
 
-ggsave(here(plots_dir, "sensitivity_robustness_intra.png"), width = 150, height = 180, units = "mm", dpi = 300)
+ggsave(here(plots_dir, "sensitivity_robustness_intra.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
 ## Joint analysis
-normalize_min_max <- function(x) (x - min(x)) / (max(x) - min(x))
-norm_cols <- c("Log2FC.Abs.Max", "p.adj.Max", "Significant.Count", "Observations.Min",
+replace_nan <- function(x, replacement = 0) replace(x, is.nan(x), replacement)
+normalize_min_max <- function(x) replace_nan((x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))
+norm_cols <- c("Log2FC.Abs.Max", "p.adj.Max", "Significant.Count", "Observations.Min", "CancerTypes.Count",
                "Robustness.InterDataset", "Robustness.IntraDataset", "Group.Balance.Min")
 
 df_sensitivity <- df_grid_results %>%
   inner_join(df_robustness_intra %>% select(-GeneLists), by = c("High", "Low", "Dataset")) %>%
   inner_join(df_robustness_inter %>% select(-GeneLists), by = c("High", "Low")) %>%
-  mutate(across(norm_cols, normalize_min_max, .names = "{.col}_norm")) %>%
+  mutate(across(all_of(norm_cols), normalize_min_max, .names = "{.col}_norm"), .by = Dataset) %>%
   mutate(SensitivityScore = (
     0.30 * Significant.Count_norm +    # prioritize number of hits
-    0.20 * Robustness.InterDataset +   # inter-dataset consistency
-    0.10 * Robustness.IntraDataset +   # local robustness
+    0.10 * Robustness.InterDataset +   # inter-dataset consistency
+    0.05 * Robustness.IntraDataset +   # local robustness
     0.10 * p.adj.Max_norm +            # strength of statistical evidence
     0.05 * Log2FC.Abs.Max_norm +       # effect size magnitude
     0.10 * Group.Balance.Min +         # balance of observations between compared groups
-    0.15 * Observations.Min_norm       # minimum number of observations in either group
+    0.15 * Observations.Min_norm +     # minimum number of observations in either group
+    0.15 * CancerTypes.Count_norm      # number of cancer types covered
   )) %>%
   mutate(Penalty = if_else(Significant.Count < 10 | (Robustness.InterDataset < 0.01 & Observations.Min < 4 & Group.Balance.Min < 0.3), 0.05, 0),
          PenalizedSensitivity = SensitivityScore - Penalty) %>%
@@ -482,9 +518,10 @@ df_sensitivity %>%
 
 df_sensitivity %>%
   ggplot() +
-  aes(x = Low, y = High, fill = SensitivityScore) +
+  aes(x = Low, y = High, fill = SensitivityScore, label = round(SensitivityScore, digits = 2)) +
   geom_tile() +
-  scale_fill_viridis(limits = c(0, 0.5), oob = scales::squish) +
+  geom_text(color = "white") +
+  scale_fill_viridis(limits = c(0, 0.6), oob = scales::squish) +
   facet_wrap(~Dataset) +
   theme(legend.position = "top")
 
@@ -492,9 +529,10 @@ ggsave(here(plots_dir, "sensitivity_score.png"), width = 300, height = 150, unit
 
 df_sensitivity %>%
   ggplot() +
-  aes(x = Low, y = High, fill = PenalizedSensitivity) +
+  aes(x = Low, y = High, fill = PenalizedSensitivity, label = round(PenalizedSensitivity, digits = 2)) +
   geom_tile() +
-  scale_fill_viridis(limits = c(0, 0.4), oob = scales::squish) +
+  geom_text(color = "white") +
+  scale_fill_viridis(limits = c(0, 0.5), oob = scales::squish) +
   facet_wrap(~Dataset) +
   theme(legend.position = "top")
 
@@ -503,8 +541,9 @@ ggsave(here(plots_dir, "sensitivity_score_penalized.png"), width = 300, height =
 df_sensitivity %>%
   summarize(SensitivityScore.Median = median(SensitivityScore), .by = c(Low, High)) %>%
   ggplot() +
-  aes(x = Low, y = High, fill = SensitivityScore.Median) +
+  aes(x = Low, y = High, fill = SensitivityScore.Median, label = round(SensitivityScore.Median, digits = 2)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   theme(legend.position = "top")
 
@@ -513,16 +552,15 @@ ggsave(here(plots_dir, "sensitivity_score_median.png"), width = 150, height = 18
 df_sensitivity %>%
   summarize(SensitivityScore.SD = sd(SensitivityScore), .by = c(Low, High)) %>%
   ggplot() +
-  aes(x = Low, y = High, fill = -log10(SensitivityScore.SD)) +
+  aes(x = Low, y = High, fill = -log10(SensitivityScore.SD), label = round(-log10(SensitivityScore.SD), digits = 2)) +
   geom_tile() +
+  geom_text(color = "white") +
   scale_fill_viridis() +
   theme(legend.position = "top")
 
 ggsave(here(plots_dir, "sensitivity_score_sd.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
 # === Multiple Myeloma ===
-tumor_types <- mskcc.oncotree::get_tumor_types()
-
 ## Analyze sample BR of multiple myeloma / MBN
 df_depmap_mbn <- model_buf_depmap %>%
   inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
