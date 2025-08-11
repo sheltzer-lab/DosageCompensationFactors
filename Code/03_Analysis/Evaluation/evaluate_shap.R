@@ -85,15 +85,21 @@ shap_results %>%
   plot_correlation(adjust = "BY")
 dev.off()
 
-## Gain, CPTAC
-png(here(plots_dir, "shap_correlation_gain_cptac.png"), width = 300, height = 300, units = "mm", res = 200)
-shap_results %>%
-  filter(Model.Condition == "Gain" & Model.Dataset == "CPTAC") %>%
-  select(ID, Model.Filename, SHAP.Value, DosageCompensation.Factor) %>%
-  pivot_wider(values_from = SHAP.Value, names_from = DosageCompensation.Factor, id_cols = c(ID, Model.Filename)) %>%
-  select(everything(), -ID, -Model.Filename) %>%
-  plot_correlation(adjust = "BY")
-dev.off()
+## Per Dataset, GeneCN
+for (dataset in unique(shap_results$Model.Dataset)) {
+  for (condition in unique(shap_results$Model.Condition)) {
+    png(here(plots_dir, paste0("shap_correlation_", condition, "_", dataset, ".png")),
+        width = 300, height = 300, units = "mm", res = 200)
+    shap_results %>%
+      filter(Model.Level == "Gene" & Model.BufferingMethod == "BR" & Model.Subset == "All") %>%
+      filter(Model.Condition == condition & Model.Dataset == dataset) %>%
+      select(ID, Model.Filename, SHAP.Value, DosageCompensation.Factor) %>%
+      pivot_wider(values_from = SHAP.Value, names_from = DosageCompensation.Factor, id_cols = c(ID, Model.Filename)) %>%
+      select(everything(), -ID, -Model.Filename) %>%
+      plot_correlation(adjust = "BY")
+    dev.off()
+  }
+}
 
 ## Loss, CPTAC
 png(here(plots_dir, "shap_correlation_loss_cptac.png"), width = 300, height = 300, units = "mm", res = 200)
