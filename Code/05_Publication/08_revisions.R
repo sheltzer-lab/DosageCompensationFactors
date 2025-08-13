@@ -432,7 +432,7 @@ df_grid_results %>%
   geom_tile() +
   geom_text(color = "white") +
   scale_fill_viridis() +
-  labs(fill = "Min. Obseravtions") +
+  labs(fill = "Median Obseravtions") +
   facet_wrap(~Dataset) +
   theme(legend.position = "top")
 
@@ -614,3 +614,151 @@ mbn_ids_procan <- df_procan_mbn %>%
 length(unique(c(mbn_ids_depmap, mbn_ids_procan)))
 length(mbn_ids_depmap)
 length(mbn_ids_procan)
+
+# === Check difference in Gene CN and ChrArm CN distribution to explain differences in BR ===
+## Check CN range
+fivenum(expr_buf_procan$Gene.CopyNumber)
+fivenum(expr_buf_procan$ChromosomeArm.CopyNumber)
+
+cn_range <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  summarize(Gene.CN.Min = min(Gene.CopyNumber, na.rm = TRUE),
+            Gene.CN.Max = max(Gene.CopyNumber, na.rm = TRUE),
+            ChrArm.CN.Min = min(ChromosomeArm.CopyNumber, na.rm = TRUE),
+            ChrArm.CN.Max = max(ChromosomeArm.CopyNumber, na.rm = TRUE),
+            .by = Dataset)
+
+
+## Compare CN distribution
+cn_compare <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  select(Dataset, Gene.CopyNumber, ChromosomeArm.CopyNumber,
+         Buffering.GeneLevel.Ratio, Buffering.ChrArmLevel.Ratio) %>%
+  pivot_longer(c(Gene.CopyNumber, ChromosomeArm.CopyNumber),
+               names_to = "Level", values_to = "CopyNumber") %>%
+  mutate(Level = str_replace(Level, ".CopyNumber", ""))
+
+### All CNs
+cn_compare %>%
+  ggplot() +
+  aes(x = CopyNumber, fill = Level) +
+  geom_bar(position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 10, 1)) +
+  scale_y_continuous(breaks = seq(0, 1000000, 100000)) +
+  facet_wrap(~Dataset)
+
+ggsave(here(plots_dir, "cn_compare.png"))
+
+### Gain only
+cn_compare %>%
+  filter(CopyNumber > 3) %>%
+  ggplot() +
+  aes(x = CopyNumber, fill = Level) +
+  geom_bar(position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 10, 1)) +
+  facet_wrap(~Dataset)
+
+ggsave(here(plots_dir, "cn_compare_gain.png"))
+
+### All CNs, used for valid BRs
+cn_compare %>%
+  drop_na() %>% # Removes observations where BR (either Gene- or ChrArm-derived) was not calculated
+  ggplot() +
+  aes(x = CopyNumber, fill = Level) +
+  geom_bar(position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 10, 1)) +
+  scale_y_continuous(breaks = seq(0, 1000000, 100000)) +
+  facet_wrap(~Dataset)
+
+ggsave(here(plots_dir, "cn_compare_br.png"))
+
+### Gain only, used for valid BRs
+cn_compare %>%
+  filter(CopyNumber > 3) %>%
+  drop_na() %>% # Removes observations where BR (either Gene- or ChrArm-derived) was not calculated
+  ggplot() +
+  aes(x = CopyNumber, fill = Level) +
+  geom_bar(position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 10, 1)) +
+  facet_wrap(~Dataset)
+
+ggsave(here(plots_dir, "cn_compare_gain_br.png"))
+
+## Check if mean CN significantly differs
+cn_compare %>%
+  filter(Dataset == "ProCan") %>%
+  t.test(CopyNumber ~ Level, data = .)
+
+cn_compare %>%
+  filter(Dataset == "ProCan") %>%
+  filter(CopyNumber > 2) %>%
+  t.test(CopyNumber ~ Level, data = .)
+
+### BR-only
+cn_compare %>%
+  filter(Dataset == "ProCan") %>%
+  drop_na() %>%
+  t.test(CopyNumber ~ Level, data = .)
+
+cn_compare %>%
+  filter(Dataset == "ProCan") %>%
+  filter(CopyNumber > 2) %>%
+  drop_na() %>%
+  t.test(CopyNumber ~ Level, data = .)
+
+## Check observations with CN discrepancy
+cn_diff <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  select(Dataset, Gene.CopyNumber, ChromosomeArm.CopyNumber,
+         Buffering.GeneLevel.Ratio, Buffering.ChrArmLevel.Ratio) %>%
+  mutate(CN_Diff = Gene.CopyNumber - ChromosomeArm.CopyNumber)
+
+### All copy numbers
+cn_diff %>%
+  filter(Dataset == "ProCan") %>%
+  ggplot() +
+  aes(x = CN_Diff) +
+  scale_x_continuous(breaks = seq(-7, 7, 1), limits = c(-8, 8), expand = c(0, 0)) +
+  scale_y_log10(breaks = c(1, 10, 100, 1000, 10000, 100000, 1000000),
+                labels = c("1", "10", "100", "1000", "10000", "100000", "1000000")) +
+  geom_bar()
+
+### Copy numbers that were used for BRs
+cn_diff %>%
+  filter(Dataset == "ProCan") %>%
+  drop_na() %>% # Removes observations where BR (either Gene- or ChrArm-derived) was not calculated
+  ggplot() +
+  aes(x = CN_Diff) +
+  scale_x_continuous(breaks = seq(-7, 7, 1), limits = c(-8, 8), expand = c(0, 0)) +
+  scale_y_log10(breaks = c(1, 10, 100, 1000, 10000, 100000, 1000000),
+                labels = c("1", "10", "100", "1000", "10000", "100000", "1000000")) +
+  geom_bar()
+
+## Compare CN Ratio against baseline
+cn_compare_ratio <- bind_rows(expr_buf_depmap, expr_buf_procan) %>%
+  select(Dataset, Gene.CopyNumber, Gene.CopyNumber.Baseline,
+         ChromosomeArm.CopyNumber, ChromosomeArm.CopyNumber.Baseline,
+         Buffering.GeneLevel.Ratio, Buffering.ChrArmLevel.Ratio) %>%
+  mutate(Gene.CNRatio = Gene.CopyNumber / Gene.CopyNumber.Baseline,
+         ChrArm.CNRatio = ChromosomeArm.CopyNumber / ChromosomeArm.CopyNumber.Baseline) %>%
+  pivot_longer(c(Gene.CNRatio, ChrArm.CNRatio),
+               names_to = "Level", values_to = "CopyNumberRatio") %>%
+  mutate(Level = str_replace(Level, ".CNRatio", ""))
+
+cn_compare_ratio %>%
+  filter(Dataset == "ProCan") %>%
+  ggplot() +
+  aes(x = CopyNumberRatio, fill = Level) +
+  geom_bar(position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 4, 0.5)) +
+  scale_y_continuous(breaks = seq(0, 1000000, 100000))
+
+ggsave(here(plots_dir, "cn-ratio_compare.png"))
+
+cn_compare_ratio %>%
+  filter(Dataset == "ProCan") %>%
+  drop_na() %>%
+  ggplot() +
+  aes(x = CopyNumberRatio, fill = Level) +
+  geom_bar(position = "dodge") +
+  scale_x_continuous(breaks = seq(0, 4, 0.5)) +
+  scale_y_continuous(breaks = seq(0, 1000000, 10000))
+
+ggsave(here(plots_dir, "cn-ratio_compare_br.png"))
