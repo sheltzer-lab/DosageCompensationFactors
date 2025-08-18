@@ -385,14 +385,17 @@ Pacini, C., Dempster, J. M., Boyle, I., Goncalves, E., Najgebauer, H., Karakoc, 
 https://www.uniprot.org/help/id_mapping
 https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/
 
-Data Source URL: ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz
+* **Data Source URL:** ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz
+* **Location (of extracted archive):** `./Data/External/HUMAN_9606_idmapping.dat`
 
 
 ### Proteomics Reproducibility - Protein-Protein Correlation - Aggregated Ranks
 
-* DOI: 10.1016/j.crmeth.2022.100288
-* File: 1-s2.0-S2667237522001709-mmc3.xlsx 
+* **DOI:** 10.1016/j.crmeth.2022.100288
+* **File:** 1-s2.0-S2667237522001709-mmc3.xlsx 
   * Table S2. B.: Computed correlation between experimental proteomic replicates of ovarian and colon tumor samples and cancer cell lines using the standard pipeline and the aggregated normalized ranks, related to Figures 1 and S2 and STAR Methods. Computed protein-protein reproducibility ranks
+* **Location:** `./Data/External/1-s2.0-S2667237522001709-mmc3.xlsx`
+* **Citation:** Upadhya, S. R., & Ryan, C. J. (2022). Experimental reproducibility limits the correlation between mRNA and protein abundances in tumor proteomic profiles. Cell Reports Methods, 2(9), 100288. https://doi.org/10.1016/j.crmeth.2022.100288
 
 ### Cancer Driver Genes
 
@@ -410,3 +413,10 @@ Data Source URL: ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/kno
 * **Source:** DepMap
 * **URL:** https://depmap.org/portal/data_page/?tab=allData&releasename=DepMap+Public+24Q2&filename=OmicsSomaticMutationsMatrixDamaging.csv
 * **Location:** `./Data/External/OmicsSomaticMutationsMatrixDamaging.csv`
+
+### Yeast Protein Attenuation (Verification, Revisions)
+
+* **DOI:** 10.1038/s41586-024-07442-9
+* **File (Supp. Tables 1-20):** 41586_2024_7442_MOESM3_ESM.xlsx
+* **Citation:** Muenzner, J., et al. (2024). Natural proteome diversity links aneuploidy tolerance to protein turnover. Nature, 630(8015), 149–157. https://doi.org/10.1038/s41586-024-07442-9
+* **Location:** `./Data/External/Muenzner2024_Yeast_Tables.xlsx`

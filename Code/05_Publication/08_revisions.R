@@ -770,15 +770,15 @@ ggsave(here(plots_dir, "cn-ratio_compare_br.png"))
 chr_map <- setNames(as.character(1:16), LETTERS[1:16])
 
 ## Load Datasets
-muenzner_strains <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+muenzner_strains <- read_excel(here(external_data_dir, "Muenzner2024_Yeast_Tables.xlsx"),
                                sheet = 7, skip = 4) %>%
   rename(strain = "Standardized_name")
-muenzner_expr <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+muenzner_expr <- read_excel(here(external_data_dir, "Muenzner2024_Yeast_Tables.xlsx"),
                             sheet = 3, skip = 3)
-muenzner_dc <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+muenzner_dc <- read_excel(here(external_data_dir, "Muenzner2024_Yeast_Tables.xlsx"),
                           sheet = 8, skip = 4)
-muenzner_turnover <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
-                               sheet = 17, skip = 4)
+muenzner_turnover <- read_excel(here(external_data_dir, "Muenzner2024_Yeast_Tables.xlsx"),
+                                sheet = 17, skip = 4)
 ## Tidy Datasets
 muenzner_cn_aneuploid <- muenzner_strains %>%
   separate_longer_delim(Aneuploidies, ";") %>%
