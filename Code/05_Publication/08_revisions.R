@@ -7,6 +7,7 @@ library(ggplot2)
 library(ggpubr)
 library(msigdbr)
 library(openxlsx)
+library(readxl)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
@@ -14,6 +15,8 @@ source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 source(here("Code", "analysis.R"))
 source(here("Code", "annotation.R"))
+source(here("Code", "buffering_ratio.R"))
+source(here("Code", "02_DosageCompensation", "baseline.R"))
 
 plots_dir <- here(plots_base_dir, "Publication", "Revisions")
 tables_dir <- here(tables_base_dir, "Publication", "Revisions")
@@ -762,3 +765,133 @@ cn_compare_ratio %>%
   scale_y_continuous(breaks = seq(0, 1000000, 10000))
 
 ggsave(here(plots_dir, "cn-ratio_compare_br.png"))
+
+# === Compare Buffering Results with Muenzner et al. ===
+chr_map <- setNames(as.character(1:16), LETTERS[1:16])
+
+## Load Datasets
+muenzner_strains <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+                               sheet = 7, skip = 4) %>%
+  rename(strain = "Standardized_name")
+muenzner_expr <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+                            sheet = 3, skip = 3)
+muenzner_dc <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+                          sheet = 8, skip = 4)
+muenzner_turnover <- read_excel(here(external_data_dir, "Expression", "Muenzner2024_Yeast_Tables.xlsx"),
+                               sheet = 17, skip = 4)
+## Tidy Datasets
+muenzner_cn_aneuploid <- muenzner_strains %>%
+  separate_longer_delim(Aneuploidies, ";") %>%
+  filter(Aneuploidies != "aneu" & Aneuploidies != "" & Aneuploidies != "euploid") %>%
+  separate_wider_delim(Aneuploidies, "*", names = c("ChromosomeArm.CNA", "Chromosome")) %>%
+  mutate_at(c("ChromosomeArm.CNA", "Chromosome"), as.integer)
+
+muenzner_cn_euploid <- muenzner_strains %>%
+  select(-Aneuploidies) %>%
+  mutate(Chromosome = paste(chr_map, collapse = ";")) %>%
+  separate_longer_delim(Chromosome, ";") %>%
+  mutate(Chromosome = as.integer(Chromosome),
+         ChromosomeArm.CNA = 0L) %>%
+  anti_join(y = muenzner_cn_aneuploid, by = c("strain", "Chromosome"))
+
+muenzner_cn <- bind_rows(muenzner_cn_aneuploid, muenzner_cn_euploid) %>%
+  mutate(ChromosomeArm.CopyNumber = Ploidy + ChromosomeArm.CNA,
+         ChromosomeArm.CopyNumber.Baseline = Ploidy)
+
+muenzner_expr_tidy <- muenzner_expr %>%
+  reshape2::melt(value.name = "Protein.Expression", id.vars = "Protein") %>%
+  rename(Protein = 1,
+         strain = "variable") %>%
+  mutate(chr_code = str_sub(Protein, 2, 2),
+         Chromosome = as.integer(recode(chr_code, !!!chr_map)),
+         Protein.Expression = as.numeric(Protein.Expression),
+         Protein.Expression.Log2 = log2(Protein.Expression))
+
+## Calculate BR
+muenzner_br <- muenzner_expr_tidy %>%
+  inner_join(y = muenzner_cn, by = c("strain", "Chromosome")) %>%
+  # Calculate protein baseline as median protein abundance on euploid chromosomes
+  # TODO: Consider calculating separate baseline for each ploidy
+  calculate_baseline(Protein, ChromosomeArm.CNA, Protein.Expression.Log2,
+                     distance_col = Ploidy, target_colname = "Protein.Expression.Baseline",
+                     weighted = FALSE, summ_func = median) %>%
+  mutate(Buffering.ChrArmLevel.Ratio = buffering_ratio(2^Protein.Expression.Baseline, 2^Protein.Expression.Log2,
+                                                       ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber),
+         Buffering.ChrArmLevel.Class = buffering_class(Buffering.ChrArmLevel.Ratio,
+                                                       2^Protein.Expression.Baseline, 2^Protein.Expression.Log2,
+                                                       ChromosomeArm.CopyNumber.Baseline, ChromosomeArm.CopyNumber))
+
+muenzner_br_trimmed <- muenzner_br %>%
+  drop_na(Buffering.ChrArmLevel.Ratio)
+
+## Calculate average gene-wise BR
+muenzner_br_avg <- muenzner_br_trimmed %>%
+  summarize(BR.Avg = mean(Buffering.ChrArmLevel.Ratio),
+            Attenuated = BR.Avg > br_cutoffs$Buffered,
+            .by = Protein)
+
+gene_vec <- AnnotationDbi::mapIds(
+  org.Sc.sgd.db::org.Sc.sgd.db,
+  keys      = unique(muenzner_br_trimmed$Protein),
+  keytype   = "ORF",
+  column    = "GENENAME",
+  multiVals = "first"  # or "list" if you want all
+)
+
+muenzner_br_avg <- muenzner_br_avg %>%
+  mutate(gene_name = if_else(is.na(gene_vec), Protein, gene_vec))
+
+## Compare attenuation calls from Muenzner et al. method with BR
+muenzner_dc_trimmed <- muenzner_dc %>%
+  select(gene_name, `attenuation slope (protein)`) %>%
+  mutate(Attenuated = `attenuation slope (protein)` < 0.85)
+
+### Limit BR-based dataset to genes identified in Muenzner DC table
+muenzner_br_avg_trimmed <- muenzner_br_avg %>%
+  semi_join(y = muenzner_dc_trimmed, by = "gene_name")
+
+nrow(muenzner_dc_trimmed)
+nrow(muenzner_br_avg)
+nrow(muenzner_br_avg_trimmed)
+
+frac_atten_muenzner <- sum(muenzner_dc_trimmed$Attenuated) / nrow(muenzner_dc_trimmed)
+frac_atten_br <- sum(muenzner_br_avg$Attenuated) / nrow(muenzner_br_avg)
+frac_atten_br_trimmed <- sum(muenzner_br_avg_trimmed$Attenuated) / nrow(muenzner_br_avg_trimmed)
+
+dc_gene_list <- list(
+  Muenzner = muenzner_dc_trimmed$gene_name[muenzner_dc_trimmed$Attenuated],
+  BR = muenzner_br_avg$gene_name[muenzner_br_avg$Attenuated],
+  BR_trimmed = muenzner_br_avg_trimmed$gene_name[muenzner_br_avg_trimmed$Attenuated]
+)
+
+length(dc_gene_list$Muenzner)
+length(dc_gene_list$BR)
+length(dc_gene_list$BR_trimmed)
+
+jaccard_index(dc_gene_list)
+ggvenn::ggvenn(dc_gene_list, c("BR", "Muenzner"))
+ggvenn::ggvenn(dc_gene_list, c("BR_trimmed", "Muenzner"))
+ggvenn::ggvenn(dc_gene_list, c("BR", "BR_trimmed", "Muenzner"))
+
+## Check correlation between BR and turnover rates to confirm results of Muenzner et al.
+muenzner_br_hl <- muenzner_br_trimmed %>%
+  rename(systematic_name = Protein) %>%
+  inner_join(y = muenzner_turnover, by = c("strain", "systematic_name"))
+
+cor.test(muenzner_br_hl$Buffering.ChrArmLevel.Ratio, muenzner_br_hl$HL)
+cor.test(muenzner_br_hl$Buffering.ChrArmLevel.Ratio, muenzner_br_hl$kdp_value)
+
+### Sample median
+muenzner_turnover_strain <- muenzner_turnover %>%
+  summarize(MedianTurnover = median(kdp_value, na.rm = TRUE),
+            MedianHalfLife = median(HL, na.rm = TRUE),
+            .by = strain)
+
+muenzner_br_strain <- muenzner_br_trimmed %>%
+  summarize(MedianBR = median(Buffering.ChrArmLevel.Ratio, na.rm = TRUE),
+            .by = strain)
+
+muenzner_br_hl_strain <- inner_join(x = muenzner_br_strain, y = muenzner_turnover_strain, by = "strain")
+
+cor.test(muenzner_br_hl_strain$MedianBR, muenzner_br_hl_strain$MedianHalfLife)
+cor.test(muenzner_br_hl_strain$MedianBR, muenzner_br_hl_strain$MedianTurnover)
