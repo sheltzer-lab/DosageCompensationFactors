@@ -131,9 +131,7 @@ string_down <- genes_down %>%
 max_abs_nes_procan <- gsea_all %>% filter(Dataset == "ProCan") %>% pull(NES) %>% abs() %>% max() %>% round()
 max_abs_nes_cptac <- gsea_all %>% filter(Dataset == "CPTAC") %>% pull(NES) %>% abs() %>% max() %>% round()
 
-selected_pathways <- c("DNA_REPAIR", "APOPTOSIS", "G2M_CHECKPOINT", "MYC_TARGETS_V2", "IL2_STAT5_SIGNALING",
-                       "UNFOLDED_PROTEIN_RESPONSE", "EPITHELIAL_MESENCHYMAL_TRANSITION", "APICAL_JUNCTION")
-
+## Plot 2D-GSEA
 panel_2d_enrichment <- gsea_all %>%
   filter(Dataset %in% c("CPTAC", "ProCan")) %>%
   select(pathway, Dataset, NES, padj) %>%
@@ -145,8 +143,7 @@ panel_2d_enrichment <- gsea_all %>%
     TRUE ~ "None"),
          Significant = factor(Significant, levels = c("ProCan", "CPTAC", "Both", "None")),
          Label = str_replace_all(str_replace(pathway, "HALLMARK_", ""), "_", " "),
-         Label = if_else(Significant != "None" | Label %in% selected_pathways,
-                         Label, NA)) %>%
+         Label = if_else(Significant != "None", Label, NA)) %>%
   ggplot() +
   aes(x = NES_ProCan, y = NES_CPTAC, label = Label, color = Significant) +
   geom_hline(yintercept = 0, color = default_color) +
@@ -552,3 +549,60 @@ figure_s5 <- cowplot::plot_grid(panel_volcano_all, figure_s5_sub1, figure_s5_sub
 cairo_pdf(here(plots_dir, "figure_s5.pdf"), width = 12, height = 18)
 figure_s5
 dev.off()
+
+# === Show how GSEA pathways are confounded by aneuploidy ===
+## List pathways significant in high buffering with different responses in high aneuploidy
+highlighted_pathways <- bind_rows(gsea_all %>% mutate(Comparison = "Buffering"),
+                                  gsea_all_as %>% mutate(Comparison = "Aneuploidy")) %>%
+  select(pathway, Dataset, Comparison, NES, padj) %>%
+  pivot_wider(id_cols = c("pathway", "Dataset"), names_from = "Comparison", values_from = c("padj", "NES")) %>%
+  mutate(EnrichmentDifference = NES_Buffering - NES_Aneuploidy,
+         MeanEnrichmentDifference = mean(EnrichmentDifference),
+         MeanEnrichmentEffect = mean(abs(EnrichmentDifference)),
+         Buffering.MaxP = max(padj_Buffering),
+         Buffering.CountEffect = sum(abs(EnrichmentDifference) > 0.2),
+         Buffering.CountP = sum(padj_Buffering < p_threshold),
+         Buffering.CountSignif = sum(abs(EnrichmentDifference) > 0.2 & padj_Buffering < p_threshold),
+         .by = pathway) %>%
+  filter(abs(EnrichmentDifference) > 0.2) %>%
+  filter(padj_Buffering < p_threshold)
+
+highlighted_pathways_strict <- highlighted_pathways %>%
+  filter(Buffering.CountSignif > 1) %>%
+  filter(MeanEnrichmentEffect > 0.5)
+
+## 2D GSEA plot (buffering & aneuploidy)
+gsea_buf_aneuploidy <- bind_rows(gsea_all %>% mutate(Comparison = "Buffering"),
+                                 gsea_all_as %>% mutate(Comparison = "Aneuploidy")) %>%
+  select(pathway, Dataset, Comparison, NES, padj) %>%
+  pivot_wider(id_cols = c("pathway", "Dataset"), names_from = "Comparison", values_from = c("padj", "NES")) %>%
+  mutate(Significant = case_when(
+            padj_Buffering < p_threshold & padj_Aneuploidy < p_threshold ~ "Both",
+            padj_Buffering >= p_threshold & padj_Aneuploidy < p_threshold ~ "High Aneuploidy",
+            padj_Buffering < p_threshold & padj_Aneuploidy >= p_threshold ~ "High Buffering",
+            TRUE ~ "None"),
+         Significant = factor(Significant, levels = c("High Buffering", "High Aneuploidy", "Both", "None")),
+         Label = str_replace_all(str_replace(pathway, "HALLMARK_", ""), "_", " "),
+         Label = if_else(pathway %in% highlighted_pathways$pathway, Label, NA)
+  ) %>%
+  ggplot() +
+  aes(x = NES_Buffering, y = NES_Aneuploidy, label = Label, color = Significant) +
+  geom_hline(yintercept = 0, color = default_color) +
+  geom_vline(xintercept = 0, color = default_color) +
+  geom_abline(xintercept = 0, yintercept = 0, slope = 1, color = default_color) +
+  geom_point(size = 3) +
+  geom_label_repel(size = ceiling(base_size / 4), force = 40, min.segment.length = 0.01) +
+  scale_color_manual(values = c(Both = highlight_colors[2],
+                                `High Buffering` = color_palettes$BufferingClasses[["Buffered"]],
+                                `High Aneuploidy` = viridis(option = "rocket", 2, begin = 0.15, end = 0.5)[2],
+                                None = default_color)) +
+  lims(x = c(-max_abs_nes_procan, max_abs_nes_procan), y = c(-max_abs_nes_cptac, max_abs_nes_cptac)) +
+  labs(x = "Normalized Enrichment Score (High vs. Low Buffering)",
+       y = "Normalized Enrichment Score (High vs. Low Aneuploidy)") +
+  theme(legend.position = "top", legend.direction = "horizontal") +
+  facet_grid(~Dataset)
+
+cairo_pdf(here(plots_dir, "Revisions", "gsea_buffering_aneuploidy.pdf"), width = 22, height = 8)
+gsea_buf_aneuploidy
+dev.off()
+
