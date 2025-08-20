@@ -181,7 +181,7 @@ upr_de_cptac <- diff_exp_cptac %>%
 
 ## Perform ORA
 upr_down_common <- semi_join(
-  x = upr_de_procan %>% filter(Log2FC < 0),
+  x = upr_de_procan %>% filter(Log2FC < 0 & Test.p.adj < p_threshold),
   y = upr_de_cptac %>% filter(Log2FC < 0),
   by = "Gene.Symbol"
 )
@@ -191,7 +191,7 @@ ora_down_common <- upr_down_common %>%
   overrepresentation_analysis(ordered = FALSE)
 
 upr_up_common <- semi_join(
-  x = upr_de_procan %>% filter(Log2FC > 0),
+  x = upr_de_procan %>% filter(Log2FC > 0 & Test.p.adj < p_threshold),
   y = upr_de_cptac %>% filter(Log2FC > 0),
   by = "Gene.Symbol"
 )
@@ -201,7 +201,7 @@ ora_up_common <- upr_up_common %>%
   overrepresentation_analysis(ordered = FALSE)
 
 upr_tumor_down_cellline_up <- semi_join(
-  x = upr_de_procan %>% filter(Log2FC > 0),
+  x = upr_de_procan %>% filter(Log2FC > 0 & Test.p.adj < p_threshold),
   y = upr_de_cptac %>% filter(Log2FC < 0),
   by = "Gene.Symbol"
 )
@@ -211,7 +211,7 @@ ora_tumor_down_cellline_up <- upr_tumor_down_cellline_up %>%
   overrepresentation_analysis(ordered = FALSE)
 
 upr_tumor_up_cellline_down <- semi_join(
-  x = upr_de_procan %>% filter(Log2FC < 0),
+  x = upr_de_procan %>% filter(Log2FC < 0 & Test.p.adj < p_threshold),
   y = upr_de_cptac %>% filter(Log2FC > 0),
   by = "Gene.Symbol"
 )
@@ -252,7 +252,7 @@ list(result = ora_tumor_down_cellline_up_unique) %>%
                      custom_color = color_palettes$Datasets["CPTAC"]) %>%
   save_plot("ora_upr_tumor_down_cellline_up.png")
 
-list(result = ora_tumor_up_cellline_down_unique) %>%
+list(result = ora_tumor_up_cellline_down$result) %>%
   plot_terms_compact(custom_color = color_palettes$Datasets["ProCan"], string_trunc = 70) %>%
   save_plot("ora_upr_tumor_up_cellline_down.png")
 
@@ -265,7 +265,7 @@ genes_down <- diff_exp_procan %>%
 
 ora_down <- genes_down %>%
   pull(Gene.Symbol) %>%
-  overrepresentation_analysis(list_genes = TRUE)
+  overrepresentation_analysis()
 
 ora_genes <- ora_down$result %>%
   filter(grepl("CCT", term_name) & source == "CORUM" | grepl("unfolded", term_name) & source == "GO:MF") %>%
