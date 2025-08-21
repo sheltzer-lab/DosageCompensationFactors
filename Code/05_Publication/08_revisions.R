@@ -372,7 +372,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   labs(fill = "Cancer Types (Primary Disease)") +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_cancertypes.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -385,7 +386,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   labs(fill = "Significant Hits") +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_hits.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -398,7 +400,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   facet_wrap(~Dataset) +
   labs(fill = "max(abs(Log2FC))") +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_Log2FC.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -411,7 +414,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   facet_wrap(~Dataset) +
   labs(fill = "max(-log10(p.adj))") +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_p.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -424,7 +428,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   labs(fill = "Min. Obseravtions") +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_observations.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -437,7 +442,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   labs(fill = "Median Obseravtions") +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_observations_median.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -450,7 +456,8 @@ df_grid_results %>%
   scale_fill_viridis() +
   labs(fill = "Min. Group Balance") +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_balance.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -467,7 +474,8 @@ df_robustness_inter %>%
   geom_tile() +
   geom_text(color = "white") +
   scale_fill_viridis() +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_robustness_inter.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
@@ -487,7 +495,8 @@ df_robustness_intra %>%
   geom_text(color = "white") +
   scale_fill_viridis() +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_robustness_intra.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -526,7 +535,8 @@ df_sensitivity %>%
   geom_text(color = "white") +
   scale_fill_viridis(limits = c(0, 0.6), oob = scales::squish) +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_score.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -537,7 +547,8 @@ df_sensitivity %>%
   geom_text(color = "white") +
   scale_fill_viridis(limits = c(0, 0.5), oob = scales::squish) +
   facet_wrap(~Dataset) +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_score_penalized.png"), width = 300, height = 150, units = "mm", dpi = 300)
 
@@ -548,7 +559,8 @@ df_sensitivity %>%
   geom_tile() +
   geom_text(color = "white") +
   scale_fill_viridis() +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_score_median.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
@@ -559,7 +571,8 @@ df_sensitivity %>%
   geom_tile() +
   geom_text(color = "white") +
   scale_fill_viridis() +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        legend.key.width = unit(0.05, 'npc'))
 
 ggsave(here(plots_dir, "sensitivity_score_sd.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
@@ -586,7 +599,8 @@ plot_mbn_br <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
   signif_beeswarm_plot(MBN, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
                        color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
-  facet_wrap(~Dataset)
+  facet_wrap(~Dataset) +
+  labs(x = "Mature B-Cell Neoplasm", y = "Sample Buffering Ratio", color = "Aneuploidy\nScore")
 
 save_plot(plot_mbn_br, "buffering_mbn.png")
 
@@ -600,9 +614,10 @@ plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
     conf.int = TRUE, cor.coef = TRUE,
     cor.coeff.args = list(method = "spearman", label.sep = "\n", cor.coef.name = "rho")
   ) +
-  facet_wrap(~Dataset)
+  facet_wrap(~Dataset) +
+  labs(x = "Aneuploidy Score", y = "Sample Buffering Ratio (z-score)")
 
-save_plot(plot_mbn_br_as, "buffering_mbn_aneuploidy.png")
+save_plot(plot_mbn_br_as, "buffering_mbn_aneuploidy.png", width = 200)
 
 mbn_ids_depmap <- df_depmap_mbn %>%
   filter(MBN) %>%

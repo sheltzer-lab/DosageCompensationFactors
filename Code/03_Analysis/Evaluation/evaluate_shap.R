@@ -31,12 +31,13 @@ heatmap_shap_depmap <- shap_results %>%
   save_plot("shap_heatmap_depmap.png", width = 300)
 
 heatmap_shap_wgd <- shap_results %>%
-  filter(Model.Subset %in% c("WGD", "Non-WGD") & Model.Condition == "Loss") %>%
+  filter(Model.Subset %in% c("WGD", "Non-WGD")) %>%
   filter(!grepl("Log2FC", Model.Variant) & !grepl("Average", Model.Variant)) %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
          DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, -SHAP.Factor.Corr, .desc = TRUE)) %>%
   distinct(DosageCompensation.Factor, Model.Variant, Model.Subset,
            Model.Level, Model.Condition, SHAP.Factor.Corr, Label) %>%
+  mutate(Model.Level = str_replace_all(Model.Level, c("Chromosome Arm" = "ChrArm", "Gene" = "GeneCN"))) %>%
   nested_shap_heatmap(as.formula(Model.Subset + Model.Level + Model.Condition ~ .)) %>%
   save_plot("shap_heatmap_wgd.png", width = 300, height = 150)
 
@@ -136,6 +137,17 @@ shap_confounder %>%
 ggsave(here(plots_dir, "shap_feature_corr_gene-dependency.png"))
 
 shap_confounder %>%
+  ggplot() +
+  aes(x = Factor.Value.Relative_mean_gene_dependency,
+      y = SHAP.Value_mean_gene_dependency) +
+  geom_point(size = 2) +
+  stat_smooth(method = "loess", color = highlight_colors[2], span = 1) +
+  labs(x = "Normalized Factor Value (Mean Gene Dependency)",
+       y = "SHAP Value (Mean Gene Dependency)")
+
+ggsave(here(plots_dir, "shap_feature_corr_gene-dependency_plain.png"), width = 6, height = 6)
+
+shap_confounder %>%
   arrange(Factor.Value.Relative_protein_complexes_corum) %>%
   ggplot() +
   aes(x = SHAP.Value_protein_complexes_corum,
@@ -177,4 +189,3 @@ shap_confounder %>%
        color = "Normalized Factor Value\n(Mean Gene Dependency)")
 
 ggsave(here(plots_dir, "shap_corr_complexes_gene-dependency.png"))
-
