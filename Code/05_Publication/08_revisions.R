@@ -577,36 +577,67 @@ df_sensitivity %>%
 ggsave(here(plots_dir, "sensitivity_score_sd.png"), width = 150, height = 180, units = "mm", dpi = 300)
 
 # === Multiple Myeloma ===
-## Analyze sample BR of multiple myeloma / MBN
-df_depmap_mbn <- model_buf_depmap %>%
+## Identify multiple myeloma cell lines in DepMap CCLE
+mm_celllines <- read_excel(here(external_data_dir, "MultipleMyeloma_CellLines.xlsx"),
+                           sheet = "Cell Line Patient Correlations") %>%
+  mutate(StrippedCellLineName = toupper(str_replace(`Cell Line`, "_Sus", ""))) %>%
+  mutate(StrippedCellLineName = str_replace(StrippedCellLineName, "U266", "U266B1")) # Synonymous accordign to Cellosaurus
+
+df_model_mm <- df_model_depmap %>%
+  filter(OncotreeCode == "PCM") %>%
+  semi_join(mm_celllines, by = "StrippedCellLineName")
+
+## Analyze sample BR of multiple myeloma
+df_depmap_mm <- model_buf_depmap %>%
   inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
-  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
-  mutate(MBN = OncotreeCodeLvl4 == "MBN",
+  mutate(Model.CancerType = if_else(OncotreeCode == "PCM", "Multiple\nMyeloma", "Other"),
          Dataset = "DepMap")
 
-df_procan_mbn <- model_buf_procan %>%
+df_procan_mm <- model_buf_procan %>%
   inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
-  mutate(OncotreeCodeLvl4 = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 4))) %>%
-  mutate(MBN = OncotreeCodeLvl4 == "MBN",
+  mutate(Model.CancerType = if_else(OncotreeCode == "PCM", "Multiple\nMyeloma", "Other"),
          Dataset = "ProCan")
 
-### MBN against other cancer types
-plot_mbn_br <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
-  signif_beeswarm_plot(MBN, Model.Buffering.Ratio,
+### MM against other cancer types
+plot_mm_br <- bind_rows(df_depmap_mm, df_procan_mbn) %>%
+  signif_beeswarm_plot(Model.CancerType, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
                        color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
   facet_wrap(~Dataset) +
-  labs(x = "Mature B-Cell Neoplasm", y = "Sample Buffering Ratio", color = "Aneuploidy\nScore")
+  labs(x = "Cancer Type", y = "Sample Buffering Ratio", color = "Aneuploidy\nScore")
 
-save_plot(plot_mbn_br, "buffering_mbn.png")
+save_plot(plot_mm_br, "buffering_mm.png")
 
-### MBN by aneuploidy score
-plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
-  filter(MBN) %>%
+### MM BR per-protein
+df_depmap_mm_prot <- expr_buf_depmap %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "many-to-one", na_matches = "never") %>%
+  left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%
+  mutate(Model.CancerType = if_else(OncotreeCode == "PCM", "Multiple\nMyeloma", "Other"),
+         Dataset = "DepMap")
+
+df_procan_mm_prot <- expr_buf_procan %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
+             relationship = "many-to-one", na_matches = "never") %>%
+  mutate(Model.CancerType = if_else(OncotreeCode == "PCM", "Multiple\nMyeloma", "Other"),
+         Dataset = "ProCan")
+
+plot_mm_br_prot <- bind_rows(df_depmap_mm_prot, df_procan_mm_prot) %>%
+  drop_na(Model.CancerType, Buffering.GeneLevel.Ratio) %>%
+  signif_boxplot(Model.CancerType, Buffering.GeneLevel.Ratio,
+                 test = wilcox.test) +
+  facet_wrap(~Dataset) +
+  labs(x = "Cancer Type", y = "Buffering Ratio")
+
+save_plot(plot_mm_br_prot, "buffering_mm_protein.png")
+
+### MM by aneuploidy score
+plot_mm_br_as <- bind_rows(df_depmap_mm, df_procan_mm) %>%
+  filter(OncotreeCode == "PCM") %>%
   ggscatter(
     x = "CellLine.AneuploidyScore", y = "Model.Buffering.Ratio.ZScore",
     color = default_color, size = 3,
@@ -617,21 +648,21 @@ plot_mbn_br_as <- bind_rows(df_depmap_mbn, df_procan_mbn) %>%
   facet_wrap(~Dataset) +
   labs(x = "Aneuploidy Score", y = "Sample Buffering Ratio (z-score)")
 
-save_plot(plot_mbn_br_as, "buffering_mbn_aneuploidy.png", width = 200)
+save_plot(plot_mm_br_as, "buffering_mm_aneuploidy.png", width = 200)
 
-mbn_ids_depmap <- df_depmap_mbn %>%
-  filter(MBN) %>%
+mm_ids_depmap <- df_depmap_mm %>%
+  filter(OncotreeCode == "PCM") %>%
   distinct(Model.ID) %>%
   pull(Model.ID)
 
-mbn_ids_procan <- df_procan_mbn %>%
-  filter(MBN) %>%
+mm_ids_procan <- df_procan_mm %>%
+  filter(OncotreeCode == "PCM") %>%
   distinct(Model.ID) %>%
   pull(Model.ID)
 
-length(unique(c(mbn_ids_depmap, mbn_ids_procan)))
-length(mbn_ids_depmap)
-length(mbn_ids_procan)
+length(unique(c(mm_ids_depmap, mm_ids_procan)))
+length(mm_ids_depmap)
+length(mm_ids_procan)
 
 # === Check difference in Gene CN and ChrArm CN distribution to explain differences in BR ===
 ## Check CN range

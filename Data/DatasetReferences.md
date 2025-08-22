@@ -420,3 +420,10 @@ https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idma
 * **File (Supp. Tables 1-20):** 41586_2024_7442_MOESM3_ESM.xlsx
 * **Citation:** Muenzner, J., et al. (2024). Natural proteome diversity links aneuploidy tolerance to protein turnover. Nature, 630(8015), 149–157. https://doi.org/10.1038/s41586-024-07442-9
 * **Location:** `./Data/External/Muenzner2024_Yeast_Tables.xlsx`
+
+### Multiple Myeloma Cell Lines (Revisions)
+
+* **DOI:** 10.1038/s41375-020-0785-1
+* *File (Dataset S1):** 41375_2020_785_MOESM3_ESM.xlsx
+* **Citation:** Sarin, V., et al. (2020). Evaluating the efficacy of multiple myeloma cell lines as models for patient tumors via transcriptomic correlation analysis. Leukemia, 34(10), 2754–2765. https://doi.org/10.1038/s41375-020-0785-1
+* **Location:** `./Data/External/MultipleMyeloma_CellLines.xlsx`

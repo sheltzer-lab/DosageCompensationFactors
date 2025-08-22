@@ -689,16 +689,18 @@ signif_boxplot <- function(df, x, y, facet_col = NULL,
     prep_signif({ { x } }, { { facet_col } })
 
   df_n <- prep$df %>%
+    drop_na({ { y } }) %>%
     group_by({ { x } }, { { facet_col } }) %>%
     summarize(n = first(n),
               Q1 = quantile({ { y } }, probs = 0.25)[[1]],
               Q3 = quantile({ { y } }, probs = 0.75)[[1]],
               IQR = IQR({ { y } }),
-              y_min = Q1 - IQR * 1.7,
-              y_max = Q3 + IQR * 1.7,
-              .groups = "drop") %>%
-    mutate(y_min = min(y_min),
-           y_max = max(y_max))
+              y_min = max(Q1 - IQR * 1.3, min({ { y } })),
+              y_max = min(Q3 + IQR * 0.8, max({ { y } })),
+              .groups = "drop")
+
+  y_min <- min(df_n$y_min)
+  y_max <- max(df_n$y_max)
 
   plot <- prep$df %>%
     ggplot() +
@@ -707,10 +709,10 @@ signif_boxplot <- function(df, x, y, facet_col = NULL,
     geom_signif(
       comparisons = list(levels(prep$df$x)),
       map_signif_level = signif_label,
-      tip_length = 0, extend_line = -0.05, y_position = max(df_n$y_max),
+      tip_length = 0, extend_line = -0.05, y_position = y_max,
       test = test, test.args = test.args
     ) +
-    geom_text(data = df_n, aes(y = y_min, label = paste0("n = ", n))) +
+    stat_summary(aes(y = y_min), fun.data = show.n, geom = "text", color = default_color) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   { if (!quo_is_null(enquo(facet_col))) facet_grid(~Bucket) } +
     xlab(as_name(enquo(x))) +
