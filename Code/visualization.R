@@ -850,8 +850,9 @@ shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.25, show_le
   max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
 
   df_explanation %>%
-    mutate(SHAP.Factor.Corr.Absolute = abs(SHAP.Factor.Corr)) %>%
-    mutate(DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Factor.Corr.Absolute)) %>%
+    mutate(SHAP.Factor.Corr.Absolute = abs(SHAP.Factor.Corr),
+           DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, SHAP.Factor.Corr.Absolute),
+           SHAP.Corr.Label = print_corr(SHAP.Factor.Corr, SHAP.Factor.Corr.p.adj, signif = TRUE, map_p = TRUE)) %>%
     arrange(Factor.Value.Relative) %>%
     ggplot() +
     aes(x = DosageCompensation.Factor, y = SHAP.Value) +
@@ -859,8 +860,12 @@ shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.25, show_le
     # geom_boxplot(outlier.shape = NA, color = "black") +
     geom_quasirandom(aes(color = Factor.Value.Relative),
                      show.legend = show_legend, alpha = alpha, width = jitter_width) +
+    geom_label(data = \(d) d %>% distinct(DosageCompensation.Factor, SHAP.Corr.Label),
+               aes(y = max_abs_shap * 1.4, label = SHAP.Corr.Label),
+               color = default_color, hjust = 1, label.size = NA, fill = "white", alpha = 1/3) +
     scale_colour_viridis_c(option = "C", direction = 1, end = 0.95,
                            limits = c(0,1), breaks = c(0,1), labels = c("Low", "High")) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
     labs(title = title, x = category_lab, y = value_lab, color = color_lab) +
     coord_flip(ylim = c(-max_abs_shap, max_abs_shap))
 }

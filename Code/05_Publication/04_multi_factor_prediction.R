@@ -292,12 +292,12 @@ shap_loss <- shap_results %>%
   #slice_sample(n = 200) %>%     # Simplify visualization
   ungroup()
 
-shap_arrows_plot_gain <- shap_gain %>%
+shap_plot_gain <- shap_gain %>%
   shap_plot(category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
-shap_arrows_plot_loss <- shap_loss %>%
+shap_plot_loss <- shap_loss %>%
   shap_plot(category_lab = NULL, color_lab = "Factor\nValue", title = "Gene CN Loss")
 
-shap_raw_plots <- cowplot::plot_grid(shap_arrows_plot_gain, shap_arrows_plot_loss,
+shap_raw_plots <- cowplot::plot_grid(shap_plot_gain, shap_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
                                      labels = c("D", "E"),
                                      rel_widths = c(0.85, 1))
