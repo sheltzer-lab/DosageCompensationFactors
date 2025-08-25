@@ -111,7 +111,8 @@ panel_roc <- cowplot::plot_grid(models_depmap, models_procan, models_cptac,
 shap_heatmap_datasets <- shap_results %>%
   filter(Model.Level == "Gene" & Model.Subset == "All") %>%
   mutate(Label = map_signif(SHAP.Factor.Corr.p.adj),
-         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, -SHAP.Factor.Corr, .desc = TRUE)) %>%
+         DosageCompensation.Factor = fct_reorder(DosageCompensation.Factor, -SHAP.Factor.Corr, .desc = TRUE),
+         Model.Dataset = factor(Model.Dataset, levels = dataset_order)) %>%
   distinct(DosageCompensation.Factor, Model.Dataset, Model.Condition, Model.Variant, SHAP.Factor.Corr, Label) %>%
   nested_shap_heatmap(as.formula(Model.Dataset + Model.Condition ~ .))
 
