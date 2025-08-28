@@ -6,6 +6,7 @@ library(ggplot2)
 
 here::i_am("DosageCompensationFactors.Rproj")
 
+source(here("Code", "buffering_ratio.R"))
 source(here("Code", "parameters.R"))
 source(here("Code", "visualization.R"))
 
@@ -168,10 +169,10 @@ panel_drugs <- drugs %>%
 
 # === Combine Figures ===
 vis_abstract <- cowplot::plot_grid(panel_as_wgd, panel_growth_pattern,
-                                   panel_diffexp, panel_gsea, panel_upr, panel_drugs,
-                                   nrow = 1, rel_widths = c(1, 1, 1, 1.1, 1, 1))
+                                   panel_diffexp, panel_gsea, panel_upr, panel_drugs, plot_buffering_ratio_classes(),
+                                   nrow = 1, rel_widths = c(1, 1, 1, 1.1, 1, 1, 1.4))
 
 
-cairo_pdf(here(plots_dir, "visual_abstract.pdf"), width = 18, height = 3.1)
+cairo_pdf(here(plots_dir, "visual_abstract.pdf"), width = 23, height = 3.1)
 vis_abstract
 dev.off()
