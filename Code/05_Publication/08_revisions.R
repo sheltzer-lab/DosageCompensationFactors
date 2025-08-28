@@ -602,12 +602,14 @@ df_procan_mm <- model_buf_procan %>%
   mutate(Model.CancerType = if_else(OncotreeCode == "PCM", "Multiple\nMyeloma", "Other"),
          Dataset = "ProCan")
 
+df_depmap_mm_missing <- df_depmap_mm %>%
+  anti_join(y = df_procan_mm, by = "Model.ID")
+
 ### MM against other cancer types
-plot_mm_br <- bind_rows(df_depmap_mm, df_procan_mbn) %>%
+plot_mm_br <- bind_rows(df_procan_mm, df_depmap_mm_missing) %>%
   signif_beeswarm_plot(Model.CancerType, Model.Buffering.Ratio,
                        color_col = CellLine.AneuploidyScore, viridis_color_pal = color_palettes$AneuploidyScore,
                        color_lims = c(0, 0.8), cex = 1, test = wilcox.test) +
-  facet_wrap(~Dataset) +
   labs(x = "Cancer Type", y = "Sample Buffering Ratio", color = "Aneuploidy\nScore")
 
 save_plot(plot_mm_br, "buffering_mm.png")
@@ -636,7 +638,7 @@ plot_mm_br_prot <- bind_rows(df_depmap_mm_prot, df_procan_mm_prot) %>%
 save_plot(plot_mm_br_prot, "buffering_mm_protein.png")
 
 ### MM by aneuploidy score
-plot_mm_br_as <- bind_rows(df_depmap_mm, df_procan_mm) %>%
+plot_mm_br_as <- bind_rows(df_procan_mm, df_depmap_mm_missing) %>%
   filter(OncotreeCode == "PCM") %>%
   ggscatter(
     x = "CellLine.AneuploidyScore", y = "Model.Buffering.Ratio.ZScore",
@@ -645,10 +647,9 @@ plot_mm_br_as <- bind_rows(df_depmap_mm, df_procan_mm) %>%
     conf.int = TRUE, cor.coef = TRUE,
     cor.coeff.args = list(method = "spearman", label.sep = "\n", cor.coef.name = "rho")
   ) +
-  facet_wrap(~Dataset) +
   labs(x = "Aneuploidy Score", y = "Sample Buffering Ratio (z-score)")
 
-save_plot(plot_mm_br_as, "buffering_mm_aneuploidy.png", width = 200)
+save_plot(plot_mm_br_as, "buffering_mm_aneuploidy.png")
 
 mm_ids_depmap <- df_depmap_mm %>%
   filter(OncotreeCode == "PCM") %>%
