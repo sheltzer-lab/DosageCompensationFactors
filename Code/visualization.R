@@ -845,7 +845,7 @@ gradient_violin_plot <- function(df, group_col, value_col, color_col, p = 2) {
 
 # === SHAP-Plots ===
 
-shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.25, show_legend = TRUE, title = NULL,
+shap_plot <- function(df_explanation, alpha = 0.5, jitter_width = 0.35, show_legend = TRUE, title = NULL,
                       category_lab = "Feature", value_lab = "SHAP-Value", color_lab = "Feature Value") {
   max_abs_shap <- round(max(abs(df_explanation$SHAP.Value)), digits = 2)
 
@@ -861,11 +861,11 @@ shap_plot <- function(df_explanation, alpha = 0.75, jitter_width = 0.25, show_le
     geom_quasirandom(aes(color = Factor.Value.Relative),
                      show.legend = show_legend, alpha = alpha, width = jitter_width) +
     geom_label(data = \(d) d %>% distinct(DosageCompensation.Factor, SHAP.Corr.Label),
-               aes(y = max_abs_shap * 1.4, label = SHAP.Corr.Label),
+               aes(y = max_abs_shap * 1.6, label = SHAP.Corr.Label),
                color = default_color, hjust = 1, label.size = NA, fill = "white", alpha = 1/3) +
-    scale_colour_viridis_c(option = "C", direction = 1, end = 0.95,
+    scale_colour_viridis_c(option = "C", direction = 1, end = 0.9,
                            limits = c(0,1), breaks = c(0,1), labels = c("Low", "High")) +
-    scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
+    scale_y_continuous(expand = expansion(mult = c(-0.1, 0.3))) +
     labs(title = title, x = category_lab, y = value_lab, color = color_lab) +
     coord_flip(ylim = c(-max_abs_shap, max_abs_shap))
 }
@@ -949,7 +949,7 @@ nested_shap_heatmap <- function(df, nesting_formula) {
                          space = "Lab", limits = c(-1, 1), oob = scales::squish) +
     scale_x_discrete(expand = c(0, 0)) +
     scale_y_discrete(expand = c(0, 0)) +
-    labs(x = "Feature", y = "Model", fill = "SHAP-Value Correlation") +
+    labs(x = "Feature", y = "Model", fill = "SHAP-to-Feature Correlation") +
     cowplot::theme_minimal_grid() +
     theme(panel.spacing = unit(0, "lines"),
           strip.background = element_rect(color = "lightgrey"),

@@ -211,8 +211,10 @@ createParquetReadme(t5_description, t5_field_descriptions, title = "Supplementar
 ## ROC AUC ranks (all)
 rank_heatmap <- rank_univariate %>%
   unidirectional_heatmap(DosageCompensation.Factor, Condition, MeanNormRank) +
+  scale_fill_viridis_c(option = "mako", direction = 1, end = 0.9, oob = scales::squish, limits = c(0.5, 1),
+                       breaks = seq(0.5, 1, 0.1), labels = c("\u22640.5", "0.6", "0.7", "0.8", "0.9", "1.0")) +
   coord_flip() +
-  labs(fill = "ROC AUC\nMNR") +
+  labs(fill = "Mean\nNormalized\nROC AUC\nRanks") +
   theme(legend.position = "right",
         legend.direction = "vertical",
         legend.title = element_text(size = 12, hjust = 0),

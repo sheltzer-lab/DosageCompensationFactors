@@ -294,9 +294,13 @@ shap_loss <- shap_results %>%
   ungroup()
 
 shap_plot_gain <- shap_gain %>%
-  shap_plot(category_lab = "Factor", show_legend = FALSE, title = "Gene CN Gain")
+  mutate(SHAP.Value = scale(SHAP.Value, scale = FALSE), .by = "DosageCompensation.Factor") %>%
+  shap_plot(category_lab = "Factor", show_legend = FALSE, value_lab = "SHAP-Value (centered)",
+            title = "Gene CN Gain, CPTAC")
 shap_plot_loss <- shap_loss %>%
-  shap_plot(category_lab = NULL, color_lab = "Factor\nValue", title = "Gene CN Loss")
+  mutate(SHAP.Value = scale(SHAP.Value, scale = FALSE), .by = "DosageCompensation.Factor") %>%
+  shap_plot(category_lab = NULL, color_lab = "Factor\nValue", value_lab = "SHAP-Value (centered)",
+            title = "Gene CN Loss, CPTAC")
 
 shap_raw_plots <- cowplot::plot_grid(shap_plot_gain, shap_plot_loss,
                                      nrow = 1, ncol = 2, align = "h", axis = "lr",
@@ -308,8 +312,8 @@ shap_raw_plots <- cowplot::plot_grid(shap_plot_gain, shap_plot_loss,
 figure_s4_sub1 <- cowplot::plot_grid(NULL, panel_oos,
                                      ncol = 2, rel_widths = c(1, 0.65), labels = c("A", "C"))
 figure_s4 <- cowplot::plot_grid(figure_s4_sub1, panel_model_perf, shap_raw_plots,
-                                nrow = 3, rel_heights = c(1, 0.65, 1.5), labels = c("", "B", ""))
+                                nrow = 3, rel_heights = c(1, 0.65, 1.7), labels = c("", "B", ""))
 
-cairo_pdf(here(plots_dir, "figure_s4.pdf"), width = 14, height = 16)
+cairo_pdf(here(plots_dir, "figure_s4.pdf"), width = 14, height = 17)
 figure_s4
 dev.off()
