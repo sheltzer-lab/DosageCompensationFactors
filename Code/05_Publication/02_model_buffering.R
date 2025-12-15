@@ -74,8 +74,8 @@ df_depmap <- model_buf_depmap %>%
   mutate(OncotreeCode = sapply(OncotreeCode, \(x) get_oncotree_parent(tumor_types, x, target_level = 2)))
 
 df_procan <- model_buf_procan %>%
-  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode), by = "Model.ID",
-             relationship = "one-to-one", na_matches = "never") %>%
+  inner_join(y = df_model_depmap %>% select(Model.ID, OncotreeCode, CellLine.DepMapModelId, CellLine.SangerModelId),
+             by = "Model.ID", relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = df_model_procan %>% select(Model.ID, growth_properties), by = "Model.ID",
              relationship = "one-to-one", na_matches = "never") %>%
   left_join(y = copy_number, by = "Model.ID", relationship = "many-to-one", na_matches = "never") %>%

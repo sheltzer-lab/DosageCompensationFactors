@@ -530,7 +530,9 @@ corr_chr_avg <- dataset_correlation(buf_matched,
                                     "ChrArm (avg.)")
 
 panel_corr <- bind_rows(corr_gene, corr_chr) %>%
+  drop_na() %>%
   jittered_boxplot(Comparison, Correlation, alpha = 1, jitter_width = 0.25, size = 2) +
+  stat_summary(aes(y = -0.15), fun.data = show.n, geom = "text", color = default_color) +
   labs(y = "BR Correlation\n(DepMap ~ ProCan)", x = "Analysis Variant")
 
 ## Inter-Dataset Correlation (frequently buffered genes)
