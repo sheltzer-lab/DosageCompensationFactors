@@ -1,6 +1,6 @@
 # DosageCompensationFactors
 
-This project contains the code for the manuscript "Explainable Machine Learning Identifies Factors for Dosage Compensation in Aneuploid Human Cancer Cells" by Heller et al. (https://doi.org/10.1101/2025.05.12.653427).
+This project contains the code for the manuscript "Protein buffering of aneuploidy is driven by coordinated factors identified through machine learning" by Heller et al. published 2026 in Molecular Systems Biology (https://doi.org/10.1038/s44320-026-00187-9).
 The project is written in R and contains code for producing the figures in the manuscript as well as further analyses.
 
 ## Abstract
